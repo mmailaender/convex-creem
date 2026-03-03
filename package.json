@@ -42,7 +42,7 @@
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:coverage": "vitest run --coverage --coverage.reporter=text",
     "prepublishOnly": "pnpm clean && pnpm build",
-    "preversion": "pnpm clean && pnpm ci && pnpm build && concurrently --kill-others --names 'test,lint,typecheck' --prefix-colors 'blue,yellow,magenta' 'pnpm test' 'pnpm lint' 'pnpm typecheck'",
+    "preversion": "pnpm clean && pnpm install --frozen-lockfile && pnpm build && concurrently --kill-others --names 'test,lint,typecheck' --prefix-colors 'blue,yellow,magenta' 'pnpm test' 'pnpm lint' 'pnpm typecheck'",
     "alpha": "pnpm version prerelease --preid alpha && pnpm publish --tag alpha && git push --follow-tags",
     "release": "pnpm version patch && pnpm publish && git push --follow-tags",
     "version": "vim -c 'normal o' -c 'normal o## '$npm_package_version CHANGELOG.md && prettier -w CHANGELOG.md && git add CHANGELOG.md"
