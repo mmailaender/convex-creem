@@ -24,6 +24,21 @@ describe("renderMarkdown", () => {
     const result = renderMarkdown("line1\nline2");
     expect(result).toContain("<br");
   });
+
+  it("renders GFM tables", () => {
+    const result = renderMarkdown(
+      "| col1 | col2 |\n| --- | --- |\n| a | b |",
+    );
+    expect(result).toContain("<table>");
+    expect(result).toContain("<th>");
+    expect(result).toContain("<td>");
+  });
+
+  it("preserves emoji characters like checkmarks and crosses", () => {
+    const result = renderMarkdown("\u2714\uFE0F feature A\n\u274C feature B");
+    expect(result).toContain("\u2714");
+    expect(result).toContain("\u274C");
+  });
 });
 
 describe("renderMarkdownInline", () => {

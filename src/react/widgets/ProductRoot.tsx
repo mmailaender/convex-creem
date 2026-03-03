@@ -253,12 +253,7 @@ export const ProductRoot = ({
               allProducts,
             );
             const splitPrice = splitPriceLabel(resolvedPrice);
-            const descriptionLines = (resolvedDescription ?? "")
-              .split(/\r?\n/)
-              .map((line) => line.trim())
-              .filter(Boolean)
-              .map((line) => line.replace(/^(?:[-*]\s+|[✔✓]\s*)/, "").trim())
-              .filter(Boolean);
+            const descriptionHtml = renderMarkdown(resolvedDescription);
 
             if (styleVariant === "pricing") {
               return (
@@ -329,40 +324,11 @@ export const ProductRoot = ({
                       ) : null}
                     </div>
 
-                    {descriptionLines.length > 0 && (
-                      <div className="w-full pt-4">
-                        <p className="label-m mb-4 font-semibold text-foreground-default">
-                          What&apos;s included:
-                        </p>
-                        <ul className="space-y-2">
-                          {descriptionLines.map((feature) => (
-                            <li
-                              key={feature}
-                              className="flex items-center gap-2"
-                            >
-                              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-foreground-muted">
-                                <svg
-                                  aria-hidden="true"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  className="h-4 w-4"
-                                >
-                                  <path
-                                    d="M20 6L9 17L4 12"
-                                    stroke="currentColor"
-                                    strokeWidth="2.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  />
-                                </svg>
-                              </span>
-                              <span className="body-m text-foreground-default">
-                                {feature}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                    {descriptionHtml && (
+                      <div
+                        className="creem-prose w-full pt-4 body-m text-foreground-default"
+                        dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+                      />
                     )}
                   </div>
                 </article>

@@ -4,6 +4,7 @@
   import type { UIPlanEntry, RecurringCycle } from "../../core/types.js";
   import type { ConnectedProduct } from "../widgets/types.js";
   import { resolveProductIdForPlan, formatPriceWithInterval, formatSeatPrice } from "./shared.js";
+  import { renderMarkdown } from "../../core/markdown.js";
 
   interface Props {
     plan: UIPlanEntry;
@@ -147,25 +148,7 @@
 
   const splitPrice = $derived(splitPriceLabel(seatPriceLabel ?? priceLabel));
 
-  const descriptionLines = $derived.by<string[]>(() => {
-    if (!plan.description) return [];
-    return plan.description
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => line.replace(/^(?:[-*]\s+|[✔✓]\s*)/, "").trim())
-      .filter(Boolean);
-  });
-
-  const featureLines = $derived.by<string[]>(() => {
-    if (descriptionLines.length < 3) return [];
-    return descriptionLines;
-  });
-
-  const leadDescription = $derived.by<string | null>(() => {
-    if (!descriptionLines.length || featureLines.length > 0) return null;
-    return descriptionLines[0] ?? null;
-  });
+  const descriptionHtml = $derived(renderMarkdown(plan.description));
 </script>
 
 <section
@@ -208,9 +191,6 @@
     {/if}
   </div>
 
-  {#if leadDescription}
-    <p class="mb-4 body-m text-foreground-muted">{leadDescription}</p>
-  {/if}
 
   <div class={`mb-4 mt-6 ${showSeatCheckoutControls ? "flex flex-col gap-2" : "flex min-h-8 items-start"}`}>
     {#if showSeatCheckoutControls}
@@ -325,32 +305,10 @@
     </div>
   </div>
 
-  {#if featureLines.length > 0}
-    <div class="w-full pt-4">
-      <p class="label-m mb-4 font-semibold text-foreground-default">What's included:</p>
-      <ul class="space-y-2">
-        {#each featureLines as feature (feature)}
-          <li class="flex items-center gap-2">
-            <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center text-foreground-muted">
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                fill="none"
-                class="h-4 w-4"
-              >
-                <path
-                  d="M20 6L9 17L4 12"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </span>
-            <span class="body-m text-foreground-default">{feature}</span>
-          </li>
-        {/each}
-      </ul>
+  {#if descriptionHtml}
+    <div class="creem-prose w-full pt-4 body-m text-foreground-default">
+      <!-- eslint-disable-next-line svelte/no-at-html-tags — merchant-authored markdown from Creem -->
+      {@html descriptionHtml}
     </div>
   {/if}
 </section>

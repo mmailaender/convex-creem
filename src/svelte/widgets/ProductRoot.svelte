@@ -262,12 +262,7 @@
         allProducts,
       )}
       {@const splitPrice = splitPriceLabel(resolvedPrice)}
-      {@const descriptionLines = (resolvedDescription ?? "")
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => line.replace(/^(?:[-*]\s+|[✔✓]\s*)/, "").trim())
-        .filter(Boolean)}
+      {@const descriptionHtml = renderMarkdown(resolvedDescription)}
       <article
         class={styleVariant === "pricing"
           ? `w-full ${layout === "single" ? "max-w-[680px]" : "max-w-none"} rounded-2xl bg-surface-base ${isIncluded ? "opacity-60" : ""}`
@@ -335,36 +330,10 @@
               {/if}
             </div>
 
-            {#if descriptionLines.length > 0}
-              <div class="w-full pt-4">
-                <p class="label-m mb-4 font-semibold text-foreground-default">What's included:</p>
-                <ul class="space-y-2">
-                  {#each descriptionLines as feature (feature)}
-                    <li class="flex items-center gap-2">
-                      <span
-                        class="inline-flex h-5 w-5 shrink-0 items-center justify-center text-foreground-muted"
-                      >
-                        <svg
-                          aria-hidden="true"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          class="h-4 w-4"
-                        >
-                          <path
-                            d="M20 6L9 17L4 12"
-                            stroke="currentColor"
-                            stroke-width="2.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                          />
-                        </svg>
-                      </span>
-                      <span class="body-m text-foreground-default"
-                        >{feature}</span
-                      >
-                    </li>
-                  {/each}
-                </ul>
+            {#if descriptionHtml}
+              <div class="creem-prose w-full pt-4 body-m text-foreground-default">
+                <!-- eslint-disable-next-line svelte/no-at-html-tags — merchant-authored markdown from Creem -->
+                {@html descriptionHtml}
               </div>
             {/if}
           </div>

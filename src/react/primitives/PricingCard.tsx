@@ -9,6 +9,7 @@ import {
   formatSeatPrice,
   splitPriceLabel,
 } from "../shared.js";
+import { renderMarkdown } from "../../core/markdown.js";
 
 const computeTrialDays = (trialEnd: string): number => {
   const end = new Date(trialEnd).getTime();
@@ -170,25 +171,10 @@ export const PricingCard = ({
 
   const splitPrice = splitPriceLabel(seatPriceLabel ?? priceLabel);
 
-  const descriptionLines = useMemo(() => {
-    if (!plan.description) return [];
-    return plan.description
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => line.replace(/^(?:[-*]\s+|[✔✓]\s*)/, "").trim())
-      .filter(Boolean);
-  }, [plan.description]);
-
-  const featureLines = useMemo(() => {
-    if (descriptionLines.length < 3) return [];
-    return descriptionLines;
-  }, [descriptionLines]);
-
-  const leadDescription = useMemo(() => {
-    if (!descriptionLines.length || featureLines.length > 0) return null;
-    return descriptionLines[0] ?? null;
-  }, [descriptionLines, featureLines]);
+  const descriptionHtml = useMemo(
+    () => renderMarkdown(plan.description),
+    [plan.description],
+  );
 
   return (
     <section
@@ -245,9 +231,6 @@ export const PricingCard = ({
         ) : null}
       </div>
 
-      {leadDescription && (
-        <p className="mb-4 body-m text-foreground-muted">{leadDescription}</p>
-      )}
 
       <div
         className={`mb-4 mt-6 ${showSeatCheckoutControls ? "flex flex-col gap-2" : "flex min-h-8 items-start"}`}
@@ -384,37 +367,11 @@ export const PricingCard = ({
         </div>
       </div>
 
-      {featureLines.length > 0 && (
-        <div className="w-full pt-4">
-          <p className="label-m mb-4 font-semibold text-foreground-default">
-            What&apos;s included:
-          </p>
-          <ul className="space-y-2">
-            {featureLines.map((feature) => (
-              <li key={feature} className="flex items-center gap-2">
-                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-foreground-muted">
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    className="h-4 w-4"
-                  >
-                    <path
-                      d="M20 6L9 17L4 12"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-                <span className="body-m text-foreground-default">
-                  {feature}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {descriptionHtml && (
+        <div
+          className="creem-prose w-full pt-4 body-m text-foreground-default"
+          dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+        />
       )}
     </section>
   );

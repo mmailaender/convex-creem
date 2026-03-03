@@ -52,6 +52,32 @@
     margin-bottom: 0.25em;
   }
 
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    font-size: 0.875em;
+  }
+
+  th,
+  td {
+    padding: 0.375em 0.75em;
+    border: 1px solid rgb(0 0 0 / 0.1);
+    text-align: left;
+  }
+
+  th {
+    font-weight: 600;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    th,
+    td {
+      border-color: rgb(255 255 255 / 0.1);
+    }
+  }
+
   code {
     font-size: 0.875em;
     padding: 0.125em 0.25em;
