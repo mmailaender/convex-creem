@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+Features
+- Tables in product descriptions
+
+Fix
+- Markdown rendering in product descriptions
+
 ## 0.1.0
 
 - Initial npm release of `@mmailaender/convex-creem`.
