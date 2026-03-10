@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+Breaking changes
+
+- Update convex-svelte package references to @mmailaender/convex-svelte
+
 ## 0.2.0
 
 Features
