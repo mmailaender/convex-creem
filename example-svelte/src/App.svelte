@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { setupConvex } from "convex-svelte";
+  import { setupConvex } from "@mmailaender/convex-svelte";
   import {
     CheckoutSuccessSummary,
     BillingPortal,

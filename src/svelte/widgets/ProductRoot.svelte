@@ -1,6 +1,6 @@
 <script lang="ts">
   import { setContext, untrack } from "svelte";
-  import { useConvexClient, useQuery } from "convex-svelte";
+  import { useConvexClient, useQuery } from "@mmailaender/convex-svelte";
   import CheckoutButton from "../primitives/CheckoutButton.svelte";
   import { formatPriceWithInterval } from "../primitives/shared.js";
   import {

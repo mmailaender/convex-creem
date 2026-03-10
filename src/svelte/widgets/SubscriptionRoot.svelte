@@ -9,7 +9,7 @@
   import PaymentWarningBanner from "../primitives/PaymentWarningBanner.svelte";
   import ScheduledChangeBanner from "../primitives/ScheduledChangeBanner.svelte";
 
-  import { useConvexClient, useQuery } from "convex-svelte";
+  import { useConvexClient, useQuery } from "@mmailaender/convex-svelte";
   import {
     SUBSCRIPTION_CONTEXT_KEY,
     type SubscriptionContextValue,
