@@ -478,16 +478,16 @@ export const syncProducts = action({
       ...(args.serverURL ? { serverURL: args.serverURL } : {}),
     });
     let pageNumber = 1;
-    let isDone = false;
-    do {
+    while (true) {
       const products = await creem.products.search(pageNumber, 100);
       pageNumber += 1;
-      isDone =
-        products.pagination.currentPage >= products.pagination.totalPages;
       await ctx.runMutation(api.lib.updateProducts, {
         products: products.items.map(convertToDatabaseProduct),
       });
-    } while (!isDone);
+      if (products.pagination.currentPage >= products.pagination.totalPages) {
+        break;
+      }
+    }
   },
 });
 
