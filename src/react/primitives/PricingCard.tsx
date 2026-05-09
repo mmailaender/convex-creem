@@ -6,7 +6,7 @@ import type { ConnectedProduct } from "../widgets/types.js";
 import {
   resolveProductIdForPlan,
   formatPriceWithInterval,
-  formatSeatPrice,
+  formatUnitPrice,
   splitPriceLabel,
 } from "../shared.js";
 import { renderMarkdown } from "../../core/markdown.js";
@@ -26,16 +26,16 @@ export const PricingCard = ({
   subscriptionTrialEnd,
   products = [],
   units,
-  showSeatPicker = false,
-  subscribedSeats,
+  showUnitPicker = false,
+  subscribedUnits,
   isGroupSubscribed = false,
   disableCheckout = false,
   disableSwitch = false,
-  disableSeats = false,
+  disableUnits = false,
   className = "",
   onCheckout,
   onSwitchPlan,
-  onUpdateSeats,
+  onUpdateUnits,
   onContactSales,
   onCancelSubscription,
 }: {
@@ -47,12 +47,12 @@ export const PricingCard = ({
   subscriptionTrialEnd?: string | null;
   products?: ConnectedProduct[];
   units?: number;
-  showSeatPicker?: boolean;
-  subscribedSeats?: number | null;
+  showUnitPicker?: boolean;
+  subscribedUnits?: number | null;
   isGroupSubscribed?: boolean;
   disableCheckout?: boolean;
   disableSwitch?: boolean;
-  disableSeats?: boolean;
+  disableUnits?: boolean;
   className?: string;
   onCheckout?: (payload: {
     plan: UIPlanEntry;
@@ -64,34 +64,34 @@ export const PricingCard = ({
     productId: string;
     units?: number;
   }) => Promise<void> | void;
-  onUpdateSeats?: (payload: { units: number }) => Promise<void> | void;
+  onUpdateUnits?: (payload: { units: number }) => Promise<void> | void;
   onContactSales?: (payload: { plan: UIPlanEntry }) => Promise<void> | void;
   onCancelSubscription?: () => void;
 }) => {
-  const isSeatPlan = plan.pricingModel === "seat";
-  const [seatCount, setSeatCount] = useState(units ?? 1);
-  const [seatAdjustCount, setSeatAdjustCount] = useState(
-    subscribedSeats ?? units ?? 1,
+  const isUnitPlan = plan.pricingModel === "unit";
+  const [unitCount, setUnitCount] = useState(units ?? 1);
+  const [unitAdjustCount, setUnitAdjustCount] = useState(
+    subscribedUnits ?? units ?? 1,
   );
-  const [editingSeats, setEditingSeats] = useState(false);
+  const [editingUnits, setEditingUnits] = useState(false);
 
   const [prevUnits, setPrevUnits] = useState(units);
-  const [prevSubscribedSeats, setPrevSubscribedSeats] =
-    useState(subscribedSeats);
+  const [prevSubscribedUnits, setPrevSubscribedUnits] =
+    useState(subscribedUnits);
 
   if (units !== prevUnits) {
     setPrevUnits(units);
-    setSeatCount(units ?? 1);
+    setUnitCount(units ?? 1);
   }
-  if (subscribedSeats !== prevSubscribedSeats || units !== prevUnits) {
-    setPrevSubscribedSeats(subscribedSeats);
-    setSeatAdjustCount(subscribedSeats ?? units ?? 1);
-    setEditingSeats(false);
+  if (subscribedUnits !== prevSubscribedUnits || units !== prevUnits) {
+    setPrevSubscribedUnits(subscribedUnits);
+    setUnitAdjustCount(subscribedUnits ?? units ?? 1);
+    setEditingUnits(false);
   }
 
-  const effectiveUnits = isSeatPlan
-    ? showSeatPicker
-      ? seatCount
+  const effectiveUnits = isUnitPlan
+    ? showUnitPicker
+      ? unitCount
       : units
     : undefined;
 
@@ -126,22 +126,22 @@ export const PricingCard = ({
     plan.category !== "free" &&
     plan.category !== "enterprise";
 
-  const showSeatCheckoutControls =
-    isSeatPlan && showSeatPicker && !isActiveProduct && !isSiblingPlan;
-  const reserveSeatActionHeight =
-    isSeatPlan &&
-    showSeatPicker &&
+  const showUnitCheckoutControls =
+    isUnitPlan && showUnitPicker && !isActiveProduct && !isSiblingPlan;
+  const reserveUnitActionHeight =
+    isUnitPlan &&
+    showUnitPicker &&
     (isActiveProduct || isSiblingPlan || isActivePlanOtherCycle);
 
-  const seatPriceLabel =
-    isActiveProduct && isSeatPlan && subscribedSeats
-      ? formatSeatPrice(productId, products, subscribedSeats)
+  const unitPriceLabel =
+    isActiveProduct && isUnitPlan && subscribedUnits
+      ? formatUnitPrice(productId, products, subscribedUnits)
       : null;
-  const seatsChanged =
+  const unitsChanged =
     isActiveProduct &&
-    isSeatPlan &&
-    subscribedSeats != null &&
-    seatAdjustCount !== subscribedSeats;
+    isUnitPlan &&
+    subscribedUnits != null &&
+    unitAdjustCount !== subscribedUnits;
 
   const checkoutLabel = isActivePlanOtherCycle
     ? "Switch interval"
@@ -156,8 +156,8 @@ export const PricingCard = ({
       onSwitchPlan({
         plan,
         productId: payload.productId,
-        units: isSeatPlan
-          ? (subscribedSeats ?? effectiveUnits)
+        units: isUnitPlan
+          ? (subscribedUnits ?? effectiveUnits)
           : effectiveUnits,
       });
     } else {
@@ -169,7 +169,7 @@ export const PricingCard = ({
     }
   };
 
-  const splitPrice = splitPriceLabel(seatPriceLabel ?? priceLabel);
+  const splitPrice = splitPriceLabel(unitPriceLabel ?? priceLabel);
 
   const descriptionHtml = useMemo(
     () => renderMarkdown(plan.description),
@@ -232,43 +232,43 @@ export const PricingCard = ({
       </div>
 
       <div
-        className={`mb-4 mt-6 ${showSeatCheckoutControls ? "flex flex-col gap-2" : "flex min-h-8 items-start"}`}
+        className={`mb-4 mt-6 ${showUnitCheckoutControls ? "flex flex-col gap-2" : "flex min-h-8 items-start"}`}
       >
-        {showSeatCheckoutControls && (
+        {showUnitCheckoutControls && (
           <div className="flex w-full items-center justify-between rounded-xl bg-surface-subtle py-2 pl-4 pr-2">
-            <span className="label-m text-foreground-default">Seats:</span>
+            <span className="label-m text-foreground-default">Units:</span>
             <NumberInput
-              value={seatCount}
+              value={unitCount}
               min={1}
               compact
-              disabled={disableSeats}
+              disabled={disableUnits}
               onValueChange={(next) => {
-                if (next > 0) setSeatCount(next);
+                if (next > 0) setUnitCount(next);
               }}
             />
           </div>
         )}
 
         <div
-          className={`${showSeatCheckoutControls ? "w-full" : "flex min-h-8 items-start w-full"} ${
-            reserveSeatActionHeight ? "min-h-[4.5rem]" : ""
+          className={`${showUnitCheckoutControls ? "w-full" : "flex min-h-8 items-start w-full"} ${
+            reserveUnitActionHeight ? "min-h-[4.5rem]" : ""
           }`}
         >
-          {isActiveProduct && isSeatPlan && showSeatPicker && onUpdateSeats ? (
+          {isActiveProduct && isUnitPlan && showUnitPicker && onUpdateUnits ? (
             <div className="flex w-full flex-col gap-2">
-              {editingSeats ? (
+              {editingUnits ? (
                 <>
                   <div className="flex w-full items-center justify-between rounded-xl bg-surface-subtle py-2 pl-4 pr-2">
                     <span className="label-m text-foreground-default">
-                      Seats:
+                      Units:
                     </span>
                     <NumberInput
-                      value={seatAdjustCount}
+                      value={unitAdjustCount}
                       min={1}
                       compact
-                      disabled={disableSeats}
+                      disabled={disableUnits}
                       onValueChange={(next) => {
-                        if (next > 0) setSeatAdjustCount(next);
+                        if (next > 0) setUnitAdjustCount(next);
                       }}
                     />
                   </div>
@@ -277,18 +277,18 @@ export const PricingCard = ({
                       type="button"
                       className="button-faded h-8 w-full"
                       onClick={() => {
-                        setSeatAdjustCount(subscribedSeats ?? 1);
-                        setEditingSeats(false);
+                        setUnitAdjustCount(subscribedUnits ?? 1);
+                        setEditingUnits(false);
                       }}
                     >
                       Cancel
                     </button>
                     <button
                       type="button"
-                      disabled={disableSeats || !seatsChanged}
+                      disabled={disableUnits || !unitsChanged}
                       className="button-filled h-8 w-full disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={() =>
-                        onUpdateSeats?.({ units: seatAdjustCount })
+                        onUpdateUnits?.({ units: unitAdjustCount })
                       }
                     >
                       Update
@@ -300,9 +300,9 @@ export const PricingCard = ({
                   <button
                     type="button"
                     className="button-faded w-full"
-                    onClick={() => setEditingSeats(true)}
+                    onClick={() => setEditingUnits(true)}
                   >
-                    Change seats
+                    Change units
                   </button>
                   {onCancelSubscription && (
                     <button

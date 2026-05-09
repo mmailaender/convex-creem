@@ -1,0 +1,31 @@
+import { getContext } from "svelte";
+import type { UIPlanEntry, RecurringCycle } from "../../core/types.js";
+
+/** Context value exposed to Subscription.Item slot components. */
+export type SubscriptionItemContextValue = {
+  plan: UIPlanEntry;
+  isActive: boolean;
+  isRecommended: boolean;
+  selectedCycle: RecurringCycle;
+  currentProductId: string | undefined;
+  price: string | null;
+  onCheckout?: () => void;
+  onSwitch?: () => void;
+};
+
+export const SUBSCRIPTION_ITEM_CONTEXT_KEY = Symbol(
+  "creem.subscription.item.context",
+);
+
+/** Get the current Subscription.Item context. Throws if used outside a Subscription.Item. */
+export const getSubscriptionItemContext = (): SubscriptionItemContextValue => {
+  const ctx = getContext<SubscriptionItemContextValue | undefined>(
+    SUBSCRIPTION_ITEM_CONTEXT_KEY,
+  );
+  if (!ctx) {
+    throw new Error(
+      "getSubscriptionItemContext must be used inside a <Subscription.Item> component",
+    );
+  }
+  return ctx;
+};

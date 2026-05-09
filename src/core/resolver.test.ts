@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveBillingSnapshot } from "./resolver.js";
 
 describe("resolveBillingSnapshot", () => {
-  it("maps recurring subscription intervals and seat actions", () => {
+  it("maps recurring subscription intervals and unit actions", () => {
     const snapshot = resolveBillingSnapshot({
       catalog: {
         version: "1",
@@ -12,7 +12,7 @@ describe("resolveBillingSnapshot", () => {
             category: "paid",
             billingType: "recurring",
             billingCycles: ["every-month", "every-year"],
-            pricingModel: "seat",
+            pricingModel: "unit",
             creemProductIds: {
               monthly: "prod_monthly",
               yearly: "prod_yearly",
@@ -24,14 +24,14 @@ describe("resolveBillingSnapshot", () => {
         productId: "prod_monthly",
         status: "active",
         recurringInterval: "every-month",
-        seats: 5,
+        units: 5,
       },
     });
 
     expect(snapshot.activePlanId).toBe("pro");
     expect(snapshot.recurringCycle).toBe("every-month");
     expect(snapshot.availableActions).toContain("switch_interval");
-    expect(snapshot.availableActions).toContain("update_seats");
+    expect(snapshot.availableActions).toContain("update_units");
   });
 
   it("supports one-time payments", () => {

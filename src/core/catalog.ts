@@ -1,5 +1,7 @@
 import type {
   BillingType,
+  CatalogProductRef,
+  PlanId,
   PlanCatalog,
   PlanCatalogEntry,
   PlanCategory,
@@ -28,6 +30,21 @@ const BILLING_TYPES: BillingType[] = ["recurring", "onetime", "custom"];
 const PLAN_CATEGORY_SET = new Set(PLAN_CATEGORIES);
 const BILLING_TYPE_SET = new Set(BILLING_TYPES);
 const RECURRING_CYCLE_SET = new Set(SUPPORTED_RECURRING_CYCLES);
+
+export const defineBillingCatalog = <const TCatalog extends PlanCatalog>(
+  catalog: TCatalog,
+): TCatalog => catalog;
+
+export const plansOf = <
+  const TCatalog extends PlanCatalog,
+  const TPlanIds extends readonly PlanId<TCatalog>[],
+>(
+  _catalog: TCatalog,
+  planIds: TPlanIds,
+): TPlanIds => planIds;
+
+const toProductId = (ref: CatalogProductRef): string =>
+  typeof ref === "string" ? ref : ref.productId;
 
 /** Type guard: check if a string is a supported Creem billing cycle. */
 export const isSupportedRecurringCycle = (
@@ -90,6 +107,16 @@ export const normalizePlanCatalog = (
       billingCycles: (plan.billingCycles ?? [])
         .map((cycle) => normalizeRecurringCycle(cycle))
         .flatMap((cycle) => (cycle ? [cycle] : [])),
+      creemProductIds:
+        plan.creemProductIds ??
+        (plan.products
+          ? Object.fromEntries(
+              Object.entries(plan.products).map(([cycle, ref]) => [
+                cycle,
+                toProductId(ref),
+              ]),
+            )
+          : undefined),
     })),
   };
 };
@@ -116,4 +143,21 @@ export const findPlanByProductId = (
   return catalog.plans.find((plan) =>
     Object.values(plan.creemProductIds ?? {}).includes(productId),
   );
+};
+
+export const resolvePlanProductId = (
+  catalog: PlanCatalog | undefined,
+  planId: string,
+  cycle: RecurringCycle,
+): string => {
+  const plan = findPlanById(catalog, planId);
+  if (!plan) {
+    throw new Error(`Unknown billing plan "${planId}"`);
+  }
+  const productIds = plan.creemProductIds;
+  const productId = productIds?.[cycle] ?? productIds?.custom;
+  if (!productId) {
+    throw new Error(`Billing plan "${planId}" has no product for "${cycle}"`);
+  }
+  return productId;
 };

@@ -3,7 +3,7 @@
   import NumberInput from "./NumberInput.svelte";
   import type { UIPlanEntry, RecurringCycle } from "../../core/types.js";
   import type { ConnectedProduct } from "../widgets/types.js";
-  import { resolveProductIdForPlan, formatPriceWithInterval, formatSeatPrice } from "./shared.js";
+  import { resolveProductIdForPlan, formatPriceWithInterval, formatUnitPrice } from "./shared.js";
   import { renderMarkdown } from "../../core/markdown.js";
 
   interface Props {
@@ -15,12 +15,12 @@
     subscriptionTrialEnd?: string | null;
     products?: ConnectedProduct[];
     units?: number;
-    showSeatPicker?: boolean;
-    subscribedSeats?: number | null;
+    showUnitPicker?: boolean;
+    subscribedUnits?: number | null;
     isGroupSubscribed?: boolean;
     disableCheckout?: boolean;
     disableSwitch?: boolean;
-    disableSeats?: boolean;
+    disableUnits?: boolean;
     className?: string;
     onCheckout?: (payload: {
       plan: UIPlanEntry;
@@ -32,7 +32,7 @@
       productId: string;
       units?: number;
     }) => Promise<void> | void;
-    onUpdateSeats?: (payload: { units: number }) => Promise<void> | void;
+    onUpdateUnits?: (payload: { units: number }) => Promise<void> | void;
     onContactSales?: (payload: { plan: UIPlanEntry }) => Promise<void> | void;
     onCancelSubscription?: () => void;
   }
@@ -46,33 +46,30 @@
     subscriptionTrialEnd = null,
     products = [],
     units = undefined,
-    showSeatPicker = false,
-    subscribedSeats = null,
+    showUnitPicker = false,
+    subscribedUnits = null,
     isGroupSubscribed = false,
     disableCheckout = false,
     disableSwitch = false,
-    disableSeats = false,
+    disableUnits = false,
     className = "",
     onCheckout,
     onSwitchPlan,
-    onUpdateSeats,
+    onUpdateUnits,
     onContactSales,
     onCancelSubscription,
   }: Props = $props();
 
-  const isSeatPlan = $derived(plan.pricingModel === "seat");
-  let seatCount = $derived(1);
-  let seatAdjustCount = $state(1);
-  let editingSeats = $state(false);
+  const isUnitPlan = $derived(plan.pricingModel === "unit");
+  let unitCount = $derived(units ?? 1);
+  let unitAdjustCount = $state(1);
+  let editingUnits = $state(false);
   $effect(() => {
-    seatCount = units ?? 1;
-  });
-  $effect(() => {
-    seatAdjustCount = subscribedSeats ?? units ?? 1;
-    editingSeats = false;
+    unitAdjustCount = subscribedUnits ?? units ?? 1;
+    editingUnits = false;
   });
   const effectiveUnits = $derived(
-    isSeatPlan ? (showSeatPicker ? seatCount : units) : undefined,
+    isUnitPlan ? (showUnitPicker ? unitCount : units) : undefined,
   );
 
   const productId = $derived(resolveProductIdForPlan(plan, selectedCycle));
@@ -102,20 +99,20 @@
   const isSiblingPlan = $derived(
     !isActiveProduct && !isActivePlanOtherCycle && isGroupSubscribed && productId != null && plan.category !== "free" && plan.category !== "enterprise",
   );
-  const showSeatCheckoutControls = $derived(
-    isSeatPlan && showSeatPicker && !isActiveProduct && !isSiblingPlan,
+  const showUnitCheckoutControls = $derived(
+    isUnitPlan && showUnitPicker && !isActiveProduct && !isSiblingPlan,
   );
-  const reserveSeatActionHeight = $derived(
-    isSeatPlan && showSeatPicker && (isActiveProduct || isSiblingPlan || isActivePlanOtherCycle),
+  const reserveUnitActionHeight = $derived(
+    isUnitPlan && showUnitPicker && (isActiveProduct || isSiblingPlan || isActivePlanOtherCycle),
   );
 
-  const seatPriceLabel = $derived(
-    isActiveProduct && isSeatPlan && subscribedSeats
-      ? formatSeatPrice(productId, products, subscribedSeats)
+  const unitPriceLabel = $derived(
+    isActiveProduct && isUnitPlan && subscribedUnits
+      ? formatUnitPrice(productId, products, subscribedUnits)
       : null,
   );
-  const seatsChanged = $derived(
-    isActiveProduct && isSeatPlan && subscribedSeats != null && seatAdjustCount !== subscribedSeats,
+  const unitsChanged = $derived(
+    isActiveProduct && isUnitPlan && subscribedUnits != null && unitAdjustCount !== subscribedUnits,
   );
 
   const checkoutLabel = $derived(
@@ -129,7 +126,7 @@
   );
   const handleCheckout = (payload: { productId: string }) => {
     if ((isSiblingPlan || isActivePlanOtherCycle) && onSwitchPlan) {
-      onSwitchPlan({ plan, productId: payload.productId, units: isSeatPlan ? (subscribedSeats ?? effectiveUnits) : effectiveUnits });
+      onSwitchPlan({ plan, productId: payload.productId, units: isUnitPlan ? (subscribedUnits ?? effectiveUnits) : effectiveUnits });
     } else {
       onCheckout?.({ plan, productId: payload.productId, units: effectiveUnits });
     }
@@ -146,7 +143,7 @@
     };
   };
 
-  const splitPrice = $derived(splitPriceLabel(seatPriceLabel ?? priceLabel));
+  const splitPrice = $derived(splitPriceLabel(unitPriceLabel ?? priceLabel));
 
   const descriptionHtml = $derived(renderMarkdown(plan.description));
 </script>
@@ -192,39 +189,39 @@
   </div>
 
 
-  <div class={`mb-4 mt-6 ${showSeatCheckoutControls ? "flex flex-col gap-2" : "flex min-h-8 items-start"}`}>
-    {#if showSeatCheckoutControls}
+  <div class={`mb-4 mt-6 ${showUnitCheckoutControls ? "flex flex-col gap-2" : "flex min-h-8 items-start"}`}>
+    {#if showUnitCheckoutControls}
       <div class="flex w-full items-center justify-between rounded-xl bg-surface-subtle py-2 pl-4 pr-2">
-        <span class="label-m text-foreground-default">Seats:</span>
+        <span class="label-m text-foreground-default">Units:</span>
         <NumberInput
-          value={seatCount}
+          value={unitCount}
           min={1}
           compact
-          disabled={disableSeats}
+          disabled={disableUnits}
           onValueChange={(next) => {
-            if (next > 0) seatCount = next;
+            if (next > 0) unitCount = next;
           }}
         />
       </div>
     {/if}
 
     <div
-      class={`${showSeatCheckoutControls ? "w-full" : "flex min-h-8 items-start w-full"} ${
-        reserveSeatActionHeight ? "min-h-[4.5rem]" : ""
+      class={`${showUnitCheckoutControls ? "w-full" : "flex min-h-8 items-start w-full"} ${
+        reserveUnitActionHeight ? "min-h-[4.5rem]" : ""
       }`}
     >
-    {#if isActiveProduct && isSeatPlan && showSeatPicker && onUpdateSeats}
+    {#if isActiveProduct && isUnitPlan && showUnitPicker && onUpdateUnits}
       <div class="flex w-full flex-col gap-2">
-        {#if editingSeats}
+        {#if editingUnits}
           <div class="flex w-full items-center justify-between rounded-xl bg-surface-subtle py-2 pl-4 pr-2">
-            <span class="label-m text-foreground-default">Seats:</span>
+            <span class="label-m text-foreground-default">Units:</span>
             <NumberInput
-              value={seatAdjustCount}
+              value={unitAdjustCount}
               min={1}
               compact
-              disabled={disableSeats}
+              disabled={disableUnits}
               onValueChange={(next) => {
-                if (next > 0) seatAdjustCount = next;
+                if (next > 0) unitAdjustCount = next;
               }}
             />
           </div>
@@ -232,22 +229,22 @@
             <button
               type="button"
               class="button-faded h-8 w-full"
-              onclick={() => { seatAdjustCount = subscribedSeats ?? 1; editingSeats = false; }}
+              onclick={() => { unitAdjustCount = subscribedUnits ?? 1; editingUnits = false; }}
             >
               Cancel
             </button>
             <button
               type="button"
-              disabled={disableSeats || !seatsChanged}
+              disabled={disableUnits || !unitsChanged}
               class="button-filled h-8 w-full disabled:cursor-not-allowed disabled:opacity-50"
-              onclick={() => onUpdateSeats?.({ units: seatAdjustCount })}
+              onclick={() => onUpdateUnits?.({ units: unitAdjustCount })}
             >
               Update
             </button>
           </div>
         {:else}
-          <button type="button" class="button-faded w-full" onclick={() => editingSeats = true}>
-            Change seats
+          <button type="button" class="button-faded w-full" onclick={() => editingUnits = true}>
+            Change units
           </button>
           {#if onCancelSubscription}
             <button type="button" class="button-outline w-full" onclick={onCancelSubscription}>

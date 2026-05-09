@@ -42,7 +42,9 @@ const {
   subscriptions,
   products,
   customers,
+  transactions,
   orders,
+  credits,
 } = creem.api({ resolve });
 
 // Component-specific
@@ -60,7 +62,13 @@ export const productsList = products.list;
 export const productsGet = products.get;
 export const customersRetrieve = customers.retrieve;
 export const customersPortalUrl = customers.portalUrl;
+export const transactionsSearch = transactions.search;
 export const ordersList = orders.list;
+export const creditsCreateAccount = credits.createAccount;
+export const creditsGetBalance = credits.getBalance;
+export const creditsCredit = credits.credit;
+export const creditsDebit = credits.debit;
+export const creditsListEntries = credits.listEntries;
 
 export const syncBillingProducts = internalAction({
   args: {},

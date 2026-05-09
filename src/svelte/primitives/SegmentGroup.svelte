@@ -24,29 +24,36 @@
     className = "",
     onValueChange,
   }: Props = $props();
+
+  const resolvedValue = $derived(value ?? undefined);
+  const controlKey = $derived(
+    `${items.map((item) => item.value).join("|")}::${resolvedValue ?? ""}`,
+  );
 </script>
 
 {#if items.length > 1}
-  <ArkSegmentGroup.Root
-    {value}
-    {defaultValue}
-    {disabled}
-    class={`segment-group ${className}`}
-    onValueChange={(details: { value: string }) => onValueChange?.(details.value)}
-  >
-    <ArkSegmentGroup.Indicator class="segment-group-indicator" />
-    {#each items as item (item.value)}
-      <ArkSegmentGroup.Item
-        value={item.value}
-        disabled={item.disabled}
-        class="segment-group-item"
-      >
-        <ArkSegmentGroup.ItemText class="segment-group-item-text label-m">
-          {item.label}
-        </ArkSegmentGroup.ItemText>
-        <ArkSegmentGroup.ItemControl class="segment-group-item-control" />
-        <ArkSegmentGroup.ItemHiddenInput />
-      </ArkSegmentGroup.Item>
-    {/each}
-  </ArkSegmentGroup.Root>
+  {#key controlKey}
+    <ArkSegmentGroup.Root
+      value={resolvedValue}
+      {defaultValue}
+      {disabled}
+      class={`segment-group ${className}`}
+      onValueChange={(details: { value: string }) => onValueChange?.(details.value)}
+    >
+      <ArkSegmentGroup.Indicator class="segment-group-indicator" />
+      {#each items as item (item.value)}
+        <ArkSegmentGroup.Item
+          value={item.value}
+          disabled={item.disabled}
+          class="segment-group-item"
+        >
+          <ArkSegmentGroup.ItemText class="segment-group-item-text label-m">
+            {item.label}
+          </ArkSegmentGroup.ItemText>
+          <ArkSegmentGroup.ItemControl class="segment-group-item-control" />
+          <ArkSegmentGroup.ItemHiddenInput />
+        </ArkSegmentGroup.Item>
+      {/each}
+    </ArkSegmentGroup.Root>
+  {/key}
 {/if}

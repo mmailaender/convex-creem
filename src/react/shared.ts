@@ -89,21 +89,21 @@ const INTERVAL_LABELS: Record<string, string> = {
   "every-year": "/yr",
 };
 
-/** Format the total price for a seat-based plan (e.g. `"$10/mo × 5 seats"`). Returns `null` if product not found. */
-export const formatSeatPrice = (
+/** Format the total price for a unit-based plan (e.g. `"$10/mo × 5 units"`). Returns `null` if product not found. */
+export const formatUnitPrice = (
   productId: string | undefined,
   products: ConnectedProduct[],
-  seats: number,
+  units: number,
 ): string | null => {
   const resolved = resolveProductPrice(productId, products);
   if (!resolved) return null;
   const suffix = resolved.interval
     ? (INTERVAL_LABELS[resolved.interval] ?? "")
     : "";
-  if (seats <= 1) {
+  if (units <= 1) {
     return `${resolved.formatted}${suffix}`;
   }
-  return `${resolved.formatted}${suffix} × ${seats} seats`;
+  return `${resolved.formatted}${suffix} × ${units} units`;
 };
 
 /** Format a product's price with its billing interval suffix (e.g. `"$10/mo"`). Returns `null` if product not found. */
@@ -119,7 +119,7 @@ export const formatPriceWithInterval = (
   return `${resolved.formatted}${suffix}`;
 };
 
-/** Split a price label into main amount, interval suffix, and trailing text (e.g. `"$10/mo × 5 seats"` → `{ main: "$10", suffix: "/mo", tail: "× 5 seats" }`). */
+/** Split a price label into main amount, interval suffix, and trailing text (e.g. `"$10/mo × 5 units"` → `{ main: "$10", suffix: "/mo", tail: "× 5 units" }`). */
 export const splitPriceLabel = (
   value: string | null,
 ): { main: string; suffix: string | null; tail: string } | null => {

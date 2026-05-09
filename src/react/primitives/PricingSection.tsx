@@ -17,18 +17,19 @@ export const PricingSection = ({
   subscriptionStatus,
   subscriptionTrialEnd,
   units,
-  showSeatPicker = false,
+  showUnitPicker = false,
+  showCycleToggle = true,
   twoColumnLayout = false,
-  subscribedSeats,
+  subscribedUnits,
   isGroupSubscribed = false,
   disableCheckout = false,
   disableSwitch = false,
-  disableSeats = false,
+  disableUnits = false,
   className = "",
   onCycleChange,
   onCheckout,
   onSwitchPlan,
-  onUpdateSeats,
+  onUpdateUnits,
   onContactSales,
   onCancelSubscription,
 }: {
@@ -40,13 +41,14 @@ export const PricingSection = ({
   subscriptionStatus?: string | null;
   subscriptionTrialEnd?: string | null;
   units?: number;
-  showSeatPicker?: boolean;
+  showUnitPicker?: boolean;
+  showCycleToggle?: boolean;
   twoColumnLayout?: boolean;
-  subscribedSeats?: number | null;
+  subscribedUnits?: number | null;
   isGroupSubscribed?: boolean;
   disableCheckout?: boolean;
   disableSwitch?: boolean;
-  disableSeats?: boolean;
+  disableUnits?: boolean;
   className?: string;
   onCycleChange?: (cycle: RecurringCycle) => void;
   onCheckout?: (payload: {
@@ -59,7 +61,7 @@ export const PricingSection = ({
     productId: string;
     units?: number;
   }) => Promise<void> | void;
-  onUpdateSeats?: (payload: { units: number }) => Promise<void> | void;
+  onUpdateUnits?: (payload: { units: number }) => Promise<void> | void;
   onContactSales?: (payload: { plan: UIPlanEntry }) => Promise<void> | void;
   onCancelSubscription?: () => void;
 }) => {
@@ -76,7 +78,7 @@ export const PricingSection = ({
   const hasEnterprisePlan = plans.some((p) => p.category === "enterprise");
   const effectiveCycle =
     selectedCycle ?? snapshot?.recurringCycle ?? availableCycles[0];
-  const showToggle = availableCycles.length > 1;
+  const showToggle = showCycleToggle && availableCycles.length > 1;
 
   return (
     <section className={className}>
@@ -92,7 +94,7 @@ export const PricingSection = ({
 
       <div
         className={`grid grid-cols-1 gap-1 ${
-          showSeatPicker || twoColumnLayout
+          showUnitPicker || twoColumnLayout
             ? "md:grid-cols-2"
             : hasEnterprisePlan
               ? "sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4"
@@ -110,15 +112,15 @@ export const PricingSection = ({
             subscriptionTrialEnd={subscriptionTrialEnd}
             products={products}
             units={units}
-            showSeatPicker={showSeatPicker}
-            subscribedSeats={subscribedSeats}
+            showUnitPicker={showUnitPicker}
+            subscribedUnits={subscribedUnits}
             isGroupSubscribed={isGroupSubscribed}
             disableCheckout={disableCheckout}
             disableSwitch={disableSwitch}
-            disableSeats={disableSeats}
+            disableUnits={disableUnits}
             onCheckout={onCheckout}
             onSwitchPlan={onSwitchPlan}
-            onUpdateSeats={onUpdateSeats}
+            onUpdateUnits={onUpdateUnits}
             onContactSales={onContactSales}
             onCancelSubscription={onCancelSubscription}
           />

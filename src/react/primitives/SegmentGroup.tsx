@@ -23,9 +23,13 @@ export const SegmentGroup = ({
 }) => {
   if (items.length <= 1) return null;
 
+  const resolvedValue = value ?? undefined;
+  const controlKey = `${items.map((item) => item.value).join("|")}::${resolvedValue ?? ""}`;
+
   return (
     <ArkSegmentGroup.Root
-      value={value ?? undefined}
+      key={controlKey}
+      value={resolvedValue}
       defaultValue={defaultValue}
       disabled={disabled}
       className={`segment-group ${className}`}

@@ -49,10 +49,10 @@ describe("buildUpdateSummary", () => {
     });
   });
 
-  describe("seat-update", () => {
-    it("returns correct title for seat-update", () => {
-      const result = buildUpdateSummary({ ...base, kind: "seat-update" });
-      expect(result.title).toBe("Update seats?");
+  describe("unit-update", () => {
+    it("returns correct title for unit-update", () => {
+      const result = buildUpdateSummary({ ...base, kind: "unit-update" });
+      expect(result.title).toBe("Update units?");
       expect(result.confirmLabel).toBe("Confirm update");
     });
   });
@@ -152,10 +152,10 @@ describe("buildUpdateSummary", () => {
       expect(result.confirmLabel).toBe("Confirm switch");
     });
 
-    it("returns correct confirm label for trial seat-update", () => {
+    it("returns correct confirm label for trial unit-update", () => {
       const result = buildUpdateSummary({
         ...base,
-        kind: "seat-update",
+        kind: "unit-update",
         isTrialing: true,
       });
       expect(result.confirmLabel).toBe("Confirm update");

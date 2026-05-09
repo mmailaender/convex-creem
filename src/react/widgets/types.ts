@@ -1,7 +1,7 @@
 import type { FunctionReference } from "convex/server";
 import type { BillingSnapshot, RecurringCycle } from "../../core/types.js";
 
-export type { CheckoutIntent } from "../../core/types.js";
+export type { CheckoutIntent, PlanChangeIntent } from "../../core/types.js";
 
 /**
  * UI-side permission flags for billing widgets.
@@ -20,8 +20,8 @@ export type BillingPermissions = {
   canCancelSubscription?: boolean;
   /** Allow resuming a paused or scheduled-cancel subscription. */
   canResumeSubscription?: boolean;
-  /** Allow changing the seat count on seat-based plans. */
-  canUpdateSeats?: boolean;
+  /** Allow changing the unit count on unit-based plans. */
+  canUpdateUnits?: boolean;
   /** Allow opening the Creem customer billing portal. */
   canAccessPortal?: boolean;
 };
@@ -57,7 +57,7 @@ export type ConnectedBillingApi = {
   };
   /** Subscription mutation references. All optional — omit to hide the corresponding UI controls. */
   subscriptions?: {
-    /** Plan switch or seat update mutation. */
+    /** Plan switch or unit update mutation. */
     update?: FunctionReference<"mutation">;
     /** Cancel subscription mutation. */
     cancel?: FunctionReference<"mutation">;
@@ -68,6 +68,24 @@ export type ConnectedBillingApi = {
   customers?: {
     /** Action that returns `{ url }` for the Creem billing portal. */
     portalUrl?: FunctionReference<"action">;
+  };
+  /** Transaction actions. */
+  transactions?: {
+    /** Action that returns paginated transaction history. */
+    search?: FunctionReference<"action">;
+  };
+  /** Customer credits actions. */
+  credits?: {
+    /** Create a credits account for the current entity. */
+    createAccount?: FunctionReference<"action">;
+    /** Get current credit balance. */
+    getBalance?: FunctionReference<"action">;
+    /** Add credits to the account. */
+    credit?: FunctionReference<"action">;
+    /** Consume/spend credits from the account. */
+    debit?: FunctionReference<"action">;
+    /** List credit/debit history entries. */
+    listEntries?: FunctionReference<"action">;
   };
 };
 
@@ -116,7 +134,7 @@ export type ConnectedBillingModel = {
     cancelAtPeriodEnd: boolean;
     currentPeriodEnd: string | null;
     currentPeriodStart: string;
-    seats: number | null;
+    units: number | null;
     recurringInterval: string | null;
     trialEnd?: string | null;
   }>;
@@ -130,23 +148,65 @@ export type ConnectedBillingModel = {
  * Plan type for `<Subscription.Item>`.
  * - `"free"` — free tier, no checkout
  * - `"single"` — standard paid plan (flat pricing)
- * - `"seat-based"` — per-seat pricing with optional seat picker
+ * - `"unit-based"` — per-unit pricing with optional unit picker
  * - `"enterprise"` — "Contact sales" CTA, no checkout
  */
 export type SubscriptionPlanType =
   | "free"
   | "single"
-  | "seat-based"
+  | "unit-based"
   | "enterprise";
 
 export type SubscriptionPlanRegistration = {
   planId: string;
-  type: SubscriptionPlanType;
+  type?: SubscriptionPlanType;
+  groupId?: string;
+  groupTitle?: string;
   title?: string;
   description?: string;
   contactUrl?: string;
   recommended?: boolean;
   productIds?: Partial<Record<RecurringCycle, string>>;
+};
+
+export type SubscriptionGroupRegistration = {
+  value: string;
+  label: string;
+  description?: string;
+  plans: readonly string[];
+};
+
+export type ConnectedTransaction = {
+  id: string;
+  amount: number;
+  amountPaid?: number | null;
+  discountAmount?: number | null;
+  currency: string;
+  type: string;
+  taxCountry?: string | null;
+  taxAmount?: number | null;
+  status: string;
+  refundedAmount?: number | null;
+  order?: string | null;
+  subscription?: string | null;
+  customer?: string | null;
+  description?: string;
+  periodStart?: number;
+  periodEnd?: number;
+  createdAt: number;
+};
+
+export type ConnectedPagination = {
+  totalRecords: number;
+  totalPages: number;
+  currentPage: number;
+  nextPage: number | null;
+  prevPage: number | null;
+};
+
+export type ConnectedTransactionList = {
+  items: ConnectedTransaction[];
+  pagination: ConnectedPagination;
 };
 
 /**

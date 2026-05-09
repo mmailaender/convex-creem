@@ -14,13 +14,14 @@
     subscriptionStatus?: string | null;
     subscriptionTrialEnd?: string | null;
     units?: number;
-    showSeatPicker?: boolean;
+    showUnitPicker?: boolean;
+    showCycleToggle?: boolean;
     twoColumnLayout?: boolean;
-    subscribedSeats?: number | null;
+    subscribedUnits?: number | null;
     isGroupSubscribed?: boolean;
     disableCheckout?: boolean;
     disableSwitch?: boolean;
-    disableSeats?: boolean;
+    disableUnits?: boolean;
     className?: string;
     onCycleChange?: (cycle: RecurringCycle) => void;
     onCheckout?: (payload: {
@@ -33,7 +34,7 @@
       productId: string;
       units?: number;
     }) => Promise<void> | void;
-    onUpdateSeats?: (payload: { units: number }) => Promise<void> | void;
+    onUpdateUnits?: (payload: { units: number }) => Promise<void> | void;
     onContactSales?: (payload: { plan: UIPlanEntry }) => Promise<void> | void;
     onCancelSubscription?: () => void;
   }
@@ -47,18 +48,19 @@
     subscriptionStatus = null,
     subscriptionTrialEnd = null,
     units = undefined,
-    showSeatPicker = false,
+    showUnitPicker = false,
+    showCycleToggle = true,
     twoColumnLayout = false,
-    subscribedSeats = null,
+    subscribedUnits = null,
     isGroupSubscribed = false,
     disableCheckout = false,
     disableSwitch = false,
-    disableSeats = false,
+    disableUnits = false,
     className = "",
     onCycleChange,
     onCheckout,
     onSwitchPlan,
-    onUpdateSeats,
+    onUpdateUnits,
     onContactSales,
     onCancelSubscription,
   }: Props = $props();
@@ -78,7 +80,7 @@
   const effectiveCycle = $derived(
     selectedCycle ?? snapshot?.recurringCycle ?? availableCycles[0],
   );
-  const showToggle = $derived(availableCycles.length > 1);
+  const showToggle = $derived(showCycleToggle && availableCycles.length > 1);
 </script>
 
 <section class={className}>
@@ -92,7 +94,7 @@
     </div>
   {/if}
 
-  <div class={`grid grid-cols-1 gap-1 ${showSeatPicker || twoColumnLayout ? "md:grid-cols-2" : hasEnterprisePlan ? "sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4" : "sm:grid-cols-2 md:grid-cols-3"}`}>
+  <div class={`grid grid-cols-1 gap-1 ${showUnitPicker || twoColumnLayout ? "md:grid-cols-2" : hasEnterprisePlan ? "sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4" : "sm:grid-cols-2 md:grid-cols-3"}`}>
     {#each plans as plan (plan.planId)}
       <PricingCard
         {plan}
@@ -103,15 +105,15 @@
         {subscriptionTrialEnd}
         {products}
         {units}
-        {showSeatPicker}
-        {subscribedSeats}
+        {showUnitPicker}
+        {subscribedUnits}
         {isGroupSubscribed}
         {disableCheckout}
         {disableSwitch}
-        {disableSeats}
+        {disableUnits}
         {onCheckout}
         {onSwitchPlan}
-        {onUpdateSeats}
+        {onUpdateUnits}
         {onContactSales}
         {onCancelSubscription}
         className=""

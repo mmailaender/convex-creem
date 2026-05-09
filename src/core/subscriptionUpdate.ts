@@ -1,7 +1,7 @@
 import type { UpdateBehavior } from "./types.js";
 
 export type UpdateSummaryInput = {
-  kind: "plan-switch" | "seat-update";
+  kind: "plan-switch" | "unit-update";
   updateBehavior: UpdateBehavior;
   currentLabel: string;
   newLabel: string;
@@ -77,7 +77,7 @@ export const buildUpdateSummary = (
   if (isTrialing) {
     const trialNote = trialEnd ? formatTrialEnd(trialEnd) : null;
     return {
-      title: kind === "plan-switch" ? "Switch plan?" : "Update seats?",
+      title: kind === "plan-switch" ? "Switch plan?" : "Update units?",
       description:
         trialNote ??
         "Your free trial will continue. The new price will take effect once the trial ends.",
@@ -90,7 +90,7 @@ export const buildUpdateSummary = (
   }
 
   return {
-    title: kind === "plan-switch" ? "Switch plan?" : "Update seats?",
+    title: kind === "plan-switch" ? "Switch plan?" : "Update units?",
     description: getBehaviorDescription(updateBehavior),
     currentLabel,
     newLabel,

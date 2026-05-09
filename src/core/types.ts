@@ -32,8 +32,23 @@ export type AvailableAction =
   | "cancel"
   | "reactivate"
   | "switch_interval"
-  | "update_seats"
+  | "update_units"
   | "contact_sales";
+
+/**
+ * Payment recovery state derived from subscription status.
+ * - `"none"` — all subscriptions healthy
+ * - `"warning"` — a subscription is past due but still active
+ * - `"blocked"` — a subscription is unpaid or expired
+ */
+export type PaymentRecoveryState = "none" | "warning" | "blocked";
+
+export type CatalogProductRef =
+  | string
+  | {
+      productId: string;
+      productSlug?: string;
+    };
 
 /** A single plan definition in the billing catalog. */
 export type PlanCatalogEntry = {
@@ -45,16 +60,28 @@ export type PlanCatalogEntry = {
   billingType?: BillingType;
   /** Supported billing cycles for this plan (e.g. `["every-month", "every-year"]`). */
   billingCycles?: RecurringCycle[];
-  /** Pricing model — `"seat"` enables per-seat controls in widgets. */
-  pricingModel?: "flat" | "seat";
+  /** Optional app-facing pricing audience or product-line group (e.g. `"individual"`, `"teams"`). */
+  groupId?: string;
+  /** Optional display label for `groupId`. */
+  groupTitle?: string;
+  /** Optional app-authored plan title. Creem product name is used when omitted. */
+  title?: string;
+  /** Optional app-authored plan description. Creem product description is used when omitted. */
+  description?: string;
+  /** Pricing model — `"unit"` enables quantity/unit controls in widgets. */
+  pricingModel?: "flat" | "unit";
+  /** Preferred recurring product map for catalog-backed widgets. */
+  products?: Readonly<Record<string, CatalogProductRef>>;
   /** Map of billing cycle → Creem product ID (e.g. `{ "every-month": "prod_xxx" }`). */
-  creemProductIds?: Record<string, string>;
+  creemProductIds?: Readonly<Record<string, string>>;
   /** "Contact sales" URL for enterprise plans. */
   contactUrl?: string;
   /** Highlight this plan as recommended in the UI. */
   recommended?: boolean;
+  /** Plan-specific usage limits. Keys are app-defined limit names, values are numeric caps. Used by `evaluateUsageLimits`. */
+  limits?: Readonly<Record<string, number>>;
   /** Arbitrary metadata for custom logic. */
-  metadata?: Record<string, unknown>;
+  metadata?: Readonly<Record<string, unknown>>;
 };
 
 /** Plan catalog entry enriched with resolved UI display fields from Creem product data. */
@@ -70,10 +97,13 @@ export type PlanCatalog = {
   /** Catalog version string (included in `BillingSnapshot.catalogVersion`). */
   version: string;
   /** Ordered list of plan definitions. */
-  plans: PlanCatalogEntry[];
+  plans: readonly PlanCatalogEntry[];
   /** Plan ID to use when no subscription is active (e.g. `"free"`). */
   defaultPlanId?: string;
 };
+
+export type PlanId<TCatalog extends { plans: readonly { planId: string }[] }> =
+  TCatalog["plans"][number]["planId"];
 
 /** Lightweight subscription state used by the billing resolver. */
 export type SubscriptionSnapshot = {
@@ -85,8 +115,8 @@ export type SubscriptionSnapshot = {
   status?: string;
   /** Billing interval (e.g. `"every-month"`, `"every-year"`). */
   recurringInterval?: string | null;
-  /** Number of seats (for seat-based pricing). */
-  seats?: number | null;
+  /** Number of units. A unit may represent a seat, credit pack quantity, or another billable unit. */
+  units?: number | null;
   /** Whether the subscription is set to cancel at the end of the current period. */
   cancelAtPeriodEnd?: boolean;
   /** ISO timestamp of the current period end. */
@@ -149,8 +179,8 @@ export type BillingSnapshot = {
   availableBillingCycles: RecurringCycle[];
   /** Raw subscription status string (e.g. `"active"`, `"trialing"`, `"canceled"`). */
   subscriptionState?: string;
-  /** Current seat count for seat-based subscriptions. */
-  seats?: number;
+  /** Current unit count for unit-based subscriptions. */
+  units?: number;
   /** One-time payment state, or `null` if not applicable. */
   payment: PaymentSnapshot | null;
   /** Actions the billing entity is allowed to perform. */
@@ -161,17 +191,17 @@ export type BillingSnapshot = {
 
 /**
  * Intent object passed to `onBeforeCheckout` and stored by `pendingCheckout`.
- * Represents the product and optional seat count the user wants to purchase.
+ * Represents the product and optional unit count the user wants to purchase.
  */
 export type CheckoutIntent = {
   /** Creem product ID to purchase. */
   productId: string;
-  /** Number of seats/units (for seat-based plans). */
+  /** Number of units for unit-based plans. A unit may represent a seat. */
   units?: number;
 };
 
 /**
- * How the Creem API handles plan switches and seat changes.
+ * How the Creem API handles plan switches and unit changes.
  * - `"proration-charge-immediately"` — prorate and charge the difference now
  * - `"proration-charge"` — prorate, charge on next invoice
  * - `"proration-none"` — no proration, change takes effect on next billing cycle
@@ -198,6 +228,94 @@ export const getSwitchPlanDescription = (
     case "proration-none":
       return `${prefix} The new price will take effect at your next billing cycle.`;
   }
+};
+
+/** A single evaluated usage-limit check result. */
+export type UsageLimitEntry = {
+  /** Current usage count provided by the app. */
+  used: number;
+  /** Limit from the catalog plan's `limits` metadata, or `Infinity` when unlimited. */
+  limit: number;
+  /** Whether the usage has reached or exceeded the limit. */
+  exceeded: boolean;
+};
+
+/** Result of `evaluateUsageLimits`. Keys match the limit keys defined in the catalog plan. */
+export type UsageLimitResult = Record<string, UsageLimitEntry>;
+
+// ── Normalized billing snapshot types ──────────────────────────
+
+/** A single subscription row in the normalized billing snapshot. */
+export type BillingSnapshotSubscription = {
+  /** Stable plan ID from the catalog (if resolved). */
+  planId: string | null;
+  /** Creem product ID. */
+  productId: string;
+  /** Creem subscription ID. */
+  subscriptionId: string;
+  /** Subscription status (e.g. `"active"`, `"trialing"`, `"canceled"`). */
+  status: string;
+  /** Billing interval. */
+  recurringCycle: RecurringCycle | null;
+  /** Optional kind tag from the catalog (e.g. `"base"`, `"addon"`). */
+  kind?: string;
+  /** Current unit count for unit-based subscriptions. */
+  units?: number | null;
+  /** Whether the subscription is set to cancel at period end. */
+  cancelAtPeriodEnd?: boolean;
+  /** ISO timestamp of the current period end. */
+  currentPeriodEnd?: string | null;
+  /** ISO timestamp when the trial expires. */
+  trialEnd?: string | null;
+};
+
+/** A single order row in the normalized billing snapshot. */
+export type BillingSnapshotOrder = {
+  /** Stable plan ID from the catalog (if resolved). */
+  planId: string | null;
+  /** Creem order ID. */
+  orderId: string;
+  /** Creem product ID. */
+  productId: string;
+  /** Order status. */
+  status: string;
+};
+
+/**
+ * Normalized billing snapshot with explicit subscription and order arrays.
+ * This is the evolution of `BillingSnapshot` that supports multiple subscriptions
+ * (base + add-ons) and one-time orders as first-class citizens.
+ */
+export type NormalizedBillingSnapshot = {
+  /** Billing entity ID. */
+  entityId: string;
+  /** Version of the plan catalog used for resolution. */
+  catalogVersion?: string;
+  /** All active/relevant subscriptions. */
+  subscriptions: BillingSnapshotSubscription[];
+  /** All one-time orders. */
+  orders: BillingSnapshotOrder[];
+  /** Derived payment recovery state from subscription statuses. */
+  paymentRecoveryState: PaymentRecoveryState;
+  /** Actions the billing entity is allowed to perform. */
+  availableBillingActions: AvailableAction[];
+  /** ISO timestamp when this snapshot was resolved. */
+  resolvedAt: string;
+};
+
+/**
+ * Intent object passed to `onBeforePlanChange`.
+ * Describes the plan change the user is about to make.
+ */
+export type PlanChangeIntent = {
+  /** Plan ID the user is switching from, or `null` if no current plan. */
+  fromPlanId: string | null;
+  /** Plan ID the user is switching to. */
+  toPlanId: string;
+  /** Creem product ID of the target plan. */
+  productId: string;
+  /** Number of units (for unit-based plans). */
+  units?: number;
 };
 
 /** Arbitrary user context passed through to the billing resolver. */

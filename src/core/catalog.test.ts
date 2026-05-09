@@ -5,8 +5,11 @@ import {
   normalizePlanCategory,
   normalizeBillingType,
   normalizePlanCatalog,
+  defineBillingCatalog,
+  plansOf,
   findPlanById,
   findPlanByProductId,
+  resolvePlanProductId,
 } from "./catalog.js";
 
 describe("isSupportedRecurringCycle", () => {
@@ -146,6 +149,41 @@ describe("normalizePlanCatalog", () => {
     // null normalizes to undefined which gets filtered out
     expect(catalog!.plans[0].billingCycles).toEqual(["every-month"]);
   });
+
+  it("normalizes products to creemProductIds", () => {
+    const catalog = normalizePlanCatalog(
+      defineBillingCatalog({
+        version: "1",
+        plans: [
+          {
+            planId: "team",
+            category: "paid",
+            products: {
+              "every-month": {
+                productSlug: "team-monthly",
+                productId: "prod_team_monthly",
+              },
+            },
+          },
+        ],
+      } as const),
+    );
+
+    expect(catalog?.plans[0].creemProductIds).toEqual({
+      "every-month": "prod_team_monthly",
+    });
+  });
+});
+
+describe("plansOf", () => {
+  it("returns plan IDs unchanged", () => {
+    const catalog = defineBillingCatalog({
+      version: "1",
+      plans: [{ planId: "pro", category: "paid" }],
+    } as const);
+
+    expect(plansOf(catalog, ["pro"] as const)).toEqual(["pro"]);
+  });
 });
 
 describe("findPlanById", () => {
@@ -208,5 +246,38 @@ describe("findPlanByProductId", () => {
 
   it("returns undefined for undefined productId", () => {
     expect(findPlanByProductId(catalog, undefined)).toBeUndefined();
+  });
+});
+
+describe("resolvePlanProductId", () => {
+  const catalog = normalizePlanCatalog({
+    version: "1",
+    plans: [
+      {
+        planId: "pro",
+        category: "paid",
+        products: {
+          "every-month": "prod_monthly",
+        },
+      },
+    ],
+  });
+
+  it("resolves a product ID by plan and cycle", () => {
+    expect(resolvePlanProductId(catalog, "pro", "every-month")).toBe(
+      "prod_monthly",
+    );
+  });
+
+  it("throws a clear error for unknown plans", () => {
+    expect(() =>
+      resolvePlanProductId(catalog, "missing", "every-month"),
+    ).toThrow('Unknown billing plan "missing"');
+  });
+
+  it("throws a clear error for unavailable cycles", () => {
+    expect(() => resolvePlanProductId(catalog, "pro", "every-year")).toThrow(
+      'Billing plan "pro" has no product for "every-year"',
+    );
   });
 });

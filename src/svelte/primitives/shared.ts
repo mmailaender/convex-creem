@@ -84,20 +84,20 @@ const INTERVAL_LABELS: Record<string, string> = {
   "every-year": "/yr",
 };
 
-export const formatSeatPrice = (
+export const formatUnitPrice = (
   productId: string | undefined,
   products: ConnectedProduct[],
-  seats: number,
+  units: number,
 ): string | null => {
   const resolved = resolveProductPrice(productId, products);
   if (!resolved) return null;
   const suffix = resolved.interval
     ? (INTERVAL_LABELS[resolved.interval] ?? "")
     : "";
-  if (seats <= 1) {
+  if (units <= 1) {
     return `${resolved.formatted}${suffix}`;
   }
-  return `${resolved.formatted}${suffix} × ${seats} seats`;
+  return `${resolved.formatted}${suffix} × ${units} units`;
 };
 
 export const formatPriceWithInterval = (

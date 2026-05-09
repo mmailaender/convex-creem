@@ -1,7 +1,43 @@
-import type { SubscriptionPlanRegistration } from "./types.js";
+import type { RecurringCycle, UIPlanEntry } from "../../core/types.js";
+import type {
+  ConnectedProduct,
+  SubscriptionPlanRegistration,
+} from "./types.js";
 
 export type SubscriptionContextValue = {
   registerPlan: (plan: SubscriptionPlanRegistration) => () => void;
+  getPlan: (planId: string) => UIPlanEntry | undefined;
+  isPlanVisible: (planId: string) => boolean;
+  getSelectedCycle: () => RecurringCycle | undefined;
+  getActivePlanId: () => string | null;
+  getProducts: () => ConnectedProduct[];
+  getSubscriptionProductId: () => string | null;
+  getSubscriptionStatus: () => string | null;
+  getSubscriptionTrialEnd: () => string | null;
+  getSubscribedUnits: () => number | null;
+  getUnits: () => number | undefined;
+  getShowUnitPicker: () => boolean;
+  getIsGroupSubscribed: () => boolean;
+  getDisableCheckout: () => boolean;
+  getDisableSwitch: () => boolean;
+  getDisableUnits: () => boolean;
+  checkout: (payload: {
+    plan: UIPlanEntry;
+    productId: string;
+    units?: number;
+  }) => Promise<void> | void;
+  switchPlan?: (payload: {
+    plan: UIPlanEntry;
+    productId: string;
+    units?: number;
+  }) => Promise<void> | void;
+  updateUnits?: (payload: { units: number }) => Promise<void> | void;
+  cancelSubscription?: () => void;
+  groupItems: () => Array<{ value: string; label: string }>;
+  activeGroupId: () => string | null;
+  setGroup: (group: string) => void;
+  availableCycles: () => RecurringCycle[];
+  setCycle: (cycle: RecurringCycle) => void;
 };
 
 export const SUBSCRIPTION_CONTEXT_KEY = Symbol("creem.subscription.context");

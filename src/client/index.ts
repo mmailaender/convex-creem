@@ -96,7 +96,7 @@ export const checkoutCreateArgs = {
 };
 
 /**
- * Convex arg validator for subscription updates (plan switch or seat change).
+ * Convex arg validator for subscription updates (plan switch or unit change).
  * Matches the args sent by `<Subscription.Root>` widgets.
  */
 export const subscriptionUpdateArgs = {
@@ -135,6 +135,66 @@ export const subscriptionResumeArgs = {
  */
 export const subscriptionPauseArgs = {
   subscriptionId: v.optional(v.string()),
+};
+
+/**
+ * Convex arg validator for transaction history search.
+ * Matches the args sent by `<BillingHistory>` widgets.
+ */
+export const transactionsSearchArgs = {
+  customerId: v.optional(v.string()),
+  orderId: v.optional(v.string()),
+  productId: v.optional(v.string()),
+  pageNumber: v.optional(v.number()),
+  pageSize: v.optional(v.number()),
+};
+
+// ── Credits arg validators ────────────────────────────────────────────
+
+/**
+ * Convex arg validator for creating a credits account.
+ * Matches the args sent by credits widgets or custom functions.
+ */
+export const creditsCreateAccountArgs = {
+  name: v.optional(v.string()),
+  unitLabel: v.optional(v.string()),
+  initialBalance: v.optional(v.string()),
+};
+
+/**
+ * Convex arg validator for getting credits balance.
+ */
+export const creditsGetBalanceArgs = {
+  accountId: v.optional(v.string()),
+};
+
+/**
+ * Convex arg validator for crediting an account.
+ */
+export const creditsCreditArgs = {
+  accountId: v.optional(v.string()),
+  amount: v.string(),
+  reference: v.string(),
+  idempotencyKey: v.string(),
+};
+
+/**
+ * Convex arg validator for debiting an account.
+ */
+export const creditsDebitArgs = {
+  accountId: v.optional(v.string()),
+  amount: v.string(),
+  reference: v.string(),
+  idempotencyKey: v.string(),
+};
+
+/**
+ * Convex arg validator for listing credit entries (history).
+ */
+export const creditsListEntriesArgs = {
+  accountId: v.optional(v.string()),
+  limit: v.optional(v.number()),
+  startingAfter: v.optional(v.string()),
 };
 
 /** Function reference type for internal mutations that receive a subscription document. */
@@ -414,7 +474,7 @@ export class Creem {
       productId: subscription.productId,
       status: subscription.status,
       recurringInterval: subscription.recurringInterval,
-      seats: subscription.seats,
+      units: subscription.seats,
       cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
       currentPeriodEnd: subscription.currentPeriodEnd,
       trialEnd: subscription.trialEnd ?? null,
@@ -528,6 +588,36 @@ export class Creem {
     }
   }
 
+  /** Resolve the default credits account ID for an entity. Finds or creates it. */
+  private async resolveDefaultCreditAccountId(
+    ctx: RunActionCtx,
+    entityId: string,
+  ): Promise<string> {
+    const customer = await ctx.runQuery(
+      this.component.lib.getCustomerByEntityId,
+      { entityId },
+    );
+    if (!customer) {
+      throw new ConvexError("Customer not found — complete a checkout first");
+    }
+    // Try to find existing default account
+    const accounts = await this.sdk.customerCredits.listAccounts(
+      10,
+      customer.id,
+    );
+    const existing = accounts.data?.find(
+      (a) => a.name === "default" || a.name === "credits",
+    );
+    if (existing) return existing.id;
+    // Auto-create a default credits account
+    const created = await this.sdk.customerCredits.createAccount({
+      customerId: customer.id,
+      name: "credits",
+      unitLabel: "credits",
+    });
+    return created.id;
+  }
+
   // ── Namespace getters (public API) ─────────────────────────
 
   /**
@@ -539,7 +629,7 @@ export class Creem {
    * - `.getCurrent()` — current active subscription with product join (Convex DB)
    * - `.list()` — active subscriptions, excludes ended + expired trials (Convex DB)
    * - `.listAll()` — all subscriptions including ended (Convex DB)
-   * - `.update()` — plan switch (`productId`) or seat change (`units`) (Creem API, optimistic)
+   * - `.update()` — plan switch (`productId`) or unit change (`units`) (Creem API, optimistic)
    * - `.cancel()` — cancel subscription (Creem API, optimistic)
    * - `.pause()` — pause an active subscription (Creem API, optimistic)
    * - `.resume()` — resume a paused or scheduled-cancel subscription (Creem API, optimistic)
@@ -748,6 +838,70 @@ export class Creem {
           },
         );
       },
+      /**
+       * Cancel to free plan — temporary workaround until Creem supports native free plans.
+       *
+       * Schedules the active subscription for cancellation at period end, then
+       * the app should activate its app-owned free plan via the
+       * `subscription.canceled` or `subscription.scheduled_cancel` webhook event.
+       *
+       * This is NOT a general plan-change API. For paid→paid transitions use `.update()`.
+       * For normal cancellation use `.cancel()`. This method exists solely as the
+       * intermediate bridge for "paid subscription ends → app activates free plan".
+       *
+       * @param ctx - Convex mutation context with scheduler
+       * @param args.entityId - Billing entity ID
+       * @param args.subscriptionId - Optional subscription ID (resolves current if omitted)
+       * @param args.freePlanId - Stable plan ID for the free plan (e.g. `"free"`)
+       * @returns The freePlanId, to be used by the app in webhook handlers
+       */
+      cancelToFreePlan: async (
+        ctx: RunSchedulerMutationCtx,
+        args: {
+          entityId: string;
+          subscriptionId?: string;
+          freePlanId: string;
+        },
+      ): Promise<{ freePlanId: string }> => {
+        const subscription = args.subscriptionId
+          ? await ctx.runQuery(this.component.lib.getSubscription, {
+              id: args.subscriptionId,
+            })
+          : await ctx.runQuery(this.component.lib.getCurrentSubscription, {
+              entityId: args.entityId,
+            });
+        if (!subscription) throw new ConvexError("Subscription not found");
+        if (
+          subscription.status !== "active" &&
+          subscription.status !== "trialing"
+        ) {
+          throw new ConvexError("Subscription is not active");
+        }
+
+        // Always schedule cancellation (not immediate), so the user keeps access until period end
+        await ctx.runMutation(this.component.lib.patchSubscription, {
+          subscriptionId: subscription.id,
+          cancelAtPeriodEnd: true,
+        });
+
+        // Schedule the Creem API call for scheduled cancellation
+        await ctx.scheduler.runAfter(
+          0,
+          this.component.lib.executeSubscriptionLifecycle,
+          {
+            apiKey: this.apiKey,
+            serverIdx: this.serverIdx,
+            serverURL: this.serverURL,
+            subscriptionId: subscription.id,
+            operation: "cancel",
+            cancelMode: "scheduled",
+            previousStatus: subscription.status,
+            previousCancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+          },
+        );
+
+        return { freePlanId: args.freePlanId };
+      },
     };
   }
 
@@ -848,6 +1002,63 @@ export class Creem {
     };
   }
 
+  /**
+   * Credits namespace. Wraps Creem Customer Credits API.
+   *
+   * - `.createAccount()` — create a credits account for a customer
+   * - `.getBalance()` — get current balance
+   * - `.credit()` — add credits
+   * - `.debit()` — consume/spend credits
+   * - `.listEntries()` — paginated transaction history
+   * - `.listAccounts()` — list all accounts for a customer
+   */
+  get credits() {
+    return {
+      createAccount: async (args: {
+        customerId: string;
+        name?: string;
+        unitLabel?: string;
+        initialBalance?: string;
+      }) => {
+        return await this.sdk.customerCredits.createAccount({
+          customerId: args.customerId,
+          name: args.name,
+          unitLabel: args.unitLabel,
+          initialBalance: args.initialBalance,
+        });
+      },
+      getBalance: async (accountId: string) => {
+        return await this.sdk.customerCredits.getAccountBalance(accountId);
+      },
+      credit: async (
+        accountId: string,
+        args: { amount: string; reference: string; idempotencyKey: string },
+      ) => {
+        return await this.sdk.customerCredits.creditAccount(accountId, args);
+      },
+      debit: async (
+        accountId: string,
+        args: { amount: string; reference: string; idempotencyKey: string },
+      ) => {
+        return await this.sdk.customerCredits.debitAccount(accountId, args);
+      },
+      listEntries: async (
+        accountId: string,
+        limit?: number,
+        startingAfter?: string,
+      ) => {
+        return await this.sdk.customerCredits.listEntries(
+          accountId,
+          limit,
+          startingAfter,
+        );
+      },
+      listAccounts: async (customerId?: string, limit?: number) => {
+        return await this.sdk.customerCredits.listAccounts(limit, customerId);
+      },
+    };
+  }
+
   // ── Component helpers (public, flat) ──────────────────────
 
   /**
@@ -888,7 +1099,7 @@ export class Creem {
           cancelAtPeriodEnd: boolean;
           currentPeriodEnd: string | null;
           currentPeriodStart: string;
-          seats: number | null;
+          units: number | null;
           recurringInterval: string | null;
           trialEnd: string | null;
         }>,
@@ -922,7 +1133,7 @@ export class Creem {
         cancelAtPeriodEnd: s.cancelAtPeriodEnd,
         currentPeriodEnd: s.currentPeriodEnd,
         currentPeriodStart: s.currentPeriodStart,
-        seats: s.seats,
+        units: s.seats,
         recurringInterval: s.recurringInterval,
         trialEnd: s.trialEnd ?? null,
       })),
@@ -1028,7 +1239,7 @@ export class Creem {
             if (!subscription) throw new ConvexError("Subscription not found");
 
             // Write optimistic state
-            // For plan switches, also protect current seats from stale webhook data
+            // For plan switches, also protect current units from stale webhook data
             await ctx.runMutation(this.component.lib.patchSubscription, {
               subscriptionId: subscription.id,
               ...(args.units != null ? { seats: args.units } : {}),
@@ -1250,6 +1461,41 @@ export class Creem {
           },
         }),
       },
+      transactions: {
+        search: actionGeneric({
+          args: transactionsSearchArgs,
+          returns: v.any(),
+          handler: async (ctx, args) => {
+            const { entityId } = await resolve(ctx);
+            const customer = await ctx.runQuery(
+              this.component.lib.getCustomerByEntityId,
+              { entityId },
+            );
+            const customerId = args.customerId ?? customer?.id;
+
+            if (!customerId) {
+              return {
+                items: [],
+                pagination: {
+                  totalRecords: 0,
+                  totalPages: 0,
+                  currentPage: args.pageNumber ?? 1,
+                  nextPage: null,
+                  prevPage: null,
+                },
+              };
+            }
+
+            return await this.sdk.transactions.search(
+              customerId,
+              args.orderId,
+              args.productId,
+              args.pageNumber,
+              args.pageSize,
+            );
+          },
+        }),
+      },
       orders: {
         list: queryGeneric({
           args: {},
@@ -1257,6 +1503,85 @@ export class Creem {
           handler: async (ctx) => {
             const { entityId } = await resolve(ctx);
             return await this.orders.list(ctx, { entityId });
+          },
+        }),
+      },
+      credits: {
+        createAccount: actionGeneric({
+          args: creditsCreateAccountArgs,
+          returns: v.any(),
+          handler: async (ctx, args) => {
+            const { entityId } = await resolve(ctx);
+            const customer = await ctx.runQuery(
+              this.component.lib.getCustomerByEntityId,
+              { entityId },
+            );
+            if (!customer)
+              throw new ConvexError(
+                "Customer not found — complete a checkout first",
+              );
+            return await this.credits.createAccount({
+              customerId: customer.id,
+              name: args.name,
+              unitLabel: args.unitLabel,
+              initialBalance: args.initialBalance,
+            });
+          },
+        }),
+        getBalance: actionGeneric({
+          args: creditsGetBalanceArgs,
+          returns: v.any(),
+          handler: async (ctx, args) => {
+            const { entityId } = await resolve(ctx);
+            const accountId =
+              args.accountId ??
+              (await this.resolveDefaultCreditAccountId(ctx, entityId));
+            return await this.credits.getBalance(accountId);
+          },
+        }),
+        credit: actionGeneric({
+          args: creditsCreditArgs,
+          returns: v.any(),
+          handler: async (ctx, args) => {
+            const { entityId } = await resolve(ctx);
+            const accountId =
+              args.accountId ??
+              (await this.resolveDefaultCreditAccountId(ctx, entityId));
+            return await this.credits.credit(accountId, {
+              amount: args.amount,
+              reference: args.reference,
+              idempotencyKey: args.idempotencyKey,
+            });
+          },
+        }),
+        debit: actionGeneric({
+          args: creditsDebitArgs,
+          returns: v.any(),
+          handler: async (ctx, args) => {
+            const { entityId } = await resolve(ctx);
+            const accountId =
+              args.accountId ??
+              (await this.resolveDefaultCreditAccountId(ctx, entityId));
+            return await this.credits.debit(accountId, {
+              amount: args.amount,
+              reference: args.reference,
+              idempotencyKey: args.idempotencyKey,
+            });
+          },
+        }),
+        listEntries: actionGeneric({
+          args: creditsListEntriesArgs,
+          returns: v.any(),
+          handler: async (ctx, args) => {
+            const { entityId } = await resolve(ctx);
+            const accountId =
+              args.accountId ??
+              (await this.resolveDefaultCreditAccountId(ctx, entityId));
+            return await this.credits.listEntries(
+              accountId,
+              args.limit,
+              args.startingAfter,
+            );
           },
         }),
       },

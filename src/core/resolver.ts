@@ -93,10 +93,12 @@ const buildActions = (
   }
 
   if (
-    (plan?.pricingModel === "seat" || subscription.seats != null) &&
+    (plan?.pricingModel === "unit" ||
+      subscription.units != null ||
+      (subscription as { seats?: number | null }).seats != null) &&
     billingType === "recurring"
   ) {
-    actions.add("update_seats");
+    actions.add("update_units");
   }
 
   return Array.from(actions);
@@ -147,7 +149,10 @@ export const resolveBillingSnapshot = (
     recurringCycle,
     availableBillingCycles,
     subscriptionState: subscription?.status,
-    seats: subscription?.seats ?? undefined,
+    units:
+      subscription?.units ??
+      (subscription as { seats?: number | null } | null)?.seats ??
+      undefined,
     payment: input.payment ?? null,
     availableActions: buildActions(input, activePlan, billingType),
     metadata: {

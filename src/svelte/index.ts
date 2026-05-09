@@ -14,30 +14,68 @@ export { default as PricingSection } from "./primitives/PricingSection.svelte";
 export { default as BillingGate } from "./primitives/BillingGate.svelte";
 export { default as ScheduledChangeBanner } from "./primitives/ScheduledChangeBanner.svelte";
 export { default as PaymentWarningBanner } from "./primitives/PaymentWarningBanner.svelte";
+export { default as PaymentRecoveryBanner } from "./primitives/PaymentRecoveryBanner.svelte";
+export { default as PaymentRecoveryButton } from "./primitives/PaymentRecoveryButton.svelte";
 export { default as TrialLimitBanner } from "./primitives/TrialLimitBanner.svelte";
 export { default as OneTimeCheckoutButton } from "./primitives/OneTimeCheckoutButton.svelte";
 export { default as OneTimePaymentStatusBadge } from "./primitives/OneTimePaymentStatusBadge.svelte";
 export { default as CheckoutSuccessSummary } from "./primitives/CheckoutSuccessSummary.svelte";
-export { Subscription, Product, BillingPortal } from "./widgets/index.js";
+export {
+  Subscription,
+  Product,
+  BillingPortal,
+  BillingHistory,
+  Credits,
+  getSubscriptionItemContext,
+} from "./widgets/index.js";
 export type {
   BillingSnapshot,
   CheckoutSuccessParams,
   OneTimePaymentStatus,
   RecurringCycle,
 } from "../core/types.js";
+export { defineBillingCatalog, plansOf } from "../core/catalog.js";
 export {
   hasBillingAction,
   isEnterpriseBilling,
   isOneTimeBilling,
   isTerminalPaymentStatus,
   shouldShowBillingCycleToggle,
+  derivePaymentRecoveryState,
+  selectOwnedProductIds,
+  resolveBasePlanId,
 } from "../core/selectors.js";
+export { evaluateUsageLimits } from "../core/usageLimits.js";
+export { resolveNormalizedSnapshot } from "../core/normalizedResolver.js";
+export { createCreemSvelte } from "./createCreemSvelte.js";
+export type {
+  CreateCreemSvelteOptions,
+  CreemSvelteBinding,
+} from "./createCreemSvelte.js";
 export type {
   BillingPermissions,
   CheckoutIntent,
+  PlanChangeIntent,
   ConnectedBillingApi,
   ConnectedBillingModel,
+  ConnectedTransaction,
+  ConnectedTransactionList,
   ProductType,
   SubscriptionPlanType,
   Transition,
 } from "./widgets/types.js";
+export type {
+  PlanId,
+  PaymentRecoveryState,
+  UsageLimitEntry,
+  UsageLimitResult,
+  BillingSnapshotSubscription,
+  BillingSnapshotOrder,
+  NormalizedBillingSnapshot,
+  PlanChangeIntent as PlanChangeIntentCore,
+} from "../core/types.js";
+export type {
+  BillingContextValue,
+  BillingProviderConfig,
+} from "../core/context.js";
+export type { NormalizedResolverInput } from "../core/normalizedResolver.js";

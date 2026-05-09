@@ -11,6 +11,7 @@ import { Dialog } from "@ark-ui/react/dialog";
 import { Portal } from "@ark-ui/react/portal";
 
 import { PricingSection } from "../primitives/PricingSection.js";
+import { SegmentGroup } from "../primitives/SegmentGroup.js";
 import { PaymentWarningBanner } from "../primitives/PaymentWarningBanner.js";
 import { ScheduledChangeBanner } from "../primitives/ScheduledChangeBanner.js";
 
@@ -18,17 +19,22 @@ import { SubscriptionContext } from "./subscriptionContext.js";
 import { pendingCheckout } from "../../core/pendingCheckout.js";
 
 import type {
+  PlanCatalog,
+  PlanCatalogEntry,
   UIPlanEntry,
   RecurringCycle,
   UpdateBehavior,
 } from "../../core/types.js";
+import { findPlanById, normalizePlanCatalog } from "../../core/catalog.js";
 import { buildUpdateSummary } from "../../core/subscriptionUpdate.js";
-import { formatPriceWithInterval, formatSeatPrice } from "../shared.js";
+import { formatPriceWithInterval, formatUnitPrice } from "../shared.js";
 import type {
   BillingPermissions,
   CheckoutIntent,
+  PlanChangeIntent,
   ConnectedBillingApi,
   ConnectedBillingModel,
+  SubscriptionGroupRegistration,
   SubscriptionPlanRegistration,
 } from "./types.js";
 
@@ -44,28 +50,80 @@ const getPreferredTheme = (): "light" | "dark" => {
     : "light";
 };
 
+const formatGroupTitle = (value: string) =>
+  value
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+const planTypeToCategory = (
+  type: SubscriptionPlanRegistration["type"],
+  fallback?: PlanCatalogEntry,
+) => {
+  if (type === "free") return "free";
+  if (type === "enterprise") return "enterprise";
+  return fallback?.category ?? "paid";
+};
+
+const planTypeToBillingType = (
+  type: SubscriptionPlanRegistration["type"],
+  fallback?: PlanCatalogEntry,
+) => {
+  if (type === "free" || type === "enterprise") return "custom";
+  return fallback?.billingType ?? "recurring";
+};
+
 export const SubscriptionRoot = ({
   api,
+  catalog,
+  plans: planIds,
+  groups,
+  defaultGroup,
+  group,
+  onGroupChange,
+  groupSelector = "auto",
+  defaultCycle = "every-month",
+  cycle,
+  onCycleChange,
+  intervalSelector = "auto",
   permissions,
   className = "",
   successUrl,
   units,
-  showSeatPicker = false,
+  showUnitPicker = false,
   twoColumnLayout = false,
   updateBehavior = "proration-charge-immediately",
   onBeforeCheckout,
+  onBeforePlanChange,
+  onBeforeFreePlanActivation,
   children,
 }: PropsWithChildren<{
   api: ConnectedBillingApi;
+  catalog?: PlanCatalog;
+  plans?: readonly string[];
+  groups?: SubscriptionGroupRegistration[];
+  defaultGroup?: string;
+  group?: string;
+  onGroupChange?: (group: string) => void;
+  groupSelector?: "auto" | "hidden" | "external";
+  defaultCycle?: RecurringCycle;
+  cycle?: RecurringCycle;
+  onCycleChange?: (cycle: RecurringCycle) => void;
+  intervalSelector?: "auto" | "hidden" | "external";
   permissions?: BillingPermissions;
   class?: string;
   className?: string;
   successUrl?: string;
   units?: number;
-  showSeatPicker?: boolean;
+  showUnitPicker?: boolean;
   twoColumnLayout?: boolean;
   updateBehavior?: UpdateBehavior;
   onBeforeCheckout?: (intent: CheckoutIntent) => Promise<boolean> | boolean;
+  onBeforePlanChange?: (intent: PlanChangeIntent) => Promise<boolean> | boolean;
+  onBeforeFreePlanActivation?: (intent: {
+    freePlanId: string;
+  }) => Promise<boolean> | boolean;
 }>) => {
   const canChange = permissions?.canChangeSubscription !== false;
   const canCancel = permissions?.canCancelSubscription !== false;
@@ -83,7 +141,10 @@ export const SubscriptionRoot = ({
   const model = (modelRaw ?? null) as ConnectedBillingModel | null;
 
   const [selectedCycle, setSelectedCycle] =
-    useState<RecurringCycle>("every-month");
+    useState<RecurringCycle>(defaultCycle);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(
+    defaultGroup ?? null,
+  );
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
@@ -94,7 +155,7 @@ export const SubscriptionRoot = ({
         productId: string;
         units?: number;
       }
-    | { kind: "seat-update"; units: number }
+    | { kind: "unit-update"; units: number }
     | null
   >(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -102,31 +163,52 @@ export const SubscriptionRoot = ({
     SubscriptionPlanRegistration[]
   >([]);
 
-  const contextValue = useMemo(
-    () => ({
-      registerPlan: (plan: SubscriptionPlanRegistration) => {
-        setRegisteredPlans((prev) => [
-          ...prev.filter((c) => c.planId !== plan.planId),
-          plan,
-        ]);
-        return () => {
-          setRegisteredPlans((prev) =>
-            prev.filter((c) => c.planId !== plan.planId),
-          );
-        };
-      },
-    }),
-    [],
-  );
+  const registerPlan = useCallback((plan: SubscriptionPlanRegistration) => {
+    setRegisteredPlans((prev) => [
+      ...prev.filter((c) => c.planId !== plan.planId),
+      plan,
+    ]);
+    return () => {
+      setRegisteredPlans((prev) =>
+        prev.filter((c) => c.planId !== plan.planId),
+      );
+    };
+  }, []);
 
   const allProducts = useMemo(
     () => model?.allProducts ?? [],
     [model?.allProducts],
   );
 
+  const normalizedCatalog = useMemo(
+    () => normalizePlanCatalog(catalog),
+    [catalog],
+  );
+
+  const catalogRegistrations = useMemo<SubscriptionPlanRegistration[]>(() => {
+    const ids =
+      groups && groups.length > 0
+        ? groups.flatMap((entry) => entry.plans)
+        : (planIds ?? []);
+    return ids.flatMap((planId) => {
+      const groupEntry = groups?.find((entry) => entry.plans.includes(planId));
+      return [
+        {
+          planId,
+          groupId: groupEntry?.value,
+          groupTitle: groupEntry?.label,
+        },
+      ];
+    });
+  }, [groups, planIds]);
+
   const plans = useMemo<UIPlanEntry[]>(() => {
-    return registeredPlans.map((plan) => {
-      const productIds = plan.productIds ?? {};
+    const registrations = [...catalogRegistrations, ...registeredPlans];
+    return registrations.map((plan) => {
+      const catalogEntry = normalizedCatalog
+        ? findPlanById(normalizedCatalog, plan.planId)
+        : undefined;
+      const productIds = plan.productIds ?? catalogEntry?.creemProductIds ?? {};
       const firstProductId = Object.values(productIds)[0];
       const firstProduct = firstProductId
         ? allProducts.find((p) => p.id === firstProductId)
@@ -138,24 +220,26 @@ export const SubscriptionRoot = ({
 
       const entry: UIPlanEntry = {
         planId: plan.planId,
-        category:
-          plan.type === "free"
-            ? "free"
-            : plan.type === "enterprise"
-              ? "enterprise"
-              : "paid",
-        billingType:
-          plan.type === "free" || plan.type === "enterprise"
-            ? "custom"
-            : "recurring",
-        pricingModel: plan.type === "seat-based" ? "seat" : "flat",
+        category: planTypeToCategory(plan.type, catalogEntry),
+        billingType: planTypeToBillingType(plan.type, catalogEntry),
+        pricingModel:
+          plan.type === "unit-based"
+            ? "unit"
+            : (catalogEntry?.pricingModel ?? "flat"),
+        groupId: plan.groupId ?? catalogEntry?.groupId,
+        groupTitle: plan.groupTitle ?? catalogEntry?.groupTitle,
         title:
           plan.title ??
+          catalogEntry?.title ??
           firstProduct?.name ??
           plan.planId.charAt(0).toUpperCase() + plan.planId.slice(1),
-        description: plan.description ?? firstProduct?.description ?? undefined,
-        contactUrl: plan.contactUrl,
-        recommended: plan.recommended,
+        description:
+          plan.description ??
+          catalogEntry?.description ??
+          firstProduct?.description ??
+          undefined,
+        contactUrl: plan.contactUrl ?? catalogEntry?.contactUrl,
+        recommended: plan.recommended ?? catalogEntry?.recommended,
         creemProductIds:
           Object.keys(productIds).length > 0
             ? (productIds as Record<string, string>)
@@ -166,7 +250,115 @@ export const SubscriptionRoot = ({
       }
       return entry;
     });
-  }, [registeredPlans, allProducts]);
+  }, [allProducts, catalogRegistrations, normalizedCatalog, registeredPlans]);
+
+  const groupItems = useMemo(() => {
+    if (groups && groups.length > 0) {
+      return groups.map((entry) => ({
+        value: entry.value,
+        label: entry.label,
+      }));
+    }
+    const inferredGroups = new Map<string, string>();
+    for (const plan of plans) {
+      if (!plan.groupId) continue;
+      if (!inferredGroups.has(plan.groupId)) {
+        inferredGroups.set(
+          plan.groupId,
+          plan.groupTitle ?? formatGroupTitle(plan.groupId),
+        );
+      }
+    }
+    return Array.from(inferredGroups, ([value, label]) => ({ value, label }));
+  }, [groups, plans]);
+
+  const requestedGroupId = group ?? selectedGroupId ?? defaultGroup ?? null;
+  const activeGroupId =
+    groupItems.length > 1 &&
+    requestedGroupId &&
+    groupItems.some((item) => item.value === requestedGroupId)
+      ? requestedGroupId
+      : (groupItems[0]?.value ?? null);
+
+  const visiblePlans = useMemo(() => {
+    if (groupItems.length <= 1 || !activeGroupId) return plans;
+    return plans.filter((plan) => plan.groupId === activeGroupId);
+  }, [activeGroupId, groupItems.length, plans]);
+
+  const availableCycles = useMemo(() => {
+    const cycles = new Set<RecurringCycle>();
+    for (const plan of visiblePlans) {
+      for (const planCycle of plan.billingCycles ?? []) {
+        cycles.add(planCycle);
+      }
+    }
+    return Array.from(cycles);
+  }, [visiblePlans]);
+  const effectiveCycle = useMemo(() => {
+    const requestedCycle = cycle ?? selectedCycle;
+    if (
+      availableCycles.length === 0 ||
+      availableCycles.includes(requestedCycle)
+    ) {
+      return requestedCycle;
+    }
+    return availableCycles[0] ?? requestedCycle;
+  }, [availableCycles, cycle, selectedCycle]);
+
+  const getCyclesForGroup = useCallback(
+    (groupId: string | null) => {
+      const targetPlans =
+        groupItems.length > 1 && groupId
+          ? plans.filter((plan) => plan.groupId === groupId)
+          : plans;
+      const cycles = new Set<RecurringCycle>();
+      for (const plan of targetPlans) {
+        for (const planCycle of plan.billingCycles ?? []) {
+          cycles.add(planCycle);
+        }
+      }
+      return Array.from(cycles);
+    },
+    [groupItems.length, plans],
+  );
+
+  const clampCycleForGroup = useCallback(
+    (groupId: string | null) => {
+      const targetCycles = getCyclesForGroup(groupId);
+      const requestedCycle = cycle ?? selectedCycle;
+      if (targetCycles.length === 0 || targetCycles.includes(requestedCycle)) {
+        return;
+      }
+      const nextCycle = targetCycles[0];
+      if (!nextCycle) return;
+      if (cycle == null) {
+        setSelectedCycle(nextCycle);
+      }
+      onCycleChange?.(nextCycle);
+    },
+    [cycle, getCyclesForGroup, onCycleChange, selectedCycle],
+  );
+
+  const handleCycleChange = useCallback(
+    (next: RecurringCycle) => {
+      const nextEffectiveCycle =
+        availableCycles.length === 0 || availableCycles.includes(next)
+          ? next
+          : (availableCycles[0] ?? next);
+      setSelectedCycle(nextEffectiveCycle);
+      onCycleChange?.(nextEffectiveCycle);
+    },
+    [availableCycles, onCycleChange],
+  );
+
+  const handleGroupChange = useCallback(
+    (next: string) => {
+      clampCycleForGroup(next);
+      setSelectedGroupId(next);
+      onGroupChange?.(next);
+    },
+    [clampCycleForGroup, onGroupChange],
+  );
 
   // Collect all product IDs that belong to plans in THIS component instance
   const ownProductIds = useMemo(() => {
@@ -194,7 +386,7 @@ export const SubscriptionRoot = ({
     matchedSubscription?.cancelAtPeriodEnd ?? false;
   const localCurrentPeriodEnd = matchedSubscription?.currentPeriodEnd ?? null;
   const localSubscriptionState = matchedSubscription?.status ?? null;
-  const localSubscribedSeats = matchedSubscription?.seats ?? null;
+  const localSubscribedUnits = matchedSubscription?.units ?? null;
 
   const snapshot = model?.billingSnapshot ?? null;
 
@@ -203,17 +395,17 @@ export const SubscriptionRoot = ({
       ? true
       : permissions?.canCheckout !== false;
 
-  const canUpdateSeats =
+  const canUpdateUnits =
     !model?.user && onBeforeCheckout != null
       ? true
-      : permissions?.canUpdateSeats !== false;
+      : permissions?.canUpdateUnits !== false;
 
   const activePlanId = useMemo(() => {
     if (!model) return null;
     const subProductId = localSubscriptionProductId;
     if (subProductId) {
-      const matchedPlan = registeredPlans.find((plan) => {
-        const values = Object.values(plan.productIds ?? {}).filter(
+      const matchedPlan = plans.find((plan) => {
+        const values = Object.values(plan.creemProductIds ?? {}).filter(
           Boolean,
         ) as string[];
         return values.includes(subProductId);
@@ -225,7 +417,7 @@ export const SubscriptionRoot = ({
       if (freePlan) return freePlan.planId;
     }
     return null;
-  }, [model, localSubscriptionProductId, registeredPlans, plans]);
+  }, [model, localSubscriptionProductId, plans]);
 
   const startCheckout = useCallback(
     async (productId: string, checkoutUnits?: number) => {
@@ -299,11 +491,32 @@ export const SubscriptionRoot = ({
   );
 
   const requestSwitchPlan = useCallback(
-    (payload: { plan: UIPlanEntry; productId: string; units?: number }) => {
+    async (payload: {
+      plan: UIPlanEntry;
+      productId: string;
+      units?: number;
+    }) => {
+      // Consent gate: onBeforePlanChange
+      if (onBeforePlanChange) {
+        const proceed = await onBeforePlanChange({
+          fromPlanId: activePlanId,
+          toPlanId: payload.plan.planId,
+          productId: payload.productId,
+          units: payload.units,
+        });
+        if (!proceed) return;
+      }
+      // Consent gate: onBeforeFreePlanActivation
+      if (onBeforeFreePlanActivation && payload.plan.category === "free") {
+        const proceed = await onBeforeFreePlanActivation({
+          freePlanId: payload.plan.planId,
+        });
+        if (!proceed) return;
+      }
       setPendingUpdate({ kind: "plan-switch", ...payload });
       setUpdateDialogOpen(true);
     },
-    [],
+    [activePlanId, onBeforePlanChange, onBeforeFreePlanActivation],
   );
 
   const confirmUpdate = useCallback(async () => {
@@ -364,7 +577,7 @@ export const SubscriptionRoot = ({
                     ...m,
                     activeSubscriptions: (m.activeSubscriptions ?? []).map(
                       (s) =>
-                        s.id === subId ? { ...s, seats: update.units } : s,
+                        s.id === subId ? { ...s, units: update.units } : s,
                     ),
                   },
                 );
@@ -379,7 +592,7 @@ export const SubscriptionRoot = ({
           ? error.message
           : update.kind === "plan-switch"
             ? "Switch failed"
-            : "Seat update failed",
+            : "Unit update failed",
       );
     }
   }, [
@@ -392,8 +605,8 @@ export const SubscriptionRoot = ({
     updateBehavior,
   ]);
 
-  const handleUpdateSeats = useCallback((payload: { units: number }) => {
-    setPendingUpdate({ kind: "seat-update", units: payload.units });
+  const handleUpdateUnits = useCallback((payload: { units: number }) => {
+    setPendingUpdate({ kind: "unit-update", units: payload.units });
     setUpdateDialogOpen(true);
   }, []);
 
@@ -433,26 +646,26 @@ export const SubscriptionRoot = ({
       });
     }
 
-    const currentSeats = localSubscribedSeats ?? 1;
-    const currentPrice = formatSeatPrice(
+    const currentUnits = localSubscribedUnits ?? 1;
+    const currentPrice = formatUnitPrice(
       localSubscriptionProductId ?? undefined,
       allProducts,
-      currentSeats,
+      currentUnits,
     );
-    const newPrice = formatSeatPrice(
+    const newPrice = formatUnitPrice(
       localSubscriptionProductId ?? undefined,
       allProducts,
       pendingUpdate.units,
     );
 
     return buildUpdateSummary({
-      kind: "seat-update",
+      kind: "unit-update",
       updateBehavior,
       currentLabel:
-        currentPrice ?? `${currentSeats} seat${currentSeats !== 1 ? "s" : ""}`,
+        currentPrice ?? `${currentUnits} unit${currentUnits !== 1 ? "s" : ""}`,
       newLabel:
         newPrice ??
-        `${pendingUpdate.units} seat${pendingUpdate.units !== 1 ? "s" : ""}`,
+        `${pendingUpdate.units} unit${pendingUpdate.units !== 1 ? "s" : ""}`,
       currentPeriodEnd: matchedSubscription?.currentPeriodEnd,
       isTrialing: matchedSubscription?.status === "trialing",
       trialEnd: matchedSubscription?.trialEnd,
@@ -462,7 +675,7 @@ export const SubscriptionRoot = ({
     plans,
     localSubscriptionProductId,
     allProducts,
-    localSubscribedSeats,
+    localSubscribedUnits,
     updateBehavior,
     matchedSubscription,
   ]);
@@ -556,12 +769,77 @@ export const SubscriptionRoot = ({
     setCancelDialogOpen(true);
   }, []);
 
+  const contextValue = useMemo(
+    () => ({
+      registerPlan,
+      getPlan: (planId: string) =>
+        plans.find((candidate) => candidate.planId === planId),
+      isPlanVisible: (planId: string) =>
+        visiblePlans.some((candidate) => candidate.planId === planId),
+      selectedCycle: effectiveCycle,
+      activePlanId,
+      products: allProducts,
+      subscriptionProductId: localSubscriptionProductId,
+      subscriptionStatus: localSubscriptionState,
+      subscriptionTrialEnd: matchedSubscription?.trialEnd ?? null,
+      subscribedUnits: localSubscribedUnits,
+      units,
+      showUnitPicker,
+      isGroupSubscribed: ownsActiveSubscription,
+      disableCheckout: !canCheckout,
+      disableSwitch: !canChange,
+      disableUnits: !canUpdateUnits,
+      checkout: handlePricingCheckout,
+      switchPlan: updateRef && canChange ? requestSwitchPlan : undefined,
+      updateUnits: updateRef && canUpdateUnits ? handleUpdateUnits : undefined,
+      cancelSubscription:
+        cancelRef &&
+        canCancel &&
+        ownsActiveSubscription &&
+        !localCancelAtPeriodEnd
+          ? openCancelDialog
+          : undefined,
+      groupItems,
+      activeGroupId,
+      setGroup: handleGroupChange,
+      availableCycles,
+      setCycle: handleCycleChange,
+    }),
+    [
+      registerPlan,
+      plans,
+      visiblePlans,
+      effectiveCycle,
+      activePlanId,
+      allProducts,
+      localSubscriptionProductId,
+      localSubscriptionState,
+      matchedSubscription,
+      localSubscribedUnits,
+      units,
+      showUnitPicker,
+      ownsActiveSubscription,
+      canCheckout,
+      canChange,
+      canUpdateUnits,
+      handlePricingCheckout,
+      updateRef,
+      requestSwitchPlan,
+      handleUpdateUnits,
+      cancelRef,
+      canCancel,
+      localCancelAtPeriodEnd,
+      openCancelDialog,
+      groupItems,
+      activeGroupId,
+      handleGroupChange,
+      availableCycles,
+      handleCycleChange,
+    ],
+  );
+
   return (
     <SubscriptionContext.Provider value={contextValue}>
-      <div className="hidden" aria-hidden="true">
-        {children}
-      </div>
-
       <section className={`space-y-4 ${className}`}>
         {actionError && (
           <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -591,41 +869,58 @@ export const SubscriptionRoot = ({
             )}
             <PaymentWarningBanner snapshot={snapshot} />
 
-            <PricingSection
-              plans={plans}
-              snapshot={snapshot ? { ...snapshot, activePlanId } : null}
-              selectedCycle={selectedCycle}
-              products={allProducts}
-              subscriptionProductId={localSubscriptionProductId}
-              subscriptionStatus={localSubscriptionState}
-              subscriptionTrialEnd={matchedSubscription?.trialEnd ?? null}
-              units={units}
-              showSeatPicker={showSeatPicker}
-              twoColumnLayout={twoColumnLayout}
-              subscribedSeats={localSubscribedSeats}
-              isGroupSubscribed={ownsActiveSubscription}
-              onCycleChange={setSelectedCycle}
-              disableCheckout={!canCheckout}
-              disableSwitch={!canChange}
-              disableSeats={!canUpdateSeats}
-              onCheckout={canCheckout ? handlePricingCheckout : undefined}
-              onSwitchPlan={
-                updateRef && canChange ? requestSwitchPlan : undefined
-              }
-              onUpdateSeats={
-                updateRef && canUpdateSeats ? handleUpdateSeats : undefined
-              }
-              onCancelSubscription={
-                cancelRef &&
-                canCancel &&
-                ownsActiveSubscription &&
-                !localCancelAtPeriodEnd
-                  ? openCancelDialog
-                  : undefined
-              }
-            />
+            {groupSelector === "auto" && groupItems.length > 1 && (
+              <div className="flex justify-center">
+                <SegmentGroup
+                  items={groupItems}
+                  value={activeGroupId}
+                  onValueChange={handleGroupChange}
+                />
+              </div>
+            )}
 
-            <div className="flex flex-wrap items-center gap-3">{children}</div>
+            {children ? (
+              children
+            ) : (
+              <PricingSection
+                plans={visiblePlans}
+                snapshot={snapshot ? { ...snapshot, activePlanId } : null}
+                selectedCycle={effectiveCycle}
+                products={allProducts}
+                subscriptionProductId={localSubscriptionProductId}
+                subscriptionStatus={localSubscriptionState}
+                subscriptionTrialEnd={matchedSubscription?.trialEnd ?? null}
+                units={units}
+                showUnitPicker={showUnitPicker}
+                showCycleToggle={intervalSelector === "auto"}
+                twoColumnLayout={twoColumnLayout}
+                subscribedUnits={localSubscribedUnits}
+                isGroupSubscribed={ownsActiveSubscription}
+                onCycleChange={
+                  intervalSelector === "external"
+                    ? undefined
+                    : handleCycleChange
+                }
+                disableCheckout={!canCheckout}
+                disableSwitch={!canChange}
+                disableUnits={!canUpdateUnits}
+                onCheckout={canCheckout ? handlePricingCheckout : undefined}
+                onSwitchPlan={
+                  updateRef && canChange ? requestSwitchPlan : undefined
+                }
+                onUpdateUnits={
+                  updateRef && canUpdateUnits ? handleUpdateUnits : undefined
+                }
+                onCancelSubscription={
+                  cancelRef &&
+                  canCancel &&
+                  ownsActiveSubscription &&
+                  !localCancelAtPeriodEnd
+                    ? openCancelDialog
+                    : undefined
+                }
+              />
+            )}
 
             {/* Cancel Dialog */}
             <Dialog.Root

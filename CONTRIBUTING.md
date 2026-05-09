@@ -10,7 +10,12 @@ pnpm dev:react
 
 ## Development setup
 
-Create a demo user (since this example doesn't have real auth):
+Create a demo user (since this example doesn't have real auth) with a real email
+address to receive creems email:
+
+```sh
+npx convex env set TEST_USER_EMAIL="your@real.email"
+```
 
 ```sh
 npx convex run example:createDemoUser

@@ -1,11 +1,18 @@
 import {
+  BillingGate,
   CheckoutSuccessSummary,
+  BillingHistory,
   BillingPortal,
   Product,
   Subscription,
+  defineBillingCatalog,
+  evaluateUsageLimits,
+  plansOf,
   type ConnectedBillingApi,
+  type ConnectedBillingModel,
   type Transition,
 } from "@mmailaender/convex-creem/react";
+import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import creemLogoUrl from "./assets/creem.svg";
 import convexLogoUrl from "./assets/convex.svg";
@@ -24,7 +31,92 @@ const connectedApi: ConnectedBillingApi = {
   customers: {
     portalUrl: api.billing.customersPortalUrl,
   },
+  transactions: {
+    search: api.billing.transactionsSearch,
+  },
 };
+
+const billingCatalog = defineBillingCatalog({
+  version: "example",
+  plans: [
+    {
+      planId: "basic-individual",
+      category: "paid",
+      billingType: "recurring",
+      title: "Basic",
+      description: "Personal workspace and basic support",
+      limits: { aiMessages: 250, projects: 5 },
+      products: {
+        "every-month":
+          import.meta.env.VITE_CREEM_BASIC_INDIVIDUAL_MONTHLY_PRODUCT_ID ??
+          "prod_1c6ZGcxekHKrVYuWriHs68",
+      },
+    },
+    {
+      planId: "premium-individual",
+      category: "paid",
+      billingType: "recurring",
+      title: "Premium",
+      description: "Unlimited personal projects and priority support",
+      recommended: true,
+      limits: { aiMessages: 2500, projects: 100 },
+      products: {
+        "every-month":
+          import.meta.env.VITE_CREEM_PREMIUM_INDIVIDUAL_MONTHLY_PRODUCT_ID ??
+          "prod_3861b06bJDnvpEBcs2uxYv",
+      },
+    },
+    {
+      planId: "basic-team",
+      category: "paid",
+      billingType: "recurring",
+      pricingModel: "unit",
+      title: "Team Basic",
+      description: "Shared team workspace with unit-based billing",
+      products: {
+        "every-month":
+          import.meta.env.VITE_CREEM_BASIC_TEAM_MONTHLY_PRODUCT_ID ??
+          "prod_1c6ZGcxekHKrVYuWriHs68",
+      },
+    },
+    {
+      planId: "premium-team",
+      category: "paid",
+      billingType: "recurring",
+      pricingModel: "unit",
+      title: "Team Premium",
+      description: "Advanced team controls with unit-based billing",
+      recommended: true,
+      products: {
+        "every-month":
+          import.meta.env.VITE_CREEM_PREMIUM_TEAM_MONTHLY_PRODUCT_ID ??
+          "prod_3861b06bJDnvpEBcs2uxYv",
+      },
+    },
+    {
+      planId: "basic-unit-auto",
+      category: "paid",
+      billingType: "recurring",
+      pricingModel: "unit",
+      products: {
+        "every-month":
+          import.meta.env.VITE_CREEM_BASIC_UNIT_AUTO_MONTHLY_PRODUCT_ID ??
+          "prod_1c6ZGcxekHKrVYuWriHs68",
+      },
+    },
+    {
+      planId: "premium-unit-auto",
+      category: "paid",
+      billingType: "recurring",
+      pricingModel: "unit",
+      products: {
+        "every-month":
+          import.meta.env.VITE_CREEM_PREMIUM_UNIT_AUTO_MONTHLY_PRODUCT_ID ??
+          "prod_3861b06bJDnvpEBcs2uxYv",
+      },
+    },
+  ],
+} as const);
 
 const upgradeTransitions: Transition[] = [
   {
@@ -36,6 +128,18 @@ const upgradeTransitions: Transition[] = [
 ];
 
 export default function App() {
+  const billingModel = useQuery(api.billing.uiModel, {}) as
+    | ConnectedBillingModel
+    | undefined;
+  const billingSnapshot = billingModel?.billingSnapshot ?? null;
+  const usage = { aiMessages: 72, projects: 3 };
+  const usagePlanId = billingSnapshot?.activePlanId ?? "basic-individual";
+  const usageLimits = evaluateUsageLimits({
+    catalog: billingCatalog,
+    planId: usagePlanId,
+    usage,
+  });
+
   return (
     <main className="w-full py-10 lg:pt-16">
       <header className="border-b border-border-subtle pb-16 lg:pb-[104px]">
@@ -45,7 +149,7 @@ export default function App() {
               Drop-in Billing for Convex Apps
             </h1>
             <p className="subtitle-m max-w-[720px] text-foreground-default">
-              Subscriptions, one-time purchases, seat-based pricing, and a
+              Subscriptions, one-time purchases, unit-based pricing, and a
               customer portal — all powered by Creem and wired to your Convex
               backend. Available for React and Svelte.
             </p>
@@ -88,18 +192,29 @@ export default function App() {
                     03
                   </span>
                   <a
-                    href="#subscription-seat-selectable"
+                    href="#subscription-unit-selectable"
                     className="link-inline"
                   >
-                    Seat-Based (User-Selectable)
+                    Individual vs Teams
                   </a>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
                     04
                   </span>
-                  <a href="#subscription-seat-auto" className="link-inline">
-                    Seat-Based (Auto-Derived)
+                  <a href="#subscription-unit-auto" className="link-inline">
+                    Unit-Based (Auto-Derived)
+                  </a>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
+                    05
+                  </span>
+                  <a
+                    href="#subscription-custom-composition"
+                    className="link-inline"
+                  >
+                    Custom Composition
                   </a>
                 </div>
               </div>
@@ -111,7 +226,7 @@ export default function App() {
               <div className="space-y-1">
                 <div className="flex items-center gap-3">
                   <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                    05
+                    06
                   </span>
                   <a href="#onetime-single" className="link-inline">
                     Single One-Time Product
@@ -119,7 +234,7 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                    06
+                    07
                   </span>
                   <a href="#onetime-group" className="link-inline">
                     Mutually Exclusive Product Group
@@ -127,10 +242,33 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                    07
+                    08
                   </span>
                   <a href="#onetime-repeat" className="link-inline">
                     Repeating Product (Consumable)
+                  </a>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <p className="label-m text-foreground-placeholder">
+                ACCOUNT WIDGETS
+              </p>
+              <div className="space-y-1">
+                <div className="flex items-center gap-3">
+                  <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
+                    09
+                  </span>
+                  <a href="#billing-history" className="link-inline">
+                    Billing History
+                  </a>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
+                    10
+                  </span>
+                  <a href="#feature-usage-gate" className="link-inline">
+                    Feature / Usage Gate
                   </a>
                 </div>
               </div>
@@ -278,9 +416,9 @@ export default function App() {
           </div>
         </section>
 
-        {/* ─── Section 3: Seat-based subscriptions ─── */}
+        {/* ─── Section 3: Unit-based subscriptions ─── */}
         <section
-          id="subscription-seat-selectable"
+          id="subscription-unit-selectable"
           className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
         >
           <div className="mx-auto w-full max-w-[1280px] px-4 lg:px-16 pt-[6.5rem]">
@@ -290,29 +428,40 @@ export default function App() {
                   Subscription
                 </span>
                 <br />
-                Seat-Based (User-Selectable)
+                Individual vs Teams
               </h2>
               <p className="body-l col-span-12 mt-6 text-center text-foreground-muted lg:col-start-4 lg:col-span-6">
-                Per-seat pricing where the customer picks how many seats before
-                checkout. The seat picker lets users choose their team size.
+                Grouped pricing for personal and team plans. Individual plans
+                are flat subscriptions; team plans use unit-based pricing where
+                the unit can represent a member, domain, or any other billable
+                quantity.
               </p>
             </div>
 
             <div className="mt-[6.5rem]">
-              <Subscription.Root api={connectedApi} showSeatPicker>
-                <Subscription.Item
-                  planId="basic-seat-monthly"
-                  type="seat-based"
-                  title="Basic"
-                  productIds={{ "every-month": "prod_1c6ZGcxekHKrVYuWriHs68" }}
-                />
-                <Subscription.Item
-                  planId="premium-seat-monthly"
-                  type="seat-based"
-                  title="Premium"
-                  productIds={{ "every-month": "prod_3861b06bJDnvpEBcs2uxYv" }}
-                />
-              </Subscription.Root>
+              <Subscription.Root
+                api={connectedApi}
+                catalog={billingCatalog}
+                showUnitPicker
+                groups={[
+                  {
+                    value: "individual",
+                    label: "Individual",
+                    plans: plansOf(billingCatalog, [
+                      "basic-individual",
+                      "premium-individual",
+                    ]),
+                  },
+                  {
+                    value: "teams",
+                    label: "Teams",
+                    plans: plansOf(billingCatalog, [
+                      "basic-team",
+                      "premium-team",
+                    ]),
+                  },
+                ]}
+              />
             </div>
 
             <div className="flex justify-center pt-16">
@@ -321,9 +470,9 @@ export default function App() {
           </div>
         </section>
 
-        {/* ─── Section 3b: Seat-based with auto-derived units ─── */}
+        {/* ─── Section 3b: Unit-based with auto-derived units ─── */}
         <section
-          id="subscription-seat-auto"
+          id="subscription-unit-auto"
           className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
         >
           <div className="mx-auto w-full max-w-[1280px] px-4 lg:px-16 pt-[6.5rem]">
@@ -333,35 +482,194 @@ export default function App() {
                   Subscription
                 </span>
                 <br />
-                Seat-Based (Auto-Derived)
+                Unit-Based (Auto-Derived)
               </h2>
               <p className="body-l col-span-12 mt-6 text-center text-foreground-muted lg:col-start-4 lg:col-span-6">
-                Per-seat pricing with a fixed seat count derived from your app
-                (e.g. team member count). No picker is shown — the unit count is
-                set programmatically. Hardcoded to 5 in this demo.
+                Unit-based pricing with a fixed quantity derived from your app
+                data. No picker is shown — the unit count is set
+                programmatically. Hardcoded to 5 in this demo.
               </p>
             </div>
 
             <div className="mt-[6.5rem]">
-              <Subscription.Root api={connectedApi} units={5} twoColumnLayout>
-                <Subscription.Item
-                  planId="basic-seat-auto"
-                  type="seat-based"
-                  title="Basic"
-                  productIds={{ "every-month": "prod_1c6ZGcxekHKrVYuWriHs68" }}
-                />
-                <Subscription.Item
-                  planId="premium-seat-auto"
-                  type="seat-based"
-                  title="Premium"
-                  productIds={{ "every-month": "prod_3861b06bJDnvpEBcs2uxYv" }}
-                />
+              <Subscription.Root
+                api={connectedApi}
+                catalog={billingCatalog}
+                plans={plansOf(billingCatalog, [
+                  "basic-unit-auto",
+                  "premium-unit-auto",
+                ])}
+                units={5}
+                twoColumnLayout
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* ─── Section 4: Custom subscription composition ─── */}
+        <section
+          id="subscription-custom-composition"
+          className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
+        >
+          <div className="mx-auto w-full max-w-[1280px] px-4 lg:px-16 pt-[6.5rem]">
+            <div className="mx-auto grid grid-cols-12">
+              <h2 className="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6">
+                <span className="text-foreground-placeholder">
+                  Subscription
+                </span>
+                <br />
+                Custom Composition
+              </h2>
+              <p className="body-l col-span-12 mt-6 text-center text-foreground-muted lg:col-start-4 lg:col-span-6">
+                React can use the same compound widget shape: the app owns
+                markup and copy while Creem state, prices, checkout, and plan
+                switching come from the billing widget context.
+              </p>
+            </div>
+
+            <div className="mt-[6.5rem]">
+              <Subscription.Root
+                api={connectedApi}
+                catalog={billingCatalog}
+                groupSelector="external"
+                groups={[
+                  {
+                    value: "individual",
+                    label: "Individual",
+                    plans: plansOf(billingCatalog, [
+                      "basic-individual",
+                      "premium-individual",
+                    ]),
+                  },
+                  {
+                    value: "teams",
+                    label: "Teams",
+                    plans: plansOf(billingCatalog, [
+                      "basic-team",
+                      "premium-team",
+                    ]),
+                  },
+                ]}
+              >
+                <div className="mb-10 flex justify-center">
+                  <Subscription.GroupSelector />
+                </div>
+
+                <Subscription.Group value="individual" label="Individual">
+                  <Subscription.Grid className="lg:grid-cols-2">
+                    <Subscription.Item
+                      planId="basic-individual"
+                      className="relative flex min-h-[320px] flex-col justify-between rounded-lg border border-border-subtle bg-surface-base p-6"
+                    >
+                      <div className="space-y-5">
+                        <Subscription.ItemBadge
+                          label="Für Einzelpersonen"
+                          className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                        />
+                        <div className="space-y-2">
+                          <Subscription.ItemTitle className="heading-s text-foreground-default" />
+                          <Subscription.ItemDescription className="body-m text-foreground-muted" />
+                        </div>
+                        <Subscription.ItemPrice className="display-s text-foreground-default" />
+                        <ul className="body-m space-y-2 text-foreground-default">
+                          <li>Personal workspace</li>
+                          <li>Basic automations</li>
+                          <li>Community support</li>
+                        </ul>
+                      </div>
+                      <Subscription.ItemCTA
+                        className="mt-8"
+                        checkoutLabel="Start individual"
+                        switchLabel="Switch individual"
+                      />
+                    </Subscription.Item>
+
+                    <Subscription.Item
+                      planId="premium-individual"
+                      className="relative flex min-h-[320px] flex-col justify-between rounded-lg border-2 border-primary-border-default bg-surface-base p-6"
+                    >
+                      <div className="space-y-5">
+                        <Subscription.ItemBadge label="Popular" />
+                        <div className="space-y-2">
+                          <Subscription.ItemTitle className="heading-s text-foreground-default" />
+                          <Subscription.ItemDescription className="body-m text-foreground-muted" />
+                        </div>
+                        <Subscription.ItemPrice className="display-s text-foreground-default" />
+                        <ul className="body-m space-y-2 text-foreground-default">
+                          <li>Unlimited personal projects</li>
+                          <li>Priority support</li>
+                          <li>Advanced usage limits</li>
+                        </ul>
+                      </div>
+                      <Subscription.ItemCTA
+                        className="mt-8"
+                        checkoutLabel="Go premium"
+                        switchLabel="Switch to premium"
+                      />
+                    </Subscription.Item>
+                  </Subscription.Grid>
+                </Subscription.Group>
+
+                <Subscription.Group value="teams" label="Teams">
+                  <Subscription.Grid className="lg:grid-cols-2">
+                    <Subscription.Item
+                      planId="basic-team"
+                      className="relative flex min-h-[320px] flex-col justify-between rounded-lg border border-border-subtle bg-surface-base p-6"
+                    >
+                      <div className="space-y-5">
+                        <Subscription.ItemBadge
+                          label="Teams"
+                          className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300"
+                        />
+                        <div className="space-y-2">
+                          <Subscription.ItemTitle className="heading-s text-foreground-default" />
+                          <Subscription.ItemDescription className="body-m text-foreground-muted" />
+                        </div>
+                        <Subscription.ItemPrice className="display-s text-foreground-default" />
+                        <ul className="body-m space-y-2 text-foreground-default">
+                          <li>Shared billing for every unit</li>
+                          <li>Team workspace</li>
+                          <li>Role-based access</li>
+                        </ul>
+                      </div>
+                      <Subscription.ItemCTA
+                        className="mt-8"
+                        checkoutLabel="Start team plan"
+                        switchLabel="Switch team plan"
+                      />
+                    </Subscription.Item>
+
+                    <Subscription.Item
+                      planId="premium-team"
+                      className="relative flex min-h-[320px] flex-col justify-between rounded-lg border-2 border-primary-border-default bg-surface-base p-6"
+                    >
+                      <div className="space-y-5">
+                        <Subscription.ItemBadge label="Best for teams" />
+                        <div className="space-y-2">
+                          <Subscription.ItemTitle className="heading-s text-foreground-default" />
+                          <Subscription.ItemDescription className="body-m text-foreground-muted" />
+                        </div>
+                        <Subscription.ItemPrice className="display-s text-foreground-default" />
+                        <ul className="body-m space-y-2 text-foreground-default">
+                          <li>Advanced team controls</li>
+                          <li>Higher usage limits</li>
+                          <li>Priority team support</li>
+                        </ul>
+                      </div>
+                      <Subscription.ItemCTA
+                        className="mt-8"
+                        checkoutLabel="Upgrade team"
+                        switchLabel="Switch team plan"
+                      />
+                    </Subscription.Item>
+                  </Subscription.Grid>
+                </Subscription.Group>
               </Subscription.Root>
             </div>
           </div>
         </section>
 
-        {/* ─── Section 4: Standalone one-time product ─── */}
+        {/* ─── Section 5: Standalone one-time product ─── */}
         <section
           id="onetime-single"
           className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
@@ -481,6 +789,136 @@ export default function App() {
                   productId="prod_73CnZ794MaJ1DUn8MU0O5f"
                 />
               </Product.Root>
+            </div>
+          </div>
+        </section>
+
+        {/* ─── Section 7: Billing history ─── */}
+        <section
+          id="billing-history"
+          className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
+        >
+          <div className="mx-auto w-full max-w-[1280px] px-4 lg:px-16 pt-[6.5rem]">
+            <div className="mx-auto grid grid-cols-12">
+              <h2 className="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6">
+                <span className="text-foreground-placeholder">Account</span>
+                <br />
+                Billing History
+              </h2>
+              <p className="body-l col-span-12 mt-6 text-center text-foreground-muted lg:col-start-4 lg:col-span-6">
+                A paginated transaction history sourced from Creem transactions.
+                Invoice and receipt documents are not included in this
+                transaction view.
+              </p>
+            </div>
+
+            <div className="mt-[6.5rem]">
+              <BillingHistory api={connectedApi} pageSize={5} />
+            </div>
+          </div>
+        </section>
+
+        {/* ─── Section 8: Feature and usage gate ─── */}
+        <section
+          id="feature-usage-gate"
+          className="relative left-1/2 -translate-x-1/2 w-screen pb-[6.5rem]"
+        >
+          <div className="mx-auto w-full max-w-[1280px] px-4 lg:px-16 pt-[6.5rem]">
+            <div className="mx-auto grid grid-cols-12">
+              <h2 className="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6">
+                <span className="text-foreground-placeholder">Account</span>
+                <br />
+                Feature / Usage Gate
+              </h2>
+              <p className="body-l col-span-12 mt-6 text-center text-foreground-muted lg:col-start-4 lg:col-span-6">
+                App-owned usage counters are evaluated against catalog limits.
+                Billing state gates feature access, while the app stays
+                responsible for measuring actual usage.
+              </p>
+            </div>
+
+            <div className="mx-auto mt-[6.5rem] grid max-w-3xl gap-4 md:grid-cols-2">
+              <div className="rounded-lg border border-border-subtle bg-surface-base p-5">
+                <p className="label-m text-foreground-placeholder">
+                  Current usage
+                </p>
+                <div className="mt-4 space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between body-m text-foreground-default">
+                      <span>AI messages</span>
+                      <span>
+                        {usageLimits.aiMessages.used} /{" "}
+                        {usageLimits.aiMessages.limit}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-subtle">
+                      <div
+                        className={`h-full rounded-full ${
+                          usageLimits.aiMessages.exceeded
+                            ? "bg-red-500"
+                            : "bg-primary-border-default"
+                        }`}
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            (usageLimits.aiMessages.used /
+                              usageLimits.aiMessages.limit) *
+                              100,
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between body-m text-foreground-default">
+                      <span>Projects</span>
+                      <span>
+                        {usageLimits.projects.used} /{" "}
+                        {usageLimits.projects.limit}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-subtle">
+                      <div
+                        className={`h-full rounded-full ${
+                          usageLimits.projects.exceeded
+                            ? "bg-red-500"
+                            : "bg-primary-border-default"
+                        }`}
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            (usageLimits.projects.used /
+                              usageLimits.projects.limit) *
+                              100,
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border-subtle bg-surface-base p-5">
+                <p className="label-m text-foreground-placeholder">
+                  Feature gate
+                </p>
+                <div className="mt-4">
+                  <BillingGate
+                    snapshot={billingSnapshot}
+                    requiredActions="portal"
+                    fallback={
+                      <div className="rounded-lg bg-surface-subtle p-4 body-m text-foreground-muted">
+                        Billing management is hidden until this account has
+                        portal access.
+                      </div>
+                    }
+                  >
+                    <div className="rounded-lg bg-emerald-50 p-4 body-m text-emerald-900">
+                      Billing management is available for this account.
+                    </div>
+                  </BillingGate>
+                </div>
+              </div>
             </div>
           </div>
         </section>
