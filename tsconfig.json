@@ -14,6 +14,7 @@
     // But when building we use Bundler & ESNext for ESM
     "module": "Node16",
     "moduleResolution": "NodeNext",
+    "types": ["node"],
 
     "composite": true,
     "isolatedModules": true,

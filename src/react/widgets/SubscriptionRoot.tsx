@@ -32,6 +32,18 @@ import type {
   SubscriptionPlanRegistration,
 } from "./types.js";
 
+const getFallbackSuccessUrl = (): string | undefined => {
+  if (typeof window === "undefined") return undefined;
+  return `${window.location.origin}${window.location.pathname}`;
+};
+
+const getPreferredTheme = (): "light" | "dark" => {
+  if (typeof window === "undefined") return "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+};
+
 export const SubscriptionRoot = ({
   api,
   permissions,
@@ -215,33 +227,6 @@ export const SubscriptionRoot = ({
     return null;
   }, [model, localSubscriptionProductId, registeredPlans, plans]);
 
-  // Pending checkout resume after auth
-  const pendingCheckoutHandled = useRef(false);
-  useEffect(() => {
-    if (!model?.user || pendingCheckoutHandled.current) return;
-    pendingCheckoutHandled.current = true;
-    const pending = pendingCheckout.load();
-    if (!pending) return;
-    if ((model.activeSubscriptions ?? []).length > 0) {
-      pendingCheckout.clear();
-      return;
-    }
-    startCheckout(pending.productId, pending.units);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model?.user]);
-
-  const getFallbackSuccessUrl = (): string | undefined => {
-    if (typeof window === "undefined") return undefined;
-    return `${window.location.origin}${window.location.pathname}`;
-  };
-
-  const getPreferredTheme = (): "light" | "dark" => {
-    if (typeof window === "undefined") return "light";
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
-  };
-
   const startCheckout = useCallback(
     async (productId: string, checkoutUnits?: number) => {
       if (onBeforeCheckout) {
@@ -273,7 +258,6 @@ export const SubscriptionRoot = ({
           { capture: true, once: true },
         );
         window.location.href = url;
-        window.location.href = url;
       } catch (error) {
         setActionError(
           error instanceof Error ? error.message : "Checkout failed",
@@ -284,6 +268,24 @@ export const SubscriptionRoot = ({
     },
     [client, checkoutLinkRef, successUrl, onBeforeCheckout],
   );
+
+  // Pending checkout resume after auth
+  const pendingCheckoutHandled = useRef(false);
+  useEffect(() => {
+    if (!model?.user || pendingCheckoutHandled.current) return;
+    pendingCheckoutHandled.current = true;
+    const pending = pendingCheckout.load();
+    if (!pending) return;
+    if ((model.activeSubscriptions ?? []).length > 0) {
+      pendingCheckout.clear();
+      return;
+    }
+    const resumeCheckout = setTimeout(() => {
+      void startCheckout(pending.productId, pending.units);
+    }, 0);
+    return () => clearTimeout(resumeCheckout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model?.user]);
 
   const handlePricingCheckout = useCallback(
     async (payload: {

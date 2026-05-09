@@ -23,6 +23,18 @@ import type {
   Transition,
 } from "./types.js";
 
+const getFallbackSuccessUrl = (): string | undefined => {
+  if (typeof window === "undefined") return undefined;
+  return `${window.location.origin}${window.location.pathname}`;
+};
+
+const getPreferredTheme = (): "light" | "dark" => {
+  if (typeof window === "undefined") return "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+};
+
 export const ProductRoot = ({
   api,
   permissions,
@@ -92,6 +104,44 @@ export const ProductRoot = ({
     [model?.ownedProductIds],
   );
 
+  const startCheckout = useCallback(
+    async (checkoutProductId: string) => {
+      if (onBeforeCheckout) {
+        const proceed = await onBeforeCheckout({
+          productId: checkoutProductId,
+        });
+        if (!proceed) return;
+      }
+      setIsLoading(true);
+      setError(null);
+      try {
+        const { url } = await client.action(checkoutLinkRef, {
+          productId: checkoutProductId,
+          ...(successUrl ? { successUrl } : {}),
+          fallbackSuccessUrl: getFallbackSuccessUrl(),
+          theme: getPreferredTheme(),
+        });
+        window.addEventListener(
+          "beforeunload",
+          (e) => {
+            e.stopImmediatePropagation();
+          },
+          { capture: true, once: true },
+        );
+        window.location.href = url;
+      } catch (checkoutError) {
+        setError(
+          checkoutError instanceof Error
+            ? checkoutError.message
+            : "Checkout failed",
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [client, checkoutLinkRef, successUrl, onBeforeCheckout],
+  );
+
   // Pending checkout resume after auth
   const pendingCheckoutHandled = useRef(false);
   useEffect(() => {
@@ -103,7 +153,10 @@ export const ProductRoot = ({
       pendingCheckout.clear();
       return;
     }
-    startCheckout(pending.productId);
+    const resumeCheckout = setTimeout(() => {
+      void startCheckout(pending.productId);
+    }, 0);
+    return () => clearTimeout(resumeCheckout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model?.user]);
 
@@ -161,56 +214,6 @@ export const ProductRoot = ({
       return toProductId;
     },
     [activeOwnedProductId, transition],
-  );
-
-  const getFallbackSuccessUrl = (): string | undefined => {
-    if (typeof window === "undefined") return undefined;
-    return `${window.location.origin}${window.location.pathname}`;
-  };
-
-  const getPreferredTheme = (): "light" | "dark" => {
-    if (typeof window === "undefined") return "light";
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
-  };
-
-  const startCheckout = useCallback(
-    async (checkoutProductId: string) => {
-      if (onBeforeCheckout) {
-        const proceed = await onBeforeCheckout({
-          productId: checkoutProductId,
-        });
-        if (!proceed) return;
-      }
-      setIsLoading(true);
-      setError(null);
-      try {
-        const { url } = await client.action(checkoutLinkRef, {
-          productId: checkoutProductId,
-          ...(successUrl ? { successUrl } : {}),
-          fallbackSuccessUrl: getFallbackSuccessUrl(),
-          theme: getPreferredTheme(),
-        });
-        window.addEventListener(
-          "beforeunload",
-          (e) => {
-            e.stopImmediatePropagation();
-          },
-          { capture: true, once: true },
-        );
-        window.location.href = url;
-      } catch (checkoutError) {
-        setError(
-          checkoutError instanceof Error
-            ? checkoutError.message
-            : "Checkout failed",
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [client, checkoutLinkRef, successUrl, onBeforeCheckout],
   );
 
   return (

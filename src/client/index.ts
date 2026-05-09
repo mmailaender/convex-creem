@@ -980,7 +980,7 @@ export class Creem {
         args: {},
         returns: v.any(),
         handler: async (ctx) => {
-          let resolved: { entityId: string } | null = null;
+          let resolved: { entityId: string } | null;
           try {
             resolved = await resolve(ctx);
           } catch {
