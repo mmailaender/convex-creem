@@ -22,14 +22,14 @@
 
   let isLoading = $state(false);
 
-  const handleClick = async () => {
+  const handleClick = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
     if (disabled || isLoading || !onCheckout) return;
     isLoading = true;
-    try {
-      await onCheckout({ productId });
-    } finally {
+    Promise.resolve(onCheckout({ productId })).finally(() => {
       isLoading = false;
-    }
+    });
   };
 </script>
 

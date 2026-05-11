@@ -1,7 +1,6 @@
 <script lang="ts">
   import { setContext, untrack } from "svelte";
   import { useConvexClient, useQuery } from "@mmailaender/convex-svelte";
-  import CheckoutButton from "../primitives/CheckoutButton.svelte";
   import { formatPriceWithInterval } from "../primitives/shared.js";
   import {
     PRODUCT_GROUP_CONTEXT_KEY,
@@ -202,14 +201,20 @@
         { capture: true, once: true },
       );
       window.location.href = url;
+      window.location.href = url;
     } catch (checkoutError) {
       error =
         checkoutError instanceof Error
           ? checkoutError.message
           : "Checkout failed";
-    } finally {
       isLoading = false;
     }
+  };
+
+  const handleCheckoutClick = (event: MouseEvent, productId: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void startCheckout(productId);
   };
 
   const splitPriceLabel = (
@@ -310,23 +315,24 @@
 
             <div class="mb-4 mt-6 flex min-h-8 items-start">
               {#if checkoutProductId && !isOwned && !isIncluded}
-                <CheckoutButton
-                  productId={checkoutProductId}
+                <button
+                  type="button"
                   disabled={isLoading || !canCheckout}
-                  onCheckout={() => startCheckout(checkoutProductId)}
-                  className={`${pricingCtaVariant === "filled" ? "button-filled" : "button-faded"} w-full`}
+                  class={`${pricingCtaVariant === "filled" ? "button-filled" : "button-faded"} w-full disabled:cursor-not-allowed disabled:opacity-60`}
+                  onclick={(event) =>
+                    handleCheckoutClick(event, checkoutProductId)}
                 >
                   {activeOwnedProductId ? "Upgrade" : "Buy now"}
-                </CheckoutButton>
+                </button>
               {:else if !isOwned && !isIncluded}
-                <CheckoutButton
-                  productId={item.productId}
+                <button
+                  type="button"
                   disabled={isLoading || !canCheckout}
-                  onCheckout={() => startCheckout(item.productId)}
-                  className={`${pricingCtaVariant === "filled" ? "button-filled" : "button-faded"} w-full`}
+                  class={`${pricingCtaVariant === "filled" ? "button-filled" : "button-faded"} w-full disabled:cursor-not-allowed disabled:opacity-60`}
+                  onclick={(event) => handleCheckoutClick(event, item.productId)}
                 >
                   Buy now
-                </CheckoutButton>
+                </button>
               {/if}
             </div>
 
@@ -364,21 +370,23 @@
                 Included
               </span>
             {:else if checkoutProductId}
-              <CheckoutButton
-                productId={checkoutProductId}
+              <button
+                type="button"
                 disabled={isLoading || !canCheckout}
-                onCheckout={() => startCheckout(checkoutProductId)}
+                class="button-filled disabled:cursor-not-allowed disabled:opacity-60"
+                onclick={(event) => handleCheckoutClick(event, checkoutProductId)}
               >
                 {activeOwnedProductId ? "Upgrade" : "Buy now"}
-              </CheckoutButton>
+              </button>
             {:else}
-              <CheckoutButton
-                productId={item.productId}
+              <button
+                type="button"
                 disabled={isLoading || !canCheckout}
-                onCheckout={() => startCheckout(item.productId)}
+                class="button-filled disabled:cursor-not-allowed disabled:opacity-60"
+                onclick={(event) => handleCheckoutClick(event, item.productId)}
               >
                 Buy now
-              </CheckoutButton>
+              </button>
             {/if}
           </div>
 
