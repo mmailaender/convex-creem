@@ -13,6 +13,13 @@ import { formatPriceWithInterval, splitPriceLabel } from "../shared.js";
 import { ProductGroupContext } from "./productGroupContext.js";
 import { renderMarkdown } from "../../core/markdown.js";
 import { pendingCheckout } from "../../core/pendingCheckout.js";
+import {
+  getActiveOwnedProductId,
+  getEffectiveOwnedProductIds,
+  isOwnedProduct,
+  resolveProductCheckoutProductId,
+  shouldSuppressPendingCheckout,
+} from "../../core/productCheckout.js";
 
 import type {
   BillingPermissions,
@@ -104,8 +111,22 @@ export const ProductRoot = ({
     [model?.ownedProductIds],
   );
 
+  // Resolve effective ownership by applying transition rules
+  const effectiveOwnedProductIds = useMemo(
+    () => getEffectiveOwnedProductIds(rawOwnedProductIds, transition),
+    [rawOwnedProductIds, transition],
+  );
+
+  const activeOwnedProductId = getActiveOwnedProductId(
+    registeredItems,
+    effectiveOwnedProductIds,
+  );
+
   const startCheckout = useCallback(
-    async (checkoutProductId: string) => {
+    async (
+      checkoutProductId: string,
+      checkoutMetadata?: Record<string, string>,
+    ) => {
       if (onBeforeCheckout) {
         const proceed = await onBeforeCheckout({
           productId: checkoutProductId,
@@ -120,6 +141,7 @@ export const ProductRoot = ({
           ...(successUrl ? { successUrl } : {}),
           fallbackSuccessUrl: getFallbackSuccessUrl(),
           theme: getPreferredTheme(),
+          ...(checkoutMetadata ? { metadata: checkoutMetadata } : {}),
         });
         window.addEventListener(
           "beforeunload",
@@ -149,7 +171,13 @@ export const ProductRoot = ({
     pendingCheckoutHandled.current = true;
     const pending = pendingCheckout.load();
     if (!pending) return;
-    if ((model.ownedProductIds ?? []).includes(pending.productId)) {
+    if (
+      shouldSuppressPendingCheckout(
+        pending.productId,
+        registeredItems,
+        effectiveOwnedProductIds,
+      )
+    ) {
       pendingCheckout.clear();
       return;
     }
@@ -159,23 +187,6 @@ export const ProductRoot = ({
     return () => clearTimeout(resumeCheckout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model?.user]);
-
-  // Resolve effective ownership by applying transition rules
-  const effectiveOwnedProductIds = useMemo(() => {
-    const effective = new Set(rawOwnedProductIds);
-    for (const rule of transition) {
-      if (rule.kind === "via_product" && effective.has(rule.viaProductId)) {
-        effective.add(rule.to);
-        effective.delete(rule.from);
-      }
-    }
-    return [...effective];
-  }, [rawOwnedProductIds, transition]);
-
-  const activeOwnedProductId =
-    registeredItems.find((item) =>
-      effectiveOwnedProductIds.includes(item.productId),
-    )?.productId ?? null;
 
   const isLowerTierThan = useCallback(
     (productId: string, targetId: string): boolean => {
@@ -195,25 +206,6 @@ export const ProductRoot = ({
       return false;
     },
     [transition],
-  );
-
-  const resolveCheckoutProductId = useCallback(
-    (toProductId: string) => {
-      if (!activeOwnedProductId) {
-        return toProductId;
-      }
-      const rule = transition.find(
-        (r) => r.from === activeOwnedProductId && r.to === toProductId,
-      );
-      if (!rule) {
-        return null;
-      }
-      if (rule.kind === "via_product") {
-        return rule.viaProductId;
-      }
-      return toProductId;
-    },
-    [activeOwnedProductId, transition],
   );
 
   return (
@@ -237,12 +229,16 @@ export const ProductRoot = ({
           }
         >
           {registeredItems.map((item) => {
-            const isOwned = effectiveOwnedProductIds.includes(item.productId);
+            const isOwned = isOwnedProduct(item, effectiveOwnedProductIds);
             const isIncluded =
               !isOwned &&
               activeOwnedProductId != null &&
               isLowerTierThan(item.productId, activeOwnedProductId);
-            const checkoutProductId = resolveCheckoutProductId(item.productId);
+            const checkoutProductId = resolveProductCheckoutProductId(
+              item,
+              activeOwnedProductId,
+              transition,
+            );
             const matchedProduct = allProducts.find(
               (p) => p.id === item.productId,
             );
@@ -310,16 +306,25 @@ export const ProductRoot = ({
                         <CheckoutButton
                           productId={checkoutProductId}
                           disabled={isLoading || !canCheckout}
-                          onCheckout={() => startCheckout(checkoutProductId)}
+                          onCheckout={() =>
+                            startCheckout(
+                              checkoutProductId,
+                              item.checkoutMetadata,
+                            )
+                          }
                           className={`${pricingCtaVariant === "filled" ? "button-filled" : "button-faded"} w-full`}
                         >
-                          {activeOwnedProductId ? "Upgrade" : "Buy now"}
+                          {item.type === "one-time" && activeOwnedProductId
+                            ? "Upgrade"
+                            : "Buy now"}
                         </CheckoutButton>
                       ) : !isOwned && !isIncluded ? (
                         <CheckoutButton
                           productId={item.productId}
                           disabled={isLoading || !canCheckout}
-                          onCheckout={() => startCheckout(item.productId)}
+                          onCheckout={() =>
+                            startCheckout(item.productId, item.checkoutMetadata)
+                          }
                           className={`${pricingCtaVariant === "filled" ? "button-filled" : "button-faded"} w-full`}
                         >
                           Buy now
@@ -377,15 +382,21 @@ export const ProductRoot = ({
                     <CheckoutButton
                       productId={checkoutProductId}
                       disabled={isLoading || !canCheckout}
-                      onCheckout={() => startCheckout(checkoutProductId)}
+                      onCheckout={() =>
+                        startCheckout(checkoutProductId, item.checkoutMetadata)
+                      }
                     >
-                      {activeOwnedProductId ? "Upgrade" : "Buy now"}
+                      {item.type === "one-time" && activeOwnedProductId
+                        ? "Upgrade"
+                        : "Buy now"}
                     </CheckoutButton>
                   ) : (
                     <CheckoutButton
                       productId={item.productId}
                       disabled={isLoading || !canCheckout}
-                      onCheckout={() => startCheckout(item.productId)}
+                      onCheckout={() =>
+                        startCheckout(item.productId, item.checkoutMetadata)
+                      }
                     >
                       Buy now
                     </CheckoutButton>

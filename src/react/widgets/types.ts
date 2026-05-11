@@ -236,4 +236,5 @@ export type ProductItemRegistration = {
   type: ProductType;
   title?: string;
   description?: string;
+  checkoutMetadata?: Record<string, string>;
 };

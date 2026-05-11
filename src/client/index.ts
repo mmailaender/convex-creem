@@ -207,7 +207,8 @@ export type SubscriptionHandler = FunctionReference<
 /**
  * Map of webhook event type → handler function.
  * Handlers run **after** the component's built-in processing (customer/subscription/order upserts).
- * The `ctx` is a Convex mutation context — you can read/write to your own tables.
+ * The `ctx` is a Convex action context — use `ctx.runQuery`,
+ * `ctx.runMutation`, or `ctx.runAction` for app-specific work.
  *
  * @example
  * ```ts
@@ -222,7 +223,7 @@ export type SubscriptionHandler = FunctionReference<
  */
 export type WebhookEventHandlers = Record<
   string,
-  (ctx: RunMutationCtx, event: CreemWebhookEvent) => Promise<void> | void
+  (ctx: RunActionCtx, event: CreemWebhookEvent) => Promise<void> | void
 >;
 
 /**
@@ -616,6 +617,26 @@ export class Creem {
       unitLabel: "credits",
     });
     return created.id;
+  }
+
+  private async creditCheckoutCustomerCredits(
+    ctx: RunActionCtx,
+    checkout: CheckoutEntity,
+  ) {
+    const metadata = (checkout.metadata ?? {}) as Record<string, unknown>;
+    const amountValue = metadata["convexCreemCreditsAmount"];
+    const amount = typeof amountValue === "string" ? amountValue.trim() : "";
+    if (!amount) return;
+
+    const entityId = getConvexEntityId(metadata);
+    if (!entityId) return;
+
+    const accountId = await this.resolveDefaultCreditAccountId(ctx, entityId);
+    await this.credits.credit(accountId, {
+      amount,
+      reference: `checkout:${checkout.id}`,
+      idempotencyKey: `creem:checkout:${checkout.id}:credits:${amount}`,
+    });
   }
 
   // ── Namespace getters (public API) ─────────────────────────
@@ -1733,6 +1754,8 @@ export class Creem {
                   order,
                 });
               }
+
+              await this.creditCheckoutCustomerCredits(ctx, checkout);
             }
           }
 

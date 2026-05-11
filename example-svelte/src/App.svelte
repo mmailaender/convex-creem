@@ -1003,6 +1003,7 @@
               type="recurring"
               title="100 AI Credits"
               productId={env.onetimeCredits}
+              checkoutMetadata={{ convexCreemCreditsAmount: "100" }}
             />
           </Product.Root>
         </div>

@@ -947,6 +947,94 @@ describe("registerRoutes", () => {
     expect(ctx.runMutation).toHaveBeenCalled();
   });
 
+  it("credits customer credits when checkout metadata includes an amount", async () => {
+    const creem = new Creem(mockComponent, {
+      apiKey: "k",
+      webhookSecret: SECRET,
+    });
+    const creditAccount = vi.fn(async () => ({}));
+    vi.spyOn(creem.sdk as any, "customerCredits", "get").mockReturnValue({
+      listAccounts: vi.fn(async () => ({
+        data: [{ id: "cred_acct_1", name: "credits" }],
+      })),
+      creditAccount,
+    });
+    const { handler } = setupWebhookHandler(creem);
+    const ctx = createMockCtx({
+      [REFS.getCustomerByEntityId]: {
+        id: "cust_6aVJrSJi8h9r7cGzWPVBF0",
+        entityId: "user_1",
+      },
+    });
+
+    const body = JSON.stringify({
+      eventType: "checkout.completed",
+      object: {
+        id: "ch_credits",
+        object: "checkout",
+        request_id: "req_credits",
+        order: {
+          object: "order",
+          id: "ord_credits",
+          customer: "cust_6aVJrSJi8h9r7cGzWPVBF0",
+          product: "prod_credits",
+          amount: 2000,
+          currency: "USD",
+          status: "paid",
+          type: "onetime",
+          transaction: "tran_credits",
+          created_at: "2026-02-28T07:52:06.979Z",
+          updated_at: "2026-02-28T07:52:06.979Z",
+          mode: "test",
+        },
+        product: {
+          id: "prod_credits",
+          object: "product",
+          name: "100 AI Credits",
+          description: "Credits",
+          price: 2000,
+          currency: "USD",
+          billing_type: "onetime",
+          billing_period: "once",
+          status: "active",
+          tax_mode: "exclusive",
+          tax_category: "saas",
+          default_success_url: null,
+          created_at: "2026-02-28T07:52:06.979Z",
+          updated_at: "2026-02-28T07:52:06.979Z",
+          mode: "test",
+        },
+        units: 1,
+        success_url: "https://example.com/success",
+        customer: {
+          id: "cust_6aVJrSJi8h9r7cGzWPVBF0",
+          object: "customer",
+          email: "test-customer@creem.io",
+          country: "US",
+          created_at: "2026-02-28T07:52:06.979Z",
+          updated_at: "2026-02-28T07:52:06.979Z",
+          mode: "test",
+        },
+        status: "completed",
+        mode: "test",
+        metadata: {
+          convexUserId: "user_1",
+          convexBillingEntityId: "user_1",
+          convexCreemCreditsAmount: "100",
+        },
+      },
+    });
+
+    const response = await signAndSend(handler!, ctx, body, SECRET);
+
+    expect(response.status).toBe(202);
+    expect(creditAccount).toHaveBeenCalledWith("cred_acct_1", {
+      amount: "100",
+      reference: "checkout:ch_credits",
+      idempotencyKey: "creem:checkout:ch_credits:credits:100",
+    });
+  });
+
   it("handles subscription.active — updates subscription", async () => {
     const creem = new Creem(mockComponent, {
       apiKey: "k",

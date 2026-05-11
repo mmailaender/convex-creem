@@ -17,6 +17,13 @@
   import { SvelteSet } from "svelte/reactivity";
   import { renderMarkdown } from "../../core/markdown.js";
   import { pendingCheckout } from "../../core/pendingCheckout.js";
+  import {
+    getActiveOwnedProductId,
+    getEffectiveOwnedProductIds,
+    isOwnedProduct,
+    resolveProductCheckoutProductId,
+    shouldSuppressPendingCheckout,
+  } from "../../core/productCheckout.js";
 
   interface Props {
     api: ConnectedBillingApi;
@@ -93,7 +100,13 @@
     untrack(() => {
       const pending = pendingCheckout.load();
       if (!pending) return;
-      if ((model!.ownedProductIds ?? []).includes(pending.productId)) {
+      if (
+        shouldSuppressPendingCheckout(
+          pending.productId,
+          registeredItems,
+          effectiveOwnedProductIds,
+        )
+      ) {
         pendingCheckout.clear();
         return;
       }
@@ -104,21 +117,12 @@
   // Resolve effective ownership by applying transition rules.
   // If the user purchased a "via_product" (upgrade delta), they effectively
   // own the transition target ('to') and no longer just the source ('from').
-  const effectiveOwnedProductIds = $derived.by<string[]>(() => {
-    const effective = new SvelteSet(rawOwnedProductIds);
-    for (const rule of transition) {
-      if (rule.kind === "via_product" && effective.has(rule.viaProductId)) {
-        effective.add(rule.to);
-        effective.delete(rule.from);
-      }
-    }
-    return [...effective];
-  });
+  const effectiveOwnedProductIds = $derived(
+    getEffectiveOwnedProductIds(rawOwnedProductIds, transition),
+  );
 
   const activeOwnedProductId = $derived(
-    registeredItems.find((item) =>
-      effectiveOwnedProductIds.includes(item.productId),
-    )?.productId ?? null,
+    getActiveOwnedProductId(registeredItems, effectiveOwnedProductIds),
   );
 
   // Determine if a product is a lower tier than the target by traversing the
@@ -141,28 +145,6 @@
     return false;
   };
 
-  const resolveTransitionTarget = (
-    fromProductId: string,
-    toProductId: string,
-  ) =>
-    transition.find(
-      (rule) => rule.from === fromProductId && rule.to === toProductId,
-    );
-
-  const resolveCheckoutProductId = (toProductId: string) => {
-    if (!activeOwnedProductId) {
-      return toProductId;
-    }
-    const rule = resolveTransitionTarget(activeOwnedProductId, toProductId);
-    if (!rule) {
-      return null;
-    }
-    if (rule.kind === "via_product") {
-      return rule.viaProductId;
-    }
-    return toProductId;
-  };
-
   const getFallbackSuccessUrl = (): string | undefined => {
     if (typeof window === "undefined") return undefined;
     return `${window.location.origin}${window.location.pathname}`;
@@ -175,7 +157,10 @@
       : "light";
   };
 
-  const startCheckout = async (checkoutProductId: string) => {
+  const startCheckout = async (
+    checkoutProductId: string,
+    checkoutMetadata?: Record<string, string>,
+  ) => {
     if (onBeforeCheckout) {
       const proceed = await onBeforeCheckout({ productId: checkoutProductId });
       if (!proceed) return;
@@ -188,6 +173,7 @@
         ...(successUrl ? { successUrl } : {}),
         fallbackSuccessUrl: getFallbackSuccessUrl(),
         theme: getPreferredTheme(),
+        ...(checkoutMetadata ? { metadata: checkoutMetadata } : {}),
       });
       // Suppress Convex client's beforeunload dialog during checkout redirect.
       // Convex registers via addEventListener, so onbeforeunload=null has no effect.
@@ -211,10 +197,14 @@
     }
   };
 
-  const handleCheckoutClick = (event: MouseEvent, productId: string) => {
+  const handleCheckoutClick = (
+    event: MouseEvent,
+    productId: string,
+    checkoutMetadata?: Record<string, string>,
+  ) => {
     event.preventDefault();
     event.stopPropagation();
-    void startCheckout(productId);
+    void startCheckout(productId, checkoutMetadata);
   };
 
   const splitPriceLabel = (
@@ -250,12 +240,16 @@
       : `flex gap-3 ${layout === "single" ? "justify-center" : "flex-wrap items-center"}`}
   >
     {#each registeredItems as item (item.productId)}
-      {@const isOwned = effectiveOwnedProductIds.includes(item.productId)}
+      {@const isOwned = isOwnedProduct(item, effectiveOwnedProductIds)}
       {@const isIncluded =
         !isOwned &&
         activeOwnedProductId != null &&
         isLowerTierThan(item.productId, activeOwnedProductId)}
-      {@const checkoutProductId = resolveCheckoutProductId(item.productId)}
+      {@const checkoutProductId = resolveProductCheckoutProductId(
+        item,
+        activeOwnedProductId,
+        transition,
+      )}
       {@const matchedProduct = allProducts.find((p) => p.id === item.productId)}
       {@const resolvedTitle =
         item.title ?? matchedProduct?.name ?? item.productId}
@@ -320,16 +314,25 @@
                   disabled={isLoading || !canCheckout}
                   class={`${pricingCtaVariant === "filled" ? "button-filled" : "button-faded"} w-full disabled:cursor-not-allowed disabled:opacity-60`}
                   onclick={(event) =>
-                    handleCheckoutClick(event, checkoutProductId)}
+                    handleCheckoutClick(
+                      event,
+                      checkoutProductId,
+                      item.checkoutMetadata,
+                    )}
                 >
-                  {activeOwnedProductId ? "Upgrade" : "Buy now"}
+                  {item.type === "one-time" && activeOwnedProductId ? "Upgrade" : "Buy now"}
                 </button>
               {:else if !isOwned && !isIncluded}
                 <button
                   type="button"
                   disabled={isLoading || !canCheckout}
                   class={`${pricingCtaVariant === "filled" ? "button-filled" : "button-faded"} w-full disabled:cursor-not-allowed disabled:opacity-60`}
-                  onclick={(event) => handleCheckoutClick(event, item.productId)}
+                  onclick={(event) =>
+                    handleCheckoutClick(
+                      event,
+                      item.productId,
+                      item.checkoutMetadata,
+                    )}
                 >
                   Buy now
                 </button>
@@ -374,16 +377,22 @@
                 type="button"
                 disabled={isLoading || !canCheckout}
                 class="button-filled disabled:cursor-not-allowed disabled:opacity-60"
-                onclick={(event) => handleCheckoutClick(event, checkoutProductId)}
+                onclick={(event) =>
+                  handleCheckoutClick(
+                    event,
+                    checkoutProductId,
+                    item.checkoutMetadata,
+                  )}
               >
-                {activeOwnedProductId ? "Upgrade" : "Buy now"}
+                {item.type === "one-time" && activeOwnedProductId ? "Upgrade" : "Buy now"}
               </button>
             {:else}
               <button
                 type="button"
                 disabled={isLoading || !canCheckout}
                 class="button-filled disabled:cursor-not-allowed disabled:opacity-60"
-                onclick={(event) => handleCheckoutClick(event, item.productId)}
+                onclick={(event) =>
+                  handleCheckoutClick(event, item.productId, item.checkoutMetadata)}
               >
                 Buy now
               </button>
