@@ -142,6 +142,7 @@ export const SubscriptionItem = ({
       selectedCycle: rootContext?.selectedCycle ?? "every-month",
       currentProductId: productId,
       price,
+      unstyled: rootContext?.unstyled ?? false,
       onCheckout:
         rootContext &&
         productId &&

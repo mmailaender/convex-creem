@@ -10,8 +10,14 @@ export const SubscriptionItemTitle = ({
 }: {
   className?: string;
 }) => {
-  const { plan } = useSubscriptionItem();
-  return <h3 className={`font-semibold ${className}`}>{plan.title}</h3>;
+  const { plan, unstyled } = useSubscriptionItem();
+  return (
+    <h3
+      className={unstyled ? className : `creem-base:font-semibold ${className}`}
+    >
+      {plan.title}
+    </h3>
+  );
 };
 
 /**
@@ -23,9 +29,19 @@ export const SubscriptionItemPrice = ({
 }: {
   className?: string;
 }) => {
-  const { price } = useSubscriptionItem();
+  const { price, unstyled } = useSubscriptionItem();
   if (!price) return null;
-  return <p className={`text-2xl font-bold ${className}`}>{price}</p>;
+  return (
+    <p
+      className={
+        unstyled
+          ? className
+          : `creem-base:text-2xl creem-base:font-bold ${className}`
+      }
+    >
+      {price}
+    </p>
+  );
 };
 
 /**
@@ -37,10 +53,16 @@ export const SubscriptionItemDescription = ({
 }: {
   className?: string;
 }) => {
-  const { plan } = useSubscriptionItem();
+  const { plan, unstyled } = useSubscriptionItem();
   if (!plan.description) return null;
   return (
-    <p className={`text-sm text-zinc-500 dark:text-zinc-400 ${className}`}>
+    <p
+      className={
+        unstyled
+          ? className
+          : `creem-base:text-sm creem-base:text-zinc-500 dark:creem-base:text-zinc-400 ${className}`
+      }
+    >
       {plan.description}
     </p>
   );
@@ -62,15 +84,17 @@ export const SubscriptionItemCTA = ({
   checkoutLabel?: string;
   switchLabel?: string;
 }) => {
-  const { isActive, onCheckout, onSwitch } = useSubscriptionItem();
+  const { isActive, onCheckout, onSwitch, unstyled } = useSubscriptionItem();
+  const activeClassName = unstyled
+    ? className
+    : `creem-base:w-full creem-base:rounded-lg creem-base:bg-zinc-100 creem-base:px-4 creem-base:py-2 creem-base:text-sm creem-base:font-medium creem-base:text-zinc-500 dark:creem-base:bg-zinc-800 dark:creem-base:text-zinc-400 ${className}`;
+  const actionClassName = unstyled
+    ? className
+    : `creem-base:button-filled creem-base:w-full ${className}`;
 
   if (isActive) {
     return (
-      <button
-        type="button"
-        className={`w-full rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 ${className}`}
-        disabled
-      >
+      <button type="button" className={activeClassName} disabled>
         {activeLabel}
       </button>
     );
@@ -78,11 +102,7 @@ export const SubscriptionItemCTA = ({
 
   if (onSwitch) {
     return (
-      <button
-        type="button"
-        className={`button-filled w-full ${className}`}
-        onClick={onSwitch}
-      >
+      <button type="button" className={actionClassName} onClick={onSwitch}>
         {switchLabel}
       </button>
     );
@@ -90,11 +110,7 @@ export const SubscriptionItemCTA = ({
 
   if (onCheckout) {
     return (
-      <button
-        type="button"
-        className={`button-filled w-full ${className}`}
-        onClick={onCheckout}
-      >
+      <button type="button" className={actionClassName} onClick={onCheckout}>
         {checkoutLabel}
       </button>
     );
@@ -115,13 +131,17 @@ export const SubscriptionItemBadge = ({
   label?: string;
   className?: string;
 }>) => {
-  const { isRecommended, isActive } = useSubscriptionItem();
+  const { isRecommended, isActive, unstyled } = useSubscriptionItem();
   const text =
     label ?? (isActive ? "Current" : isRecommended ? "Recommended" : null);
   if (!text && !children) return null;
   return (
     <span
-      className={`inline-block rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 ${className}`}
+      className={
+        unstyled
+          ? className
+          : `creem-base:inline-block creem-base:rounded-full creem-base:bg-blue-100 creem-base:px-2.5 creem-base:py-0.5 creem-base:text-xs creem-base:font-medium creem-base:text-blue-800 dark:creem-base:bg-blue-900/30 dark:creem-base:text-blue-300 ${className}`
+      }
     >
       {children ?? text}
     </span>

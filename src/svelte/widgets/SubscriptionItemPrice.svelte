@@ -7,8 +7,11 @@
 
   let { class: className = "" }: Props = $props();
   const ctx = getSubscriptionItemContext();
+  const resolvedClass = $derived(
+    ctx.unstyled ? className : `creem-base:text-2xl creem-base:font-bold ${className}`,
+  );
 </script>
 
 {#if ctx.price}
-  <p class={`text-2xl font-bold ${className}`}>{ctx.price}</p>
+  <p class={resolvedClass}>{ctx.price}</p>
 {/if}

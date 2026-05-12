@@ -40,6 +40,16 @@
   }
   setupConvex(convexUrl);
 
+  const detailedSelectorClass = [
+    "flex w-full justify-center md:w-auto",
+    "[&_[data-part=root]]:relative [&_[data-part=root]]:inline-flex [&_[data-part=root]]:items-stretch [&_[data-part=root]]:gap-1 [&_[data-part=root]]:rounded-lg [&_[data-part=root]]:border [&_[data-part=root]]:border-border-subtle [&_[data-part=root]]:bg-surface-subtle [&_[data-part=root]]:p-1",
+    "[&_[data-part=indicator]]:absolute [&_[data-part=indicator]]:left-[var(--left)] [&_[data-part=indicator]]:top-[var(--top)] [&_[data-part=indicator]]:z-0 [&_[data-part=indicator]]:h-[var(--height)] [&_[data-part=indicator]]:w-[var(--width)] [&_[data-part=indicator]]:rounded-md [&_[data-part=indicator]]:bg-surface-base [&_[data-part=indicator]]:shadow-sm [&_[data-part=indicator]]:transition-[left,top,width,height] [&_[data-part=indicator]]:duration-150",
+    "[&_[data-part=item]]:relative [&_[data-part=item]]:z-10 [&_[data-part=item]]:inline-flex [&_[data-part=item]]:min-h-8 [&_[data-part=item]]:cursor-pointer [&_[data-part=item]]:select-none [&_[data-part=item]]:items-center [&_[data-part=item]]:justify-center [&_[data-part=item]]:rounded-md [&_[data-part=item]]:px-3 [&_[data-part=item]]:py-1.5 [&_[data-part=item]]:text-sm [&_[data-part=item]]:font-medium [&_[data-part=item]]:text-foreground-muted [&_[data-part=item]]:outline-none",
+    "[&_[data-part=item]:hover]:text-foreground-default [&_[data-part=item][data-state=checked]]:text-foreground-default [&_[data-part=item][data-focus-visible]]:ring-2 [&_[data-part=item][data-focus-visible]]:ring-primary-border-default [&_[data-part=item][data-disabled]]:cursor-not-allowed [&_[data-part=item][data-disabled]]:opacity-50",
+    "[&_[data-part=item-text]]:relative [&_[data-part=item-text]]:z-10",
+    "[&_[data-part=item-control]]:absolute [&_[data-part=item-control]]:inset-0 [&_[data-part=item-control]]:opacity-0",
+  ].join(" ");
+
   // ────────────────────────────────────────────────────────────────────────────
   // Product IDs — all from env vars, NO hardcoded fallbacks
   // ────────────────────────────────────────────────────────────────────────────
@@ -927,6 +937,7 @@
 
           <div class="mt-[6.5rem]">
             <Subscription.Root
+              unstyled
               groupSelector="external"
               intervalSelector="external"
               groups={[
@@ -951,12 +962,14 @@
               <div
                 class="mb-10 flex flex-col items-center justify-between gap-4 md:flex-row"
               >
-                <Subscription.GroupSelector />
-                <Subscription.IntervalSelector />
+                <Subscription.GroupSelector class={detailedSelectorClass} />
+                <Subscription.IntervalSelector class={detailedSelectorClass} />
               </div>
 
               <Subscription.Group value="individual" label="Individual">
-                <Subscription.Grid class="lg:grid-cols-2">
+                <Subscription.Grid
+                  class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2"
+                >
                   <Subscription.Item
                     planId="basic-individual-cycle"
                     class="relative flex min-h-[320px] flex-col justify-between rounded-lg border border-border-subtle bg-surface-base p-6"
@@ -964,7 +977,7 @@
                     <div class="space-y-5">
                       <Subscription.ItemBadge
                         label="Für Einzelpersonen"
-                        class="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                        class="inline-block rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
                       />
                       <div class="space-y-2">
                         <Subscription.ItemTitle
@@ -984,7 +997,7 @@
                       </ul>
                     </div>
                     <Subscription.ItemCTA
-                      class="mt-8"
+                      class="button-filled mt-8 w-full disabled:cursor-not-allowed disabled:opacity-60"
                       checkoutLabel="Start individual"
                       switchLabel="Switch individual"
                     />
@@ -995,7 +1008,10 @@
                     class="relative flex min-h-[320px] flex-col justify-between rounded-lg border-2 border-primary-border-default bg-surface-base p-6"
                   >
                     <div class="space-y-5">
-                      <Subscription.ItemBadge label="Popular" />
+                      <Subscription.ItemBadge
+                        label="Popular"
+                        class="inline-block rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                      />
                       <div class="space-y-2">
                         <Subscription.ItemTitle
                           class="heading-s text-foreground-default"
@@ -1014,7 +1030,7 @@
                       </ul>
                     </div>
                     <Subscription.ItemCTA
-                      class="mt-8"
+                      class="button-filled mt-8 w-full disabled:cursor-not-allowed disabled:opacity-60"
                       checkoutLabel="Go premium"
                       switchLabel="Switch to premium"
                     />
@@ -1023,7 +1039,9 @@
               </Subscription.Group>
 
               <Subscription.Group value="teams" label="Teams">
-                <Subscription.Grid class="lg:grid-cols-2">
+                <Subscription.Grid
+                  class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2"
+                >
                   <Subscription.Item
                     planId="basic-team-cycle"
                     class="relative flex min-h-[320px] flex-col justify-between rounded-lg border border-border-subtle bg-surface-base p-6"
@@ -1031,7 +1049,7 @@
                     <div class="space-y-5">
                       <Subscription.ItemBadge
                         label="Teams"
-                        class="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300"
+                        class="inline-block rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300"
                       />
                       <div class="space-y-2">
                         <Subscription.ItemTitle
@@ -1051,7 +1069,7 @@
                       </ul>
                     </div>
                     <Subscription.ItemCTA
-                      class="mt-8"
+                      class="button-filled mt-8 w-full disabled:cursor-not-allowed disabled:opacity-60"
                       checkoutLabel="Start team plan"
                       switchLabel="Switch team plan"
                     />
@@ -1062,7 +1080,10 @@
                     class="relative flex min-h-[320px] flex-col justify-between rounded-lg border-2 border-primary-border-default bg-surface-base p-6"
                   >
                     <div class="space-y-5">
-                      <Subscription.ItemBadge label="Best for teams" />
+                      <Subscription.ItemBadge
+                        label="Best for teams"
+                        class="inline-block rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                      />
                       <div class="space-y-2">
                         <Subscription.ItemTitle
                           class="heading-s text-foreground-default"
@@ -1081,7 +1102,7 @@
                       </ul>
                     </div>
                     <Subscription.ItemCTA
-                      class="mt-8"
+                      class="button-filled mt-8 w-full disabled:cursor-not-allowed disabled:opacity-60"
                       checkoutLabel="Upgrade team"
                       switchLabel="Switch team plan"
                     />

@@ -13,6 +13,7 @@
     defaultValue?: string;
     disabled?: boolean;
     className?: string;
+    unstyled?: boolean;
     onValueChange?: (value: string) => void;
   }
 
@@ -22,6 +23,7 @@
     defaultValue = undefined,
     disabled = false,
     className = "",
+    unstyled = false,
     onValueChange,
   }: Props = $props();
 
@@ -37,20 +39,26 @@
       value={resolvedValue}
       {defaultValue}
       {disabled}
-      class={`segment-group ${className}`}
+      class={unstyled ? className : `creem-base:segment-group ${className}`}
       onValueChange={(details: { value: string }) => onValueChange?.(details.value)}
     >
-      <ArkSegmentGroup.Indicator class="segment-group-indicator" />
+      <ArkSegmentGroup.Indicator
+        class={unstyled ? "" : "creem-base:segment-group-indicator"}
+      />
       {#each items as item (item.value)}
         <ArkSegmentGroup.Item
           value={item.value}
           disabled={item.disabled}
-          class="segment-group-item"
+          class={unstyled ? "" : "creem-base:segment-group-item"}
         >
-          <ArkSegmentGroup.ItemText class="segment-group-item-text label-m">
+          <ArkSegmentGroup.ItemText
+            class={unstyled ? "" : "creem-base:segment-group-item-text creem-base:label-m"}
+          >
             {item.label}
           </ArkSegmentGroup.ItemText>
-          <ArkSegmentGroup.ItemControl class="segment-group-item-control" />
+          <ArkSegmentGroup.ItemControl
+            class={unstyled ? "" : "creem-base:segment-group-item-control"}
+          />
           <ArkSegmentGroup.ItemHiddenInput />
         </ArkSegmentGroup.Item>
       {/each}

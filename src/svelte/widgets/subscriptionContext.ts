@@ -21,6 +21,7 @@ export type SubscriptionContextValue = {
   getDisableCheckout: () => boolean;
   getDisableSwitch: () => boolean;
   getDisableUnits: () => boolean;
+  getUnstyled: () => boolean;
   checkout: (payload: {
     plan: UIPlanEntry;
     productId: string;

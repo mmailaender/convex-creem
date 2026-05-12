@@ -9,6 +9,7 @@ export type SubscriptionItemContextValue = {
   selectedCycle: RecurringCycle;
   currentProductId: string | undefined;
   price: string | null;
+  unstyled: boolean;
   onCheckout?: () => void;
   onSwitch?: () => void;
 };

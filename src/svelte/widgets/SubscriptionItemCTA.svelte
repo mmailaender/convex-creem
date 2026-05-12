@@ -16,12 +16,20 @@
   }: Props = $props();
 
   const ctx = getSubscriptionItemContext();
+  const activeClass = $derived(
+    ctx.unstyled
+      ? className
+      : `creem-base:w-full creem-base:rounded-lg creem-base:bg-zinc-100 creem-base:px-4 creem-base:py-2 creem-base:text-sm creem-base:font-medium creem-base:text-zinc-500 dark:creem-base:bg-zinc-800 dark:creem-base:text-zinc-400 ${className}`,
+  );
+  const actionClass = $derived(
+    ctx.unstyled ? className : `creem-base:button-filled creem-base:w-full ${className}`,
+  );
 </script>
 
 {#if ctx.isActive}
   <button
     type="button"
-    class={`w-full rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 ${className}`}
+    class={activeClass}
     disabled
   >
     {activeLabel}
@@ -29,7 +37,7 @@
 {:else if ctx.onSwitch}
   <button
     type="button"
-    class={`button-filled w-full ${className}`}
+    class={actionClass}
     onclick={ctx.onSwitch}
   >
     {switchLabel}
@@ -37,7 +45,7 @@
 {:else if ctx.onCheckout}
   <button
     type="button"
-    class={`button-filled w-full ${className}`}
+    class={actionClass}
     onclick={ctx.onCheckout}
   >
     {checkoutLabel}

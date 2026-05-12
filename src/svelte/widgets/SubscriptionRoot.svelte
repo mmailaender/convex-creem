@@ -53,6 +53,7 @@
     showUnitPicker?: boolean;
     twoColumnLayout?: boolean;
     updateBehavior?: UpdateBehavior;
+    unstyled?: boolean;
     onBeforeCheckout?: (intent: CheckoutIntent) => Promise<boolean> | boolean;
     onBeforePlanChange?: (intent: PlanChangeIntent) => Promise<boolean> | boolean;
     onBeforeFreePlanActivation?: (intent: { freePlanId: string }) => Promise<boolean> | boolean;
@@ -78,6 +79,7 @@
     showUnitPicker = false,
     twoColumnLayout = false,
     updateBehavior = "proration-charge-immediately",
+    unstyled = false,
     onBeforeCheckout = undefined,
     onBeforePlanChange = undefined,
     onBeforeFreePlanActivation = undefined,
@@ -166,6 +168,7 @@
     getDisableCheckout: () => !canCheckout,
     getDisableSwitch: () => !canChange,
     getDisableUnits: () => !canUpdateUnits,
+    getUnstyled: () => unstyled,
     checkout: (payload) => handlePricingCheckout(payload),
     switchPlan: (payload) => requestSwitchPlan(payload),
     updateUnits: (payload) => handleUpdateUnits(payload),
@@ -722,17 +725,19 @@
   };
 </script>
 
-<section class={`space-y-4 ${className}`}>
+<section class={unstyled ? className : `creem-base:space-y-4 ${className}`}>
   {#if actionError}
     <div
-      class="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700"
+      class={unstyled
+        ? ""
+        : "creem-base:rounded-lg creem-base:border creem-base:border-red-300 creem-base:bg-red-50 creem-base:px-3 creem-base:py-2 creem-base:text-sm creem-base:text-red-700"}
     >
       {actionError}
     </div>
   {/if}
 
   {#if !model}
-    <p class="text-sm text-zinc-500">Loading billing model…</p>
+    <p class={unstyled ? "" : "creem-base:text-sm creem-base:text-zinc-500"}>Loading billing model…</p>
   {:else}
     {#if ownsActiveSubscription && snapshot}
       <ScheduledChangeBanner
@@ -751,10 +756,11 @@
     <PaymentWarningBanner {snapshot} />
 
     {#if groupSelector === "auto" && groupItems.length > 1}
-      <div class="flex justify-center">
+      <div class={unstyled ? "" : "creem-base:flex creem-base:justify-center"}>
         <SegmentGroup
           items={groupItems}
           value={activeGroupId}
+          {unstyled}
           onValueChange={(value) => {
             selectedGroupId = value;
             onGroupChange?.(value);

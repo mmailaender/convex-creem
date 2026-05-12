@@ -43,6 +43,7 @@ export const SubscriptionIntervalSelector = ({
       ? requestedValue
       : resolvedCycles[0];
   const handleValueChange = onValueChange ?? rootContext?.setCycle;
+  const unstyled = rootContext?.unstyled ?? false;
 
   if (resolvedCycles.length <= 1 || !resolvedValue || !handleValueChange) {
     return null;
@@ -54,10 +55,17 @@ export const SubscriptionIntervalSelector = ({
   }));
 
   return (
-    <div className={`flex justify-center ${className}`}>
+    <div
+      className={
+        unstyled
+          ? className
+          : `creem-base:flex creem-base:justify-center ${className}`
+      }
+    >
       <SegmentGroup
         items={items}
         value={resolvedValue}
+        unstyled={unstyled}
         onValueChange={(v) => handleValueChange(v as RecurringCycle)}
       />
     </div>

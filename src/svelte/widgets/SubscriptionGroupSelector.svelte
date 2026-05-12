@@ -24,6 +24,10 @@
   );
   const resolvedItems = $derived(items ?? rootContext?.groupItems() ?? []);
   const resolvedValue = $derived(value ?? rootContext?.activeGroupId() ?? null);
+  const unstyled = $derived(rootContext?.getUnstyled() ?? false);
+  const resolvedClass = $derived(
+    unstyled ? className : `creem-base:flex creem-base:justify-center ${className}`,
+  );
   const handleValueChange = (next: string) => {
     if (onValueChange) {
       onValueChange(next);
@@ -34,10 +38,11 @@
 </script>
 
 {#if resolvedItems.length > 1}
-  <div class={`flex justify-center ${className}`}>
+  <div class={resolvedClass}>
     <SegmentGroup
       items={resolvedItems}
       value={resolvedValue}
+      {unstyled}
       onValueChange={handleValueChange}
     />
   </div>

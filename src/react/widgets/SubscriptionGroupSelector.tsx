@@ -32,14 +32,22 @@ export const SubscriptionGroupSelector = ({
   const resolvedItems = items ?? rootContext?.groupItems ?? [];
   const resolvedValue = value ?? rootContext?.activeGroupId ?? null;
   const handleValueChange = onValueChange ?? rootContext?.setGroup;
+  const unstyled = rootContext?.unstyled ?? false;
 
   if (resolvedItems.length <= 1 || !handleValueChange) return null;
 
   return (
-    <div className={`flex justify-center ${className}`}>
+    <div
+      className={
+        unstyled
+          ? className
+          : `creem-base:flex creem-base:justify-center ${className}`
+      }
+    >
       <SegmentGroup
         items={resolvedItems}
         value={resolvedValue}
+        unstyled={unstyled}
         onValueChange={handleValueChange}
       />
     </div>

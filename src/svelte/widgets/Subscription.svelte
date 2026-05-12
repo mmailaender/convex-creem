@@ -164,6 +164,9 @@
     get price() {
       return price;
     },
+    get unstyled() {
+      return rootContext?.getUnstyled() ?? false;
+    },
     get onCheckout() {
       return onCheckout;
     },

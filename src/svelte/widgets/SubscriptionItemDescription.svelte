@@ -7,10 +7,15 @@
 
   let { class: className = "" }: Props = $props();
   const ctx = getSubscriptionItemContext();
+  const resolvedClass = $derived(
+    ctx.unstyled
+      ? className
+      : `creem-base:text-sm creem-base:text-zinc-500 dark:creem-base:text-zinc-400 ${className}`,
+  );
 </script>
 
 {#if ctx.plan.description}
-  <p class={`text-sm text-zinc-500 dark:text-zinc-400 ${className}`}>
+  <p class={resolvedClass}>
     {ctx.plan.description}
   </p>
 {/if}

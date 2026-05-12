@@ -96,6 +96,7 @@ export const SubscriptionRoot = ({
   showUnitPicker = false,
   twoColumnLayout = false,
   updateBehavior = "proration-charge-immediately",
+  unstyled = false,
   onBeforeCheckout,
   onBeforePlanChange,
   onBeforeFreePlanActivation,
@@ -120,6 +121,7 @@ export const SubscriptionRoot = ({
   showUnitPicker?: boolean;
   twoColumnLayout?: boolean;
   updateBehavior?: UpdateBehavior;
+  unstyled?: boolean;
   onBeforeCheckout?: (intent: CheckoutIntent) => Promise<boolean> | boolean;
   onBeforePlanChange?: (intent: PlanChangeIntent) => Promise<boolean> | boolean;
   onBeforeFreePlanActivation?: (intent: {
@@ -810,6 +812,7 @@ export const SubscriptionRoot = ({
       disableCheckout: !canCheckout,
       disableSwitch: !canChange,
       disableUnits: !canUpdateUnits,
+      unstyled,
       checkout: handlePricingCheckout,
       switchPlan: updateRef && canChange ? requestSwitchPlan : undefined,
       updateUnits: updateRef && canUpdateUnits ? handleUpdateUnits : undefined,
@@ -843,6 +846,7 @@ export const SubscriptionRoot = ({
       canCheckout,
       canChange,
       canUpdateUnits,
+      unstyled,
       handlePricingCheckout,
       updateRef,
       requestSwitchPlan,
@@ -861,15 +865,29 @@ export const SubscriptionRoot = ({
 
   return (
     <SubscriptionContext.Provider value={contextValue}>
-      <section className={`space-y-4 ${className}`}>
+      <section
+        className={unstyled ? className : `creem-base:space-y-4 ${className}`}
+      >
         {actionError && (
-          <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div
+            className={
+              unstyled
+                ? ""
+                : "creem-base:rounded-lg creem-base:border creem-base:border-red-300 creem-base:bg-red-50 creem-base:px-3 creem-base:py-2 creem-base:text-sm creem-base:text-red-700"
+            }
+          >
             {actionError}
           </div>
         )}
 
         {!model ? (
-          <p className="text-sm text-zinc-500">Loading billing model…</p>
+          <p
+            className={
+              unstyled ? "" : "creem-base:text-sm creem-base:text-zinc-500"
+            }
+          >
+            Loading billing model…
+          </p>
         ) : (
           <>
             {ownsActiveSubscription && snapshot && (
@@ -891,10 +909,15 @@ export const SubscriptionRoot = ({
             <PaymentWarningBanner snapshot={snapshot} />
 
             {groupSelector === "auto" && groupItems.length > 1 && (
-              <div className="flex justify-center">
+              <div
+                className={
+                  unstyled ? "" : "creem-base:flex creem-base:justify-center"
+                }
+              >
                 <SegmentGroup
                   items={groupItems}
                   value={activeGroupId}
+                  unstyled={unstyled}
                   onValueChange={handleGroupChange}
                 />
               </div>

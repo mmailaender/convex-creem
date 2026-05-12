@@ -39,6 +39,10 @@
       ? requestedValue
       : resolvedCycles[0],
   );
+  const unstyled = $derived(rootContext?.getUnstyled() ?? false);
+  const resolvedClass = $derived(
+    unstyled ? className : `creem-base:flex creem-base:justify-center ${className}`,
+  );
 
   const items = $derived(
     resolvedCycles.map((cycle) => ({
@@ -57,10 +61,11 @@
 </script>
 
 {#if resolvedCycles.length > 1 && resolvedValue}
-  <div class={`flex justify-center ${className}`}>
+  <div class={resolvedClass}>
     <SegmentGroup
       {items}
       value={resolvedValue}
+      {unstyled}
       onValueChange={handleValueChange}
     />
   </div>

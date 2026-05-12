@@ -18,12 +18,15 @@
     label ?? (ctx.isActive ? "Current" : ctx.isRecommended ? "Recommended" : null),
   );
   const show = $derived(text != null || children != null);
+  const resolvedClass = $derived(
+    ctx.unstyled
+      ? className
+      : `creem-base:inline-block creem-base:rounded-full creem-base:bg-blue-100 creem-base:px-2.5 creem-base:py-0.5 creem-base:text-xs creem-base:font-medium creem-base:text-blue-800 dark:creem-base:bg-blue-900/30 dark:creem-base:text-blue-300 ${className}`,
+  );
 </script>
 
 {#if show}
-  <span
-    class={`inline-block rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 ${className}`}
-  >
+  <span class={resolvedClass}>
     {#if children}
       {@render children()}
     {:else}

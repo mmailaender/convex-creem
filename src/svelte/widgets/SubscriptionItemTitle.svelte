@@ -7,6 +7,9 @@
 
   let { class: className = "" }: Props = $props();
   const ctx = getSubscriptionItemContext();
+  const resolvedClass = $derived(
+    ctx.unstyled ? className : `creem-base:font-semibold ${className}`,
+  );
 </script>
 
-<h3 class={`font-semibold ${className}`}>{ctx.plan.title}</h3>
+<h3 class={resolvedClass}>{ctx.plan.title}</h3>
