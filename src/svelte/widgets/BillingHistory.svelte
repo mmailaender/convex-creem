@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { getContext } from "svelte";
   import { useConvexClient } from "@mmailaender/convex-svelte";
   import { Pagination } from "@ark-ui/svelte/pagination";
   import type {
@@ -7,14 +8,16 @@
   } from "@ark-ui/svelte/pagination";
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
   import type {
-    ConnectedBillingApi,
     ConnectedTransaction,
     ConnectedTransactionList,
   } from "./types.js";
   import { formatPrice } from "../primitives/shared.js";
+  import {
+    CREEM_CONVEX_CONTEXT_KEY,
+    type CreemConvexContextValue,
+  } from "../creemConvexContext.js";
 
   interface Props {
-    api: ConnectedBillingApi;
     pageSize?: number;
     productId?: string;
     orderId?: string;
@@ -22,7 +25,6 @@
   }
 
   let {
-    api,
     pageSize = 10,
     productId = undefined,
     orderId = undefined,
@@ -30,8 +32,16 @@
   }: Props = $props();
 
   const client = useConvexClient();
-  // svelte-ignore state_referenced_locally
-  const searchRef = api.transactions?.search;
+  const provider = getContext<CreemConvexContextValue | undefined>(
+    CREEM_CONVEX_CONTEXT_KEY,
+  );
+  const resolvedApi = provider?.api;
+  if (!resolvedApi) {
+    throw new Error(
+      "BillingHistory must be rendered inside <CreemConvexProvider>.",
+    );
+  }
+  const searchRef = resolvedApi.transactions?.search;
 
   let pageNumber = $state(1);
   let result = $state<ConnectedTransactionList | null>(null);

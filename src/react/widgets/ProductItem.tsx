@@ -7,13 +7,11 @@ export const ProductItem = ({
   type,
   title,
   description,
-  checkoutMetadata,
 }: {
   productId: string;
   type: ProductType;
   title?: string;
   description?: string;
-  checkoutMetadata?: Record<string, string>;
 }) => {
   const rootContext = useContext(ProductGroupContext);
 
@@ -24,11 +22,10 @@ export const ProductItem = ({
       type,
       title,
       description,
-      checkoutMetadata,
     };
     const unregister = rootContext.registerItem(registration);
     return unregister;
-  }, [rootContext, productId, type, title, description, checkoutMetadata]);
+  }, [rootContext, productId, type, title, description]);
 
   return null;
 };

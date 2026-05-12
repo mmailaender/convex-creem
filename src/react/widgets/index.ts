@@ -13,10 +13,19 @@ import {
 } from "./SubscriptionItemSlots.js";
 import { ProductItem } from "./ProductItem.js";
 import { ProductRoot } from "./ProductRoot.js";
+import { CreditsRoot } from "./CreditsRoot.js";
+import {
+  CreditsAmount,
+  CreditsError,
+  CreditsRefresh,
+  CreditsStatus,
+  CreditsTitle,
+} from "./CreditsSlots.js";
 
 export { BillingPortal } from "./BillingPortal.js";
 export { BillingHistory } from "./BillingHistory.js";
 export { useSubscriptionItem } from "./subscriptionItemContext.js";
+export { useCredits } from "./creditsContext.js";
 
 export const Subscription: typeof SubscriptionItem & {
   Root: typeof SubscriptionRoot;
@@ -53,6 +62,22 @@ export const Product: typeof ProductItem & {
   Root: ProductRoot,
   Item: ProductItem,
   Group: ProductRoot,
+});
+
+export const Credits: typeof CreditsRoot & {
+  Root: typeof CreditsRoot;
+  Title: typeof CreditsTitle;
+  Amount: typeof CreditsAmount;
+  Refresh: typeof CreditsRefresh;
+  Error: typeof CreditsError;
+  Status: typeof CreditsStatus;
+} = Object.assign(CreditsRoot, {
+  Root: CreditsRoot,
+  Title: CreditsTitle,
+  Amount: CreditsAmount,
+  Refresh: CreditsRefresh,
+  Error: CreditsError,
+  Status: CreditsStatus,
 });
 
 export type {

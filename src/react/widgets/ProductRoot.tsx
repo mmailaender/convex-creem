@@ -20,11 +20,14 @@ import {
   resolveProductCheckoutProductId,
   shouldSuppressPendingCheckout,
 } from "../../core/productCheckout.js";
+import {
+  requireCreemConvexApi,
+  useCreemConvex,
+} from "../CreemConvexProvider.js";
 
 import type {
   BillingPermissions,
   CheckoutIntent,
-  ConnectedBillingApi,
   ConnectedBillingModel,
   ProductItemRegistration,
   Transition,
@@ -43,7 +46,6 @@ const getPreferredTheme = (): "light" | "dark" => {
 };
 
 export const ProductRoot = ({
-  api,
   permissions,
   transition = [],
   className = "",
@@ -55,7 +57,6 @@ export const ProductRoot = ({
   onBeforeCheckout,
   children,
 }: PropsWithChildren<{
-  api: ConnectedBillingApi;
   permissions?: BillingPermissions;
   transition?: Transition[];
   class?: string;
@@ -67,10 +68,16 @@ export const ProductRoot = ({
   successUrl?: string;
   onBeforeCheckout?: (intent: CheckoutIntent) => Promise<boolean> | boolean;
 }>) => {
+  const provider = useCreemConvex();
+  const resolvedApi = requireCreemConvexApi("Product.Root", provider);
+  const resolvedPermissions = permissions ?? provider?.permissions;
+  const resolvedOnBeforeCheckout =
+    onBeforeCheckout ?? provider?.onBeforeCheckout;
+
   const client = useConvex();
 
-  const billingUiModelRef = api.uiModel;
-  const checkoutLinkRef = api.checkouts.create;
+  const billingUiModelRef = resolvedApi.uiModel;
+  const checkoutLinkRef = resolvedApi.checkouts.create;
 
   const modelRaw = useQuery(billingUiModelRef, {});
   const model = (modelRaw ?? null) as ConnectedBillingModel | null;
@@ -99,9 +106,9 @@ export const ProductRoot = ({
   );
 
   const canCheckout =
-    !model?.user && onBeforeCheckout != null
+    !model?.user && resolvedOnBeforeCheckout != null
       ? true
-      : permissions?.canCheckout !== false;
+      : resolvedPermissions?.canCheckout !== false;
   const allProducts = useMemo(
     () => model?.allProducts ?? [],
     [model?.allProducts],
@@ -123,12 +130,9 @@ export const ProductRoot = ({
   );
 
   const startCheckout = useCallback(
-    async (
-      checkoutProductId: string,
-      checkoutMetadata?: Record<string, string>,
-    ) => {
-      if (onBeforeCheckout) {
-        const proceed = await onBeforeCheckout({
+    async (checkoutProductId: string) => {
+      if (resolvedOnBeforeCheckout) {
+        const proceed = await resolvedOnBeforeCheckout({
           productId: checkoutProductId,
         });
         if (!proceed) return;
@@ -141,7 +145,6 @@ export const ProductRoot = ({
           ...(successUrl ? { successUrl } : {}),
           fallbackSuccessUrl: getFallbackSuccessUrl(),
           theme: getPreferredTheme(),
-          ...(checkoutMetadata ? { metadata: checkoutMetadata } : {}),
         });
         window.addEventListener(
           "beforeunload",
@@ -161,7 +164,7 @@ export const ProductRoot = ({
         setIsLoading(false);
       }
     },
-    [client, checkoutLinkRef, successUrl, onBeforeCheckout],
+    [client, checkoutLinkRef, successUrl, resolvedOnBeforeCheckout],
   );
 
   // Pending checkout resume after auth
@@ -306,12 +309,7 @@ export const ProductRoot = ({
                         <CheckoutButton
                           productId={checkoutProductId}
                           disabled={isLoading || !canCheckout}
-                          onCheckout={() =>
-                            startCheckout(
-                              checkoutProductId,
-                              item.checkoutMetadata,
-                            )
-                          }
+                          onCheckout={() => startCheckout(checkoutProductId)}
                           className={`${pricingCtaVariant === "filled" ? "button-filled" : "button-faded"} w-full`}
                         >
                           {item.type === "one-time" && activeOwnedProductId
@@ -322,9 +320,7 @@ export const ProductRoot = ({
                         <CheckoutButton
                           productId={item.productId}
                           disabled={isLoading || !canCheckout}
-                          onCheckout={() =>
-                            startCheckout(item.productId, item.checkoutMetadata)
-                          }
+                          onCheckout={() => startCheckout(item.productId)}
                           className={`${pricingCtaVariant === "filled" ? "button-filled" : "button-faded"} w-full`}
                         >
                           Buy now
@@ -382,9 +378,7 @@ export const ProductRoot = ({
                     <CheckoutButton
                       productId={checkoutProductId}
                       disabled={isLoading || !canCheckout}
-                      onCheckout={() =>
-                        startCheckout(checkoutProductId, item.checkoutMetadata)
-                      }
+                      onCheckout={() => startCheckout(checkoutProductId)}
                     >
                       {item.type === "one-time" && activeOwnedProductId
                         ? "Upgrade"
@@ -394,9 +388,7 @@ export const ProductRoot = ({
                     <CheckoutButton
                       productId={item.productId}
                       disabled={isLoading || !canCheckout}
-                      onCheckout={() =>
-                        startCheckout(item.productId, item.checkoutMetadata)
-                      }
+                      onCheckout={() => startCheckout(item.productId)}
                     >
                       Buy now
                     </CheckoutButton>

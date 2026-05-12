@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { setContext, untrack } from "svelte";
+  import { getContext, setContext, untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
   import { Dialog } from "@ark-ui/svelte/dialog";
@@ -15,6 +15,10 @@
     SUBSCRIPTION_CONTEXT_KEY,
     type SubscriptionContextValue,
   } from "./subscriptionContext.js";
+  import {
+    CREEM_CONVEX_CONTEXT_KEY,
+    type CreemConvexContextValue,
+  } from "../creemConvexContext.js";
   import { pendingCheckout } from "../../core/pendingCheckout.js";
 
   import type { PlanCatalog, PlanCatalogEntry, UIPlanEntry, RecurringCycle, UpdateBehavior } from "../../core/types.js";
@@ -25,14 +29,12 @@
     BillingPermissions,
     CheckoutIntent,
     PlanChangeIntent,
-    ConnectedBillingApi,
     ConnectedBillingModel,
     SubscriptionGroupRegistration,
     SubscriptionPlanRegistration,
   } from "./types.js";
 
   interface Props {
-    api: ConnectedBillingApi;
     catalog?: PlanCatalog;
     plans?: readonly string[];
     groups?: SubscriptionGroupRegistration[];
@@ -58,7 +60,6 @@
   }
 
   let {
-    api,
     catalog = undefined,
     plans: planIds = undefined,
     groups: explicitGroups = undefined,
@@ -66,7 +67,7 @@
     group = undefined,
     onGroupChange = undefined,
     groupSelector = "auto",
-    defaultCycle = "every-month",
+    defaultCycle = undefined,
     cycle = undefined,
     onCycleChange = undefined,
     intervalSelector = "auto",
@@ -83,28 +84,46 @@
     children,
   }: Props = $props();
 
-  const canChange = $derived(permissions?.canChangeSubscription !== false);
-  const canCancel = $derived(permissions?.canCancelSubscription !== false);
-  const canResume = $derived(permissions?.canResumeSubscription !== false);
+  const provider = getContext<CreemConvexContextValue | undefined>(
+    CREEM_CONVEX_CONTEXT_KEY,
+  );
+  const resolvedApi = provider?.api;
+  if (!resolvedApi) {
+    throw new Error(
+      "Subscription.Root must be rendered inside <CreemConvexProvider>.",
+    );
+  }
+
+  const resolvedCatalog = $derived(catalog ?? provider?.catalog);
+  const resolvedDefaultCycle = $derived(
+    defaultCycle ?? provider?.defaultCycle ?? "every-month",
+  );
+  const resolvedPermissions = $derived(permissions ?? provider?.permissions);
+  const resolvedOnBeforeCheckout = $derived(
+    onBeforeCheckout ?? provider?.onBeforeCheckout,
+  );
+  const resolvedOnBeforePlanChange = $derived(
+    onBeforePlanChange ?? provider?.onBeforePlanChange,
+  );
+  const resolvedOnBeforeFreePlanActivation = $derived(
+    onBeforeFreePlanActivation ?? provider?.onBeforeFreePlanActivation,
+  );
+
+  const canChange = $derived(resolvedPermissions?.canChangeSubscription !== false);
+  const canCancel = $derived(resolvedPermissions?.canCancelSubscription !== false);
+  const canResume = $derived(resolvedPermissions?.canResumeSubscription !== false);
 
   const client = useConvexClient();
 
-  // svelte-ignore state_referenced_locally
-  const billingUiModelRef = api.uiModel;
-  // svelte-ignore state_referenced_locally
-  const checkoutLinkRef = api.checkouts.create;
-  // svelte-ignore state_referenced_locally
-  const updateRef = api.subscriptions?.update;
-  // svelte-ignore state_referenced_locally
-  const cancelRef = api.subscriptions?.cancel;
-  // svelte-ignore state_referenced_locally
-  const resumeRef = api.subscriptions?.resume;
+  const billingUiModelRef = resolvedApi.uiModel;
+  const checkoutLinkRef = resolvedApi.checkouts.create;
+  const updateRef = resolvedApi.subscriptions?.update;
+  const cancelRef = resolvedApi.subscriptions?.cancel;
+  const resumeRef = resolvedApi.subscriptions?.resume;
 
   const billingModelQuery = useQuery(billingUiModelRef, {});
 
-  // svelte-ignore state_referenced_locally
-  let selectedCycle = $state<RecurringCycle>(defaultCycle);
-  // svelte-ignore state_referenced_locally
+  let selectedCycle = $state<RecurringCycle>(resolvedDefaultCycle);
   let selectedGroupId = $state<string | null>(defaultGroup ?? null);
   let isActionLoading = $state(false);
   let actionError = $state<string | null>(null);
@@ -175,14 +194,14 @@
     (billingModelQuery.data ?? null) as ConnectedBillingModel | null,
   );
   const canCheckout = $derived(
-    !model?.user && onBeforeCheckout != null
+    !model?.user && resolvedOnBeforeCheckout != null
       ? true
-      : permissions?.canCheckout !== false,
+      : resolvedPermissions?.canCheckout !== false,
   );
   const canUpdateUnits = $derived(
-    !model?.user && onBeforeCheckout != null
+    !model?.user && resolvedOnBeforeCheckout != null
       ? true
-      : permissions?.canUpdateUnits !== false,
+      : resolvedPermissions?.canUpdateUnits !== false,
   );
   const snapshot = $derived(model?.billingSnapshot ?? null);
 
@@ -221,7 +240,7 @@
   });
 
   const allProducts = $derived(model?.allProducts ?? []);
-  const normalizedCatalog = $derived(normalizePlanCatalog(catalog));
+  const normalizedCatalog = $derived(normalizePlanCatalog(resolvedCatalog));
 
   const catalogRegistrations = $derived.by<SubscriptionPlanRegistration[]>(() => {
     const ids = explicitGroups && explicitGroups.length > 0
@@ -435,8 +454,8 @@
   }
 
   const startCheckout = async (productId: string, checkoutUnits?: number) => {
-    if (onBeforeCheckout) {
-      const proceed = await onBeforeCheckout({
+    if (resolvedOnBeforeCheckout) {
+      const proceed = await resolvedOnBeforeCheckout({
         productId,
         units: checkoutUnits,
       });
@@ -486,8 +505,8 @@
     units?: number;
   }) => {
     // Consent gate: onBeforePlanChange
-    if (onBeforePlanChange) {
-      const proceed = await onBeforePlanChange({
+    if (resolvedOnBeforePlanChange) {
+      const proceed = await resolvedOnBeforePlanChange({
         fromPlanId: activePlanId,
         toPlanId: payload.plan.planId,
         productId: payload.productId,
@@ -496,8 +515,8 @@
       if (!proceed) return;
     }
     // Consent gate: onBeforeFreePlanActivation
-    if (onBeforeFreePlanActivation && payload.plan.category === "free") {
-      const proceed = await onBeforeFreePlanActivation({
+    if (resolvedOnBeforeFreePlanActivation && payload.plan.category === "free") {
+      const proceed = await resolvedOnBeforeFreePlanActivation({
         freePlanId: payload.plan.planId,
       });
       if (!proceed) return;

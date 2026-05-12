@@ -50,6 +50,23 @@ export type CatalogProductRef =
       productSlug?: string;
     };
 
+/** App-side Customer Credits grant fulfilled after successful Creem commerce events. */
+export type CreditGrant = {
+  /** Amount of credits to grant. String to preserve large integer values. */
+  amount: string;
+  /** Creem Customer Credits account name. Defaults to `"credits"`. */
+  accountName?: string;
+  /** Unit label to use if the account must be created. Defaults to `"credits"`. */
+  unitLabel?: string;
+  /**
+   * Refund behavior for the grant.
+   * - `"prorate"` deducts a proportional amount for partial refunds and the full grant for full refunds.
+   * - `"debit"` deducts the full grant whenever a refund succeeds.
+   * - `"none"` leaves credits untouched.
+   */
+  refundBehavior?: "prorate" | "debit" | "none";
+};
+
 /** A single plan definition in the billing catalog. */
 export type PlanCatalogEntry = {
   /** Unique plan identifier (e.g. `"basic"`, `"premium"`). */
@@ -80,6 +97,8 @@ export type PlanCatalogEntry = {
   recommended?: boolean;
   /** Plan-specific usage limits. Keys are app-defined limit names, values are numeric caps. Used by `evaluateUsageLimits`. */
   limits?: Readonly<Record<string, number>>;
+  /** Optional app-side Customer Credits grant fulfilled from webhook events for this product. */
+  creditGrant?: CreditGrant;
   /** Arbitrary metadata for custom logic. */
   metadata?: Readonly<Record<string, unknown>>;
 };

@@ -20,6 +20,8 @@ export { default as TrialLimitBanner } from "./primitives/TrialLimitBanner.svelt
 export { default as OneTimeCheckoutButton } from "./primitives/OneTimeCheckoutButton.svelte";
 export { default as OneTimePaymentStatusBadge } from "./primitives/OneTimePaymentStatusBadge.svelte";
 export { default as CheckoutSuccessSummary } from "./primitives/CheckoutSuccessSummary.svelte";
+export { default as CreemConvexProvider } from "./CreemConvexProvider.svelte";
+export type { CreemConvexContextValue } from "./creemConvexContext.js";
 export {
   Subscription,
   Product,
@@ -27,6 +29,7 @@ export {
   BillingHistory,
   Credits,
   getSubscriptionItemContext,
+  getCreditsContext,
 } from "./widgets/index.js";
 export type {
   BillingSnapshot,

@@ -6,15 +6,28 @@ const creditsSource = readFileSync(
   fileURLToPath(new URL("./Credits.svelte", import.meta.url)),
   "utf8",
 );
+const creditsRefreshSource = readFileSync(
+  fileURLToPath(new URL("./CreditsRefresh.svelte", import.meta.url)),
+  "utf8",
+);
+const creditsAmountSource = readFileSync(
+  fileURLToPath(new URL("./CreditsAmount.svelte", import.meta.url)),
+  "utf8",
+);
+const creditsCombinedSource = [
+  creditsSource,
+  creditsRefreshSource,
+  creditsAmountSource,
+].join("\n");
 
 describe("Credits.svelte styling", () => {
   it("uses Tailwind and design-system utilities instead of component CSS", () => {
-    expect(creditsSource).not.toMatch(/<style[\s>]/);
-    expect(creditsSource).not.toContain("creem-credits");
+    expect(creditsCombinedSource).not.toMatch(/<style[\s>]/);
+    expect(creditsCombinedSource).not.toContain("creem-credits");
+    expect(creditsCombinedSource).not.toContain("consumeAmount");
 
-    expect(creditsSource).toContain("button-filled");
-    expect(creditsSource).toContain("icon-button-ghost-sm");
-    expect(creditsSource).toContain("border-border-subtle");
-    expect(creditsSource).toContain("text-foreground-default");
+    expect(creditsCombinedSource).toContain("icon-button-ghost-sm");
+    expect(creditsCombinedSource).toContain("border-border-subtle");
+    expect(creditsCombinedSource).toContain("text-foreground-default");
   });
 });

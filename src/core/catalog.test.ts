@@ -9,6 +9,7 @@ import {
   plansOf,
   findPlanById,
   findPlanByProductId,
+  findCreditGrantByProductId,
   resolvePlanProductId,
 } from "./catalog.js";
 
@@ -246,6 +247,44 @@ describe("findPlanByProductId", () => {
 
   it("returns undefined for undefined productId", () => {
     expect(findPlanByProductId(catalog, undefined)).toBeUndefined();
+  });
+});
+
+describe("findCreditGrantByProductId", () => {
+  it("finds the credit grant configured for a product", () => {
+    const catalog = {
+      version: "1",
+      plans: [
+        {
+          planId: "credits",
+          category: "paid" as const,
+          billingType: "onetime" as const,
+          creemProductIds: { custom: "prod_credits" },
+          creditGrant: { amount: "100", refundBehavior: "prorate" as const },
+        },
+      ],
+    };
+
+    expect(findCreditGrantByProductId(catalog, "prod_credits")).toEqual({
+      amount: "100",
+      refundBehavior: "prorate",
+    });
+  });
+
+  it("returns undefined when the product has no credit grant", () => {
+    const catalog = {
+      version: "1",
+      plans: [
+        {
+          planId: "license",
+          category: "paid" as const,
+          billingType: "onetime" as const,
+          creemProductIds: { custom: "prod_license" },
+        },
+      ],
+    };
+
+    expect(findCreditGrantByProductId(catalog, "prod_license")).toBeUndefined();
   });
 });
 

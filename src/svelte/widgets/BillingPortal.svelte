@@ -1,26 +1,39 @@
 <script lang="ts">
+  import { getContext } from "svelte";
   import { useConvexClient, useQuery } from "@mmailaender/convex-svelte";
   import CustomerPortalButton from "../primitives/CustomerPortalButton.svelte";
-  import type { BillingPermissions, ConnectedBillingApi, ConnectedBillingModel } from "./types.js";
+  import type { BillingPermissions, ConnectedBillingModel } from "./types.js";
   import type { Snippet } from "svelte";
+  import {
+    CREEM_CONVEX_CONTEXT_KEY,
+    type CreemConvexContextValue,
+  } from "../creemConvexContext.js";
 
   interface Props {
-    api: ConnectedBillingApi;
     permissions?: BillingPermissions;
     class?: string;
     children?: Snippet;
   }
 
-  let { api, permissions = undefined, class: className = "", children }: Props = $props();
+  let { permissions = undefined, class: className = "", children }: Props = $props();
 
-  const canAccess = $derived(permissions?.canAccessPortal !== false);
+  const provider = getContext<CreemConvexContextValue | undefined>(
+    CREEM_CONVEX_CONTEXT_KEY,
+  );
+  const resolvedApi = provider?.api;
+  if (!resolvedApi) {
+    throw new Error(
+      "BillingPortal must be rendered inside <CreemConvexProvider>.",
+    );
+  }
+  const resolvedPermissions = $derived(permissions ?? provider?.permissions);
+
+  const canAccess = $derived(resolvedPermissions?.canAccessPortal !== false);
 
   const client = useConvexClient();
 
-  // svelte-ignore state_referenced_locally
-  const billingUiModelRef = api.uiModel;
-  // svelte-ignore state_referenced_locally
-  const portalUrlRef = api.customers?.portalUrl;
+  const billingUiModelRef = resolvedApi.uiModel;
+  const portalUrlRef = resolvedApi.customers?.portalUrl;
 
   const billingModelQuery = useQuery(billingUiModelRef, {});
   const model = $derived(billingModelQuery.data as ConnectedBillingModel | undefined);

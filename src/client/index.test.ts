@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Creem } from "./index.js";
+import { defineBillingCatalog } from "../core/catalog.js";
 import type { ComponentApi } from "../component/_generated/component.js";
 
 type AnyFn = (...args: any[]) => any;
@@ -947,10 +948,22 @@ describe("registerRoutes", () => {
     expect(ctx.runMutation).toHaveBeenCalled();
   });
 
-  it("credits customer credits when checkout metadata includes an amount", async () => {
+  it("credits customer credits from a catalog grant for a completed checkout", async () => {
     const creem = new Creem(mockComponent, {
       apiKey: "k",
       webhookSecret: SECRET,
+      billingCatalog: defineBillingCatalog({
+        version: "test",
+        plans: [
+          {
+            planId: "ai-credits-100",
+            category: "paid",
+            billingType: "onetime",
+            creemProductIds: { custom: "prod_credits" },
+            creditGrant: { amount: "100" },
+          },
+        ],
+      }),
     });
     const creditAccount = vi.fn(async () => ({}));
     vi.spyOn(creem.sdk as any, "customerCredits", "get").mockReturnValue({
@@ -1020,7 +1033,6 @@ describe("registerRoutes", () => {
         metadata: {
           convexUserId: "user_1",
           convexBillingEntityId: "user_1",
-          convexCreemCreditsAmount: "100",
         },
       },
     });
@@ -1031,8 +1043,99 @@ describe("registerRoutes", () => {
     expect(creditAccount).toHaveBeenCalledWith("cred_acct_1", {
       amount: "100",
       reference: "checkout:ch_credits",
-      idempotencyKey: "creem:checkout:ch_credits:credits:100",
+      idempotencyKey: "creem:checkout:ch_credits:credits:prod_credits:100",
     });
+  });
+
+  it("debits catalog-granted customer credits when the order is refunded", async () => {
+    const creem = new Creem(mockComponent, {
+      apiKey: "k",
+      webhookSecret: SECRET,
+      billingCatalog: defineBillingCatalog({
+        version: "test",
+        plans: [
+          {
+            planId: "ai-credits-100",
+            category: "paid",
+            billingType: "onetime",
+            creemProductIds: { custom: "prod_credits" },
+            creditGrant: { amount: "100", refundBehavior: "prorate" },
+          },
+        ],
+      }),
+    });
+    const debitAccount = vi.fn(async () => ({}));
+    vi.spyOn(creem.sdk as any, "customerCredits", "get").mockReturnValue({
+      listAccounts: vi.fn(async () => ({
+        data: [{ id: "cred_acct_1", name: "credits" }],
+      })),
+      debitAccount,
+    });
+    const { handler } = setupWebhookHandler(creem);
+    const ctx = createMockCtx();
+
+    const body = JSON.stringify({
+      eventType: "refund.created",
+      object: {
+        id: "ref_credits",
+        object: "refund",
+        status: "succeeded",
+        refund_amount: 1000,
+        refund_currency: "USD",
+        reason: "requested_by_customer",
+        order: {
+          object: "order",
+          id: "ord_credits",
+          customer: "cust_6aVJrSJi8h9r7cGzWPVBF0",
+          product: "prod_credits",
+          amount: 2000,
+          currency: "USD",
+          sub_total: 2000,
+          tax_amount: 0,
+          amount_due: 2000,
+          amount_paid: 2000,
+          status: "paid",
+          type: "onetime",
+          transaction: "tran_credits",
+          created_at: "2026-02-28T07:52:06.979Z",
+          updated_at: "2026-02-28T07:52:06.979Z",
+          mode: "test",
+        },
+        created_at: 1772265452403,
+        mode: "test",
+      },
+    });
+
+    const response = await signAndSend(handler!, ctx, body, SECRET);
+
+    expect(response.status).toBe(202);
+    expect(debitAccount).toHaveBeenCalledWith("cred_acct_1", {
+      amount: "50",
+      reference: "refund:ref_credits",
+      idempotencyKey: "creem:refund:ref_credits:credits:prod_credits:50",
+    });
+  });
+
+  it("tolerates Customer Credits response validation drift after debit requests", async () => {
+    const creem = new Creem(mockComponent, {
+      apiKey: "k",
+      webhookSecret: SECRET,
+    });
+    vi.spyOn(creem.sdk as any, "customerCredits", "get").mockReturnValue({
+      debitAccount: vi.fn(async () => {
+        const error = new Error("Response validation failed");
+        error.name = "ResponseValidationError";
+        throw error;
+      }),
+    });
+
+    await expect(
+      creem.credits.debit("cred_acct_1", {
+        amount: "10",
+        reference: "usage:req_1",
+        idempotencyKey: "usage:req_1",
+      }),
+    ).resolves.toBeNull();
   });
 
   it("handles subscription.active — updates subscription", async () => {

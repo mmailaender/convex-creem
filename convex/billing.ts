@@ -1,9 +1,36 @@
-import { Creem, type ApiResolver } from "@mmailaender/convex-creem";
+import {
+  Creem,
+  defineBillingCatalog,
+  type ApiResolver,
+} from "@mmailaender/convex-creem";
 import { api, components } from "./_generated/api";
-import { internalAction, query } from "./_generated/server";
+import { action, internalAction, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 
-export const creem = new Creem(components.creem);
+const demoCreditsProductId =
+  process.env.CREEM_ONETIME_CREDITS ?? "prod_73CnZ794MaJ1DUn8MU0O5f";
+
+const billingCatalog = defineBillingCatalog({
+  version: "example-server",
+  plans: [
+    {
+      planId: "ai-credits-100",
+      category: "paid",
+      billingType: "onetime",
+      creemProductIds: {
+        custom: demoCreditsProductId,
+      },
+      creditGrant: {
+        amount: "100",
+        accountName: "credits",
+        unitLabel: "credits",
+        refundBehavior: "prorate",
+      },
+    },
+  ],
+} as const);
+
+export const creem = new Creem(components.creem, { billingCatalog });
 
 // ── Auth resolver ───────────────────────────────────────────────
 // Replace with your own auth logic (e.g. ctx.auth.getUserIdentity()).
@@ -69,6 +96,22 @@ export const creditsGetBalance = credits.getBalance;
 export const creditsCredit = credits.credit;
 export const creditsDebit = credits.debit;
 export const creditsListEntries = credits.listEntries;
+
+export const generateDemoImage = action({
+  args: {},
+  handler: async (ctx) => {
+    const idempotencyKey = `demo_generate_image_${Date.now()}`;
+    await ctx.runAction(api.billing.creditsDebit, {
+      amount: "10",
+      reference: "demo_generate_image",
+      idempotencyKey,
+    });
+    return {
+      id: idempotencyKey,
+      creditsConsumed: "10",
+    };
+  },
+});
 
 export const syncBillingProducts = internalAction({
   args: {},

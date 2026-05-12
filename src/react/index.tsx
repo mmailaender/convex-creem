@@ -24,12 +24,16 @@ export { TrialLimitBanner } from "./primitives/TrialLimitBanner.js";
 export { OneTimeCheckoutButton } from "./primitives/OneTimeCheckoutButton.js";
 export { OneTimePaymentStatusBadge } from "./primitives/OneTimePaymentStatusBadge.js";
 export { CheckoutSuccessSummary } from "./primitives/CheckoutSuccessSummary.js";
+export { CreemConvexProvider, useCreemConvex } from "./CreemConvexProvider.js";
+export type { CreemConvexContextValue } from "./CreemConvexProvider.js";
 export {
   Subscription,
   Product,
+  Credits,
   BillingPortal,
   BillingHistory,
   useSubscriptionItem,
+  useCredits,
 } from "./widgets/index.js";
 export type {
   BillingSnapshot,

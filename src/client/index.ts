@@ -44,8 +44,14 @@ import {
 } from "../component/util.js";
 import type { ComponentApi } from "../component/_generated/component.js";
 import { resolveBillingSnapshot as defaultResolveBillingSnapshot } from "../core/resolver.js";
+import {
+  findCreditGrantByProductId,
+  normalizePlanCatalog,
+} from "../core/catalog.js";
 import type {
   BillingSnapshot,
+  CreditGrant,
+  PlanCatalog,
   PaymentSnapshot,
   SubscriptionSnapshot,
 } from "../core/types.js";
@@ -269,6 +275,8 @@ type CreemConfig = {
   serverIdx?: number;
   /** Creem SDK server URL override (for test/staging). Falls back to `CREEM_SERVER_URL` env var. */
   serverURL?: string;
+  /** Optional app-owned billing catalog used for server-side fulfillment such as Customer Credits grants. */
+  billingCatalog?: PlanCatalog;
 };
 
 /**
@@ -297,6 +305,7 @@ export class Creem {
   private webhookSecret: string;
   private serverIdx?: number;
   private serverURL?: string;
+  private billingCatalog?: PlanCatalog;
 
   constructor(
     public component: ComponentApi,
@@ -311,6 +320,7 @@ export class Creem {
         ? Number(process.env["CREEM_SERVER_IDX"])
         : undefined);
     this.serverURL = config.serverURL ?? process.env["CREEM_SERVER_URL"];
+    this.billingCatalog = normalizePlanCatalog(config.billingCatalog);
 
     this.sdk = new CreemSDK({
       apiKey: this.apiKey,
@@ -619,23 +629,150 @@ export class Creem {
     return created.id;
   }
 
-  private async creditCheckoutCustomerCredits(
-    ctx: RunActionCtx,
-    checkout: CheckoutEntity,
-  ) {
-    const metadata = (checkout.metadata ?? {}) as Record<string, unknown>;
-    const amountValue = metadata["convexCreemCreditsAmount"];
-    const amount = typeof amountValue === "string" ? amountValue.trim() : "";
+  private async resolveCreditAccountIdForCustomer(
+    customerId: string,
+    grant?: CreditGrant,
+    { createIfMissing = true }: { createIfMissing?: boolean } = {},
+  ): Promise<string | null> {
+    const accountName = grant?.accountName ?? "credits";
+    const accounts = await this.sdk.customerCredits.listAccounts(
+      10,
+      customerId,
+    );
+    const existing = accounts.data?.find((a) => a.name === accountName);
+    if (existing) return existing.id;
+
+    const fallback =
+      accountName === "credits"
+        ? accounts.data?.find((a) => a.name === "default")
+        : undefined;
+    if (fallback) return fallback.id;
+    if (!createIfMissing) return null;
+
+    const created = await this.sdk.customerCredits.createAccount({
+      customerId,
+      name: accountName,
+      unitLabel: grant?.unitLabel ?? "credits",
+    });
+    return created.id;
+  }
+
+  private getCreditGrantForProduct(productId: string | undefined) {
+    return findCreditGrantByProductId(this.billingCatalog, productId);
+  }
+
+  private async tolerateCustomerCreditsResponseValidation<T>(
+    operation: () => Promise<T>,
+  ): Promise<T | null> {
+    try {
+      return await operation();
+    } catch (error) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "name" in error &&
+        error.name === "ResponseValidationError"
+      ) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  private async creditCheckoutCustomerCredits(checkout: CheckoutEntity) {
+    const order =
+      checkout.order && typeof checkout.order === "object"
+        ? (checkout.order as Record<string, unknown>)
+        : undefined;
+    const productId =
+      typeof order?.product === "string"
+        ? order.product
+        : (getEntityId(checkout.product) ?? undefined);
+    const grant = this.getCreditGrantForProduct(productId);
+    const amount = grant?.amount.trim();
+    if (!grant) {
+      if (this.billingCatalog && productId) {
+        console.warn(
+          `[creem-webhook] no creditGrant configured for checkout product ${productId}`,
+        );
+      }
+      return;
+    }
     if (!amount) return;
 
-    const entityId = getConvexEntityId(metadata);
-    if (!entityId) return;
+    const customerId =
+      typeof order?.customer === "string"
+        ? order.customer
+        : getCustomerId(
+            typeof checkout.customer === "object" ? checkout.customer : null,
+          );
+    if (!customerId) return;
 
-    const accountId = await this.resolveDefaultCreditAccountId(ctx, entityId);
+    const accountId = await this.resolveCreditAccountIdForCustomer(
+      customerId,
+      grant,
+    );
+    if (!accountId) return;
     await this.credits.credit(accountId, {
       amount,
       reference: `checkout:${checkout.id}`,
-      idempotencyKey: `creem:checkout:${checkout.id}:credits:${amount}`,
+      idempotencyKey: `creem:checkout:${checkout.id}:credits:${productId}:${amount}`,
+    });
+  }
+
+  private getRefundCreditDebitAmount(
+    grant: CreditGrant,
+    refundAmount: unknown,
+    orderAmount: unknown,
+  ): string | null {
+    const amount = grant.amount.trim();
+    if (!amount || grant.refundBehavior === "none") return null;
+    if (grant.refundBehavior === "debit") return amount;
+
+    if (typeof refundAmount !== "number" || typeof orderAmount !== "number") {
+      return amount;
+    }
+    if (refundAmount <= 0 || orderAmount <= 0) return null;
+
+    const grantAmount = BigInt(amount);
+    const debitAmount =
+      (grantAmount * BigInt(Math.min(refundAmount, orderAmount))) /
+      BigInt(orderAmount);
+    return debitAmount > 0n ? debitAmount.toString() : null;
+  }
+
+  private async debitRefundedCustomerCredits(refund: Record<string, unknown>) {
+    if (refund.status && refund.status !== "succeeded") return;
+    const order =
+      refund.order && typeof refund.order === "object"
+        ? (refund.order as Record<string, unknown>)
+        : undefined;
+    const productId = typeof order?.product === "string" ? order.product : "";
+    const grant = this.getCreditGrantForProduct(productId);
+    if (!grant) return;
+
+    const amount = this.getRefundCreditDebitAmount(
+      grant,
+      refund.refund_amount,
+      order?.amount_paid ?? order?.amount,
+    );
+    if (!amount) return;
+
+    const customerId =
+      typeof order?.customer === "string" ? order.customer : "";
+    if (!customerId) return;
+
+    const refundId = typeof refund.id === "string" ? refund.id : "unknown";
+    const accountId = await this.resolveCreditAccountIdForCustomer(
+      customerId,
+      grant,
+      { createIfMissing: false },
+    );
+    if (!accountId) return;
+    await this.credits.debit(accountId, {
+      amount,
+      reference: `refund:${refundId}`,
+      idempotencyKey: `creem:refund:${refundId}:credits:${productId}:${amount}`,
     });
   }
 
@@ -1055,13 +1192,17 @@ export class Creem {
         accountId: string,
         args: { amount: string; reference: string; idempotencyKey: string },
       ) => {
-        return await this.sdk.customerCredits.creditAccount(accountId, args);
+        return await this.tolerateCustomerCreditsResponseValidation(() =>
+          this.sdk.customerCredits.creditAccount(accountId, args),
+        );
       },
       debit: async (
         accountId: string,
         args: { amount: string; reference: string; idempotencyKey: string },
       ) => {
-        return await this.sdk.customerCredits.debitAccount(accountId, args);
+        return await this.tolerateCustomerCreditsResponseValidation(() =>
+          this.sdk.customerCredits.debitAccount(accountId, args),
+        );
       },
       listEntries: async (
         accountId: string,
@@ -1755,8 +1896,18 @@ export class Creem {
                 });
               }
 
-              await this.creditCheckoutCustomerCredits(ctx, checkout);
+              await this.creditCheckoutCustomerCredits(checkout);
             }
+          }
+
+          if (
+            eventData &&
+            typeof eventData === "object" &&
+            eventType === "refund.created"
+          ) {
+            await this.debitRefundedCustomerCredits(
+              eventData as Record<string, unknown>,
+            );
           }
 
           if (

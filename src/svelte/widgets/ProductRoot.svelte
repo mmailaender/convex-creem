@@ -1,15 +1,18 @@
 <script lang="ts">
-  import { setContext, untrack } from "svelte";
+  import { getContext, setContext, untrack } from "svelte";
   import { useConvexClient, useQuery } from "@mmailaender/convex-svelte";
   import { formatPriceWithInterval } from "../primitives/shared.js";
   import {
     PRODUCT_GROUP_CONTEXT_KEY,
     type ProductGroupContextValue,
   } from "./productGroupContext.js";
+  import {
+    CREEM_CONVEX_CONTEXT_KEY,
+    type CreemConvexContextValue,
+  } from "../creemConvexContext.js";
   import type {
     BillingPermissions,
     CheckoutIntent,
-    ConnectedBillingApi,
     ConnectedBillingModel,
     ProductItemRegistration,
     Transition,
@@ -26,7 +29,6 @@
   } from "../../core/productCheckout.js";
 
   interface Props {
-    api: ConnectedBillingApi;
     permissions?: BillingPermissions;
     transition?: Transition[];
     class?: string;
@@ -40,7 +42,6 @@
   }
 
   let {
-    api,
     permissions = undefined,
     transition = [],
     class: className = "",
@@ -53,12 +54,24 @@
     children,
   }: Props = $props();
 
+  const provider = getContext<CreemConvexContextValue | undefined>(
+    CREEM_CONVEX_CONTEXT_KEY,
+  );
+  const resolvedApi = provider?.api;
+  if (!resolvedApi) {
+    throw new Error(
+      "Product.Root must be rendered inside <CreemConvexProvider>.",
+    );
+  }
+  const resolvedPermissions = $derived(permissions ?? provider?.permissions);
+  const resolvedOnBeforeCheckout = $derived(
+    onBeforeCheckout ?? provider?.onBeforeCheckout,
+  );
+
   const client = useConvexClient();
 
-  // svelte-ignore state_referenced_locally
-  const billingUiModelRef = api.uiModel;
-  // svelte-ignore state_referenced_locally
-  const checkoutLinkRef = api.checkouts.create;
+  const billingUiModelRef = resolvedApi.uiModel;
+  const checkoutLinkRef = resolvedApi.checkouts.create;
 
   const billingModelQuery = useQuery(billingUiModelRef, {});
 
@@ -88,9 +101,9 @@
     (billingModelQuery.data ?? null) as ConnectedBillingModel | null,
   );
   const canCheckout = $derived(
-    !model?.user && onBeforeCheckout != null
+    !model?.user && resolvedOnBeforeCheckout != null
       ? true
-      : permissions?.canCheckout !== false,
+      : resolvedPermissions?.canCheckout !== false,
   );
   const allProducts = $derived(model?.allProducts ?? []);
   const rawOwnedProductIds = $derived(model?.ownedProductIds ?? []);
@@ -157,12 +170,9 @@
       : "light";
   };
 
-  const startCheckout = async (
-    checkoutProductId: string,
-    checkoutMetadata?: Record<string, string>,
-  ) => {
-    if (onBeforeCheckout) {
-      const proceed = await onBeforeCheckout({ productId: checkoutProductId });
+  const startCheckout = async (checkoutProductId: string) => {
+    if (resolvedOnBeforeCheckout) {
+      const proceed = await resolvedOnBeforeCheckout({ productId: checkoutProductId });
       if (!proceed) return;
     }
     isLoading = true;
@@ -173,7 +183,6 @@
         ...(successUrl ? { successUrl } : {}),
         fallbackSuccessUrl: getFallbackSuccessUrl(),
         theme: getPreferredTheme(),
-        ...(checkoutMetadata ? { metadata: checkoutMetadata } : {}),
       });
       // Suppress Convex client's beforeunload dialog during checkout redirect.
       // Convex registers via addEventListener, so onbeforeunload=null has no effect.
@@ -197,14 +206,10 @@
     }
   };
 
-  const handleCheckoutClick = (
-    event: MouseEvent,
-    productId: string,
-    checkoutMetadata?: Record<string, string>,
-  ) => {
+  const handleCheckoutClick = (event: MouseEvent, productId: string) => {
     event.preventDefault();
     event.stopPropagation();
-    void startCheckout(productId, checkoutMetadata);
+    void startCheckout(productId);
   };
 
   const splitPriceLabel = (
@@ -314,11 +319,7 @@
                   disabled={isLoading || !canCheckout}
                   class={`${pricingCtaVariant === "filled" ? "button-filled" : "button-faded"} w-full disabled:cursor-not-allowed disabled:opacity-60`}
                   onclick={(event) =>
-                    handleCheckoutClick(
-                      event,
-                      checkoutProductId,
-                      item.checkoutMetadata,
-                    )}
+                    handleCheckoutClick(event, checkoutProductId)}
                 >
                   {item.type === "one-time" && activeOwnedProductId ? "Upgrade" : "Buy now"}
                 </button>
@@ -328,11 +329,7 @@
                   disabled={isLoading || !canCheckout}
                   class={`${pricingCtaVariant === "filled" ? "button-filled" : "button-faded"} w-full disabled:cursor-not-allowed disabled:opacity-60`}
                   onclick={(event) =>
-                    handleCheckoutClick(
-                      event,
-                      item.productId,
-                      item.checkoutMetadata,
-                    )}
+                    handleCheckoutClick(event, item.productId)}
                 >
                   Buy now
                 </button>
@@ -378,11 +375,7 @@
                 disabled={isLoading || !canCheckout}
                 class="button-filled disabled:cursor-not-allowed disabled:opacity-60"
                 onclick={(event) =>
-                  handleCheckoutClick(
-                    event,
-                    checkoutProductId,
-                    item.checkoutMetadata,
-                  )}
+                  handleCheckoutClick(event, checkoutProductId)}
               >
                 {item.type === "one-time" && activeOwnedProductId ? "Upgrade" : "Buy now"}
               </button>
@@ -392,7 +385,7 @@
                 disabled={isLoading || !canCheckout}
                 class="button-filled disabled:cursor-not-allowed disabled:opacity-60"
                 onclick={(event) =>
-                  handleCheckoutClick(event, item.productId, item.checkoutMetadata)}
+                  handleCheckoutClick(event, item.productId)}
               >
                 Buy now
               </button>

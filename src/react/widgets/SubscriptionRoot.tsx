@@ -28,11 +28,14 @@ import type {
 import { findPlanById, normalizePlanCatalog } from "../../core/catalog.js";
 import { buildUpdateSummary } from "../../core/subscriptionUpdate.js";
 import { formatPriceWithInterval, formatUnitPrice } from "../shared.js";
+import {
+  requireCreemConvexApi,
+  useCreemConvex,
+} from "../CreemConvexProvider.js";
 import type {
   BillingPermissions,
   CheckoutIntent,
   PlanChangeIntent,
-  ConnectedBillingApi,
   ConnectedBillingModel,
   SubscriptionGroupRegistration,
   SubscriptionPlanRegistration,
@@ -75,7 +78,6 @@ const planTypeToBillingType = (
 };
 
 export const SubscriptionRoot = ({
-  api,
   catalog,
   plans: planIds,
   groups,
@@ -83,7 +85,7 @@ export const SubscriptionRoot = ({
   group,
   onGroupChange,
   groupSelector = "auto",
-  defaultCycle = "every-month",
+  defaultCycle,
   cycle,
   onCycleChange,
   intervalSelector = "auto",
@@ -99,7 +101,6 @@ export const SubscriptionRoot = ({
   onBeforeFreePlanActivation,
   children,
 }: PropsWithChildren<{
-  api: ConnectedBillingApi;
   catalog?: PlanCatalog;
   plans?: readonly string[];
   groups?: SubscriptionGroupRegistration[];
@@ -125,23 +126,36 @@ export const SubscriptionRoot = ({
     freePlanId: string;
   }) => Promise<boolean> | boolean;
 }>) => {
-  const canChange = permissions?.canChangeSubscription !== false;
-  const canCancel = permissions?.canCancelSubscription !== false;
-  const canResume = permissions?.canResumeSubscription !== false;
+  const provider = useCreemConvex();
+  const resolvedApi = requireCreemConvexApi("Subscription.Root", provider);
+  const resolvedCatalog = catalog ?? provider?.catalog;
+  const resolvedDefaultCycle =
+    defaultCycle ?? provider?.defaultCycle ?? "every-month";
+  const resolvedPermissions = permissions ?? provider?.permissions;
+  const resolvedOnBeforeCheckout =
+    onBeforeCheckout ?? provider?.onBeforeCheckout;
+  const resolvedOnBeforePlanChange =
+    onBeforePlanChange ?? provider?.onBeforePlanChange;
+  const resolvedOnBeforeFreePlanActivation =
+    onBeforeFreePlanActivation ?? provider?.onBeforeFreePlanActivation;
+
+  const canChange = resolvedPermissions?.canChangeSubscription !== false;
+  const canCancel = resolvedPermissions?.canCancelSubscription !== false;
+  const canResume = resolvedPermissions?.canResumeSubscription !== false;
 
   const client = useConvex();
 
-  const billingUiModelRef = api.uiModel;
-  const checkoutLinkRef = api.checkouts.create;
-  const updateRef = api.subscriptions?.update;
-  const cancelRef = api.subscriptions?.cancel;
-  const resumeRef = api.subscriptions?.resume;
+  const billingUiModelRef = resolvedApi.uiModel;
+  const checkoutLinkRef = resolvedApi.checkouts.create;
+  const updateRef = resolvedApi.subscriptions?.update;
+  const cancelRef = resolvedApi.subscriptions?.cancel;
+  const resumeRef = resolvedApi.subscriptions?.resume;
 
   const modelRaw = useQuery(billingUiModelRef, {});
   const model = (modelRaw ?? null) as ConnectedBillingModel | null;
 
   const [selectedCycle, setSelectedCycle] =
-    useState<RecurringCycle>(defaultCycle);
+    useState<RecurringCycle>(resolvedDefaultCycle);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(
     defaultGroup ?? null,
   );
@@ -181,8 +195,8 @@ export const SubscriptionRoot = ({
   );
 
   const normalizedCatalog = useMemo(
-    () => normalizePlanCatalog(catalog),
-    [catalog],
+    () => normalizePlanCatalog(resolvedCatalog),
+    [resolvedCatalog],
   );
 
   const catalogRegistrations = useMemo<SubscriptionPlanRegistration[]>(() => {
@@ -391,14 +405,14 @@ export const SubscriptionRoot = ({
   const snapshot = model?.billingSnapshot ?? null;
 
   const canCheckout =
-    !model?.user && onBeforeCheckout != null
+    !model?.user && resolvedOnBeforeCheckout != null
       ? true
-      : permissions?.canCheckout !== false;
+      : resolvedPermissions?.canCheckout !== false;
 
   const canUpdateUnits =
-    !model?.user && onBeforeCheckout != null
+    !model?.user && resolvedOnBeforeCheckout != null
       ? true
-      : permissions?.canUpdateUnits !== false;
+      : resolvedPermissions?.canUpdateUnits !== false;
 
   const activePlanId = useMemo(() => {
     if (!model) return null;
@@ -421,8 +435,8 @@ export const SubscriptionRoot = ({
 
   const startCheckout = useCallback(
     async (productId: string, checkoutUnits?: number) => {
-      if (onBeforeCheckout) {
-        const proceed = await onBeforeCheckout({
+      if (resolvedOnBeforeCheckout) {
+        const proceed = await resolvedOnBeforeCheckout({
           productId,
           units: checkoutUnits,
         });
@@ -458,7 +472,7 @@ export const SubscriptionRoot = ({
         setIsActionLoading(false);
       }
     },
-    [client, checkoutLinkRef, successUrl, onBeforeCheckout],
+    [client, checkoutLinkRef, successUrl, resolvedOnBeforeCheckout],
   );
 
   // Pending checkout resume after auth
@@ -497,8 +511,8 @@ export const SubscriptionRoot = ({
       units?: number;
     }) => {
       // Consent gate: onBeforePlanChange
-      if (onBeforePlanChange) {
-        const proceed = await onBeforePlanChange({
+      if (resolvedOnBeforePlanChange) {
+        const proceed = await resolvedOnBeforePlanChange({
           fromPlanId: activePlanId,
           toPlanId: payload.plan.planId,
           productId: payload.productId,
@@ -507,8 +521,11 @@ export const SubscriptionRoot = ({
         if (!proceed) return;
       }
       // Consent gate: onBeforeFreePlanActivation
-      if (onBeforeFreePlanActivation && payload.plan.category === "free") {
-        const proceed = await onBeforeFreePlanActivation({
+      if (
+        resolvedOnBeforeFreePlanActivation &&
+        payload.plan.category === "free"
+      ) {
+        const proceed = await resolvedOnBeforeFreePlanActivation({
           freePlanId: payload.plan.planId,
         });
         if (!proceed) return;
@@ -516,7 +533,11 @@ export const SubscriptionRoot = ({
       setPendingUpdate({ kind: "plan-switch", ...payload });
       setUpdateDialogOpen(true);
     },
-    [activePlanId, onBeforePlanChange, onBeforeFreePlanActivation],
+    [
+      activePlanId,
+      resolvedOnBeforePlanChange,
+      resolvedOnBeforeFreePlanActivation,
+    ],
   );
 
   const confirmUpdate = useCallback(async () => {

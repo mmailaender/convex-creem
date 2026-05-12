@@ -11,11 +11,17 @@ import SubscriptionItemCTAComponent from "./SubscriptionItemCTA.svelte";
 import SubscriptionItemBadgeComponent from "./SubscriptionItemBadge.svelte";
 import ProductItemComponent from "./Product.svelte";
 import ProductRootComponent from "./ProductRoot.svelte";
+import CreditsRootComponent from "./Credits.svelte";
+import CreditsTitleComponent from "./CreditsTitle.svelte";
+import CreditsAmountComponent from "./CreditsAmount.svelte";
+import CreditsRefreshComponent from "./CreditsRefresh.svelte";
+import CreditsErrorComponent from "./CreditsError.svelte";
+import CreditsStatusComponent from "./CreditsStatus.svelte";
 
 export { default as BillingPortal } from "./BillingPortal.svelte";
 export { default as BillingHistory } from "./BillingHistory.svelte";
-export { default as Credits } from "./Credits.svelte";
 export { getSubscriptionItemContext } from "./subscriptionItemContext.js";
+export { getCreditsContext } from "./creditsContext.js";
 
 export const Subscription: typeof SubscriptionItemComponent & {
   Root: typeof SubscriptionRootComponent;
@@ -52,6 +58,22 @@ export const Product: typeof ProductItemComponent & {
   Root: ProductRootComponent,
   Item: ProductItemComponent,
   Group: ProductRootComponent,
+});
+
+export const Credits: typeof CreditsRootComponent & {
+  Root: typeof CreditsRootComponent;
+  Title: typeof CreditsTitleComponent;
+  Amount: typeof CreditsAmountComponent;
+  Refresh: typeof CreditsRefreshComponent;
+  Error: typeof CreditsErrorComponent;
+  Status: typeof CreditsStatusComponent;
+} = Object.assign(CreditsRootComponent, {
+  Root: CreditsRootComponent,
+  Title: CreditsTitleComponent,
+  Amount: CreditsAmountComponent,
+  Refresh: CreditsRefreshComponent,
+  Error: CreditsErrorComponent,
+  Status: CreditsStatusComponent,
 });
 
 export type {

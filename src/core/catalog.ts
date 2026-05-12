@@ -1,6 +1,7 @@
 import type {
   BillingType,
   CatalogProductRef,
+  CreditGrant,
   PlanId,
   PlanCatalog,
   PlanCatalogEntry,
@@ -144,6 +145,13 @@ export const findPlanByProductId = (
     Object.values(plan.creemProductIds ?? {}).includes(productId),
   );
 };
+
+/** Find the app-side credit grant configured for a Creem product ID. */
+export const findCreditGrantByProductId = (
+  catalog: PlanCatalog | undefined,
+  productId: string | undefined,
+): CreditGrant | undefined =>
+  findPlanByProductId(catalog, productId)?.creditGrant;
 
 export const resolvePlanProductId = (
   catalog: PlanCatalog | undefined,

@@ -11,7 +11,6 @@
     type: ProductType;
     title?: string;
     description?: string;
-    checkoutMetadata?: Record<string, string>;
   }
 
   let {
@@ -19,7 +18,6 @@
     type,
     title = undefined,
     description = undefined,
-    checkoutMetadata = undefined,
   }: Props = $props();
 
   // Must be used inside a <Product.Root>
@@ -34,7 +32,6 @@
         type,
         title,
         description,
-        checkoutMetadata,
       };
       const unregister = untrack(() => rootContext.registerItem(registration));
       return () => untrack(unregister);

@@ -7,11 +7,14 @@ import {
 } from "@ark-ui/react/pagination";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type {
-  ConnectedBillingApi,
   ConnectedTransaction,
   ConnectedTransactionList,
 } from "./types.js";
 import { formatPrice } from "../shared.js";
+import {
+  requireCreemConvexApi,
+  useCreemConvex,
+} from "../CreemConvexProvider.js";
 
 const normalizeTimestamp = (timestamp: number | undefined): number | null => {
   if (!timestamp) return null;
@@ -41,21 +44,21 @@ const paginationItemClassName = (isCurrentPage: boolean) =>
   `${isCurrentPage ? "button-filled" : "button-faded"} h-8 min-w-8 px-2`;
 
 export const BillingHistory = ({
-  api,
   pageSize = 10,
   productId,
   orderId,
   className = "",
 }: {
-  api: ConnectedBillingApi;
   pageSize?: number;
   productId?: string;
   orderId?: string;
   class?: string;
   className?: string;
 }) => {
+  const provider = useCreemConvex();
+  const resolvedApi = requireCreemConvexApi("BillingHistory", provider);
   const client = useConvex();
-  const searchRef = api.transactions?.search;
+  const searchRef = resolvedApi.transactions?.search;
   const [pageNumber, setPageNumber] = useState(1);
   const [result, setResult] = useState<ConnectedTransactionList | null>(null);
   const [isLoading, setIsLoading] = useState(false);
