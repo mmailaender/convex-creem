@@ -67,6 +67,7 @@ export type {
   SubscriptionPlanType,
   Transition,
 } from "./widgets/types.js";
+export type { CreditsContextValue } from "./widgets/creditsContext.js";
 export type {
   PlanId,
   PaymentRecoveryState,

@@ -20,6 +20,7 @@
     evaluateUsageLimits,
     plansOf,
     type ConnectedBillingApi,
+    type CreditsContextValue,
     type Transition,
   } from "@mmailaender/convex-creem/svelte";
   import { api } from "../../convex/_generated/api.js";
@@ -374,7 +375,7 @@
   let demoImageMessage = $state<string | null>(null);
   let demoImageError = $state<string | null>(null);
 
-  async function generateDemoImage() {
+  async function generateDemoImage(refreshCredits?: () => Promise<void>) {
     demoImageLoading = true;
     demoImageMessage = null;
     demoImageError = null;
@@ -383,6 +384,7 @@
         api.billing.generateDemoImage,
         {},
       );
+      await refreshCredits?.();
       demoImageMessage = `Generated demo image and consumed ${result.creditsConsumed} credits.`;
     } catch (cause) {
       demoImageError =
@@ -1273,35 +1275,37 @@
 
             <div class="mt-12 flex justify-center">
               <Credits.Root unitLabel="credits">
-                <div class="flex items-center justify-between gap-3">
-                  <Credits.Title>Credit Balance</Credits.Title>
-                  <Credits.Refresh />
-                </div>
-                <Credits.Amount />
-                <Credits.Error />
-
-                {#if demoImageMessage}
-                  <div class="label-s text-success-foreground-default">
-                    {demoImageMessage}
+                {#snippet children(credits: CreditsContextValue)}
+                  <div class="flex items-center justify-between gap-3">
+                    <Credits.Title>Credit Balance</Credits.Title>
+                    <Credits.Refresh />
                   </div>
-                {/if}
-                {#if demoImageError}
-                  <div
-                    class="body-m radius-m border border-error-border-subtle bg-error-surface-subtle px-3 py-2 text-error-foreground-default"
+                  <Credits.Amount />
+                  <Credits.Error />
+
+                  {#if demoImageMessage}
+                    <div class="label-s text-success-foreground-default">
+                      {demoImageMessage}
+                    </div>
+                  {/if}
+                  {#if demoImageError}
+                    <div
+                      class="body-m radius-m border border-error-border-subtle bg-error-surface-subtle px-3 py-2 text-error-foreground-default"
+                    >
+                      {demoImageError}
+                    </div>
+                  {/if}
+
+                  <button
+                    class="button-filled h-10 w-full disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                    onclick={() => generateDemoImage(credits.refresh)}
+                    disabled={demoImageLoading}
                   >
-                    {demoImageError}
-                  </div>
-                {/if}
-
-                <button
-                  class="button-filled h-10 w-full disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                  onclick={generateDemoImage}
-                  disabled={demoImageLoading}
-                >
-                  {demoImageLoading
-                    ? "Generating..."
-                    : "Generate image (10 credits)"}
-                </button>
+                    {demoImageLoading
+                      ? "Generating..."
+                      : "Generate image (10 credits)"}
+                  </button>
+                {/snippet}
               </Credits.Root>
             </div>
           {:else}

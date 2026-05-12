@@ -76,6 +76,8 @@ export const Credits: typeof CreditsRootComponent & {
   Status: CreditsStatusComponent,
 });
 
+export type { CreditsContextValue } from "./creditsContext.js";
+
 export type {
   ConnectedBillingApi,
   ConnectedBillingModel,

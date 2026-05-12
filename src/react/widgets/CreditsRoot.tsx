@@ -3,14 +3,14 @@ import {
   useEffect,
   useMemo,
   useState,
-  type PropsWithChildren,
+  type ReactNode,
 } from "react";
 import { useConvex } from "convex/react";
 import {
   requireCreemConvexApi,
   useCreemConvex,
 } from "../CreemConvexProvider.js";
-import { CreditsContext } from "./creditsContext.js";
+import { CreditsContext, type CreditsContextValue } from "./creditsContext.js";
 import {
   CreditsAmount,
   CreditsError,
@@ -22,11 +22,12 @@ export const CreditsRoot = ({
   unitLabel = "credits",
   className = "",
   children,
-}: PropsWithChildren<{
+}: {
   unitLabel?: string;
   class?: string;
   className?: string;
-}>) => {
+  children?: ReactNode | ((credits: CreditsContextValue) => ReactNode);
+}) => {
   const provider = useCreemConvex();
   const resolvedApi = requireCreemConvexApi("Credits.Root", provider);
   const client = useConvex();
@@ -72,16 +73,18 @@ export const CreditsRoot = ({
       <section
         className={`w-full max-w-sm space-y-4 radius-xl border border-border-subtle bg-surface-base p-6 text-foreground-default ${className}`}
       >
-        {children ?? (
-          <>
-            <div className="flex items-center justify-between gap-3">
-              <CreditsTitle />
-              <CreditsRefresh />
-            </div>
-            <CreditsAmount />
-            <CreditsError />
-          </>
-        )}
+        {typeof children === "function"
+          ? children(contextValue)
+          : (children ?? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <CreditsTitle />
+                  <CreditsRefresh />
+                </div>
+                <CreditsAmount />
+                <CreditsError />
+              </>
+            ))}
       </section>
     </CreditsContext.Provider>
   );

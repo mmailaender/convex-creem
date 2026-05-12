@@ -172,12 +172,13 @@ export default function App() {
     usage,
   });
 
-  const generateDemoImage = async () => {
+  const generateDemoImage = async (refreshCredits?: () => Promise<void>) => {
     setDemoImageLoading(true);
     setDemoImageMessage(null);
     setDemoImageError(null);
     try {
       const result = await generateDemoImageAction({});
+      await refreshCredits?.();
       setDemoImageMessage(
         `Generated demo image and consumed ${result.creditsConsumed} credits.`,
       );
@@ -846,33 +847,37 @@ export default function App() {
 
               <div className="mt-12 flex justify-center">
                 <Credits.Root unitLabel="credits">
-                  <div className="flex items-center justify-between gap-3">
-                    <Credits.Title>Credit Balance</Credits.Title>
-                    <Credits.Refresh />
-                  </div>
-                  <Credits.Amount />
-                  <Credits.Error />
+                  {(credits) => (
+                    <>
+                      <div className="flex items-center justify-between gap-3">
+                        <Credits.Title>Credit Balance</Credits.Title>
+                        <Credits.Refresh />
+                      </div>
+                      <Credits.Amount />
+                      <Credits.Error />
 
-                  {demoImageMessage && (
-                    <div className="label-s text-success-foreground-default">
-                      {demoImageMessage}
-                    </div>
-                  )}
-                  {demoImageError && (
-                    <div className="body-m radius-m border border-error-border-subtle bg-error-surface-subtle px-3 py-2 text-error-foreground-default">
-                      {demoImageError}
-                    </div>
-                  )}
+                      {demoImageMessage && (
+                        <div className="label-s text-success-foreground-default">
+                          {demoImageMessage}
+                        </div>
+                      )}
+                      {demoImageError && (
+                        <div className="body-m radius-m border border-error-border-subtle bg-error-surface-subtle px-3 py-2 text-error-foreground-default">
+                          {demoImageError}
+                        </div>
+                      )}
 
-                  <button
-                    className="button-filled h-10 w-full disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={() => void generateDemoImage()}
-                    disabled={demoImageLoading}
-                  >
-                    {demoImageLoading
-                      ? "Generating..."
-                      : "Generate image (10 credits)"}
-                  </button>
+                      <button
+                        className="button-filled h-10 w-full disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => void generateDemoImage(credits.refresh)}
+                        disabled={demoImageLoading}
+                      >
+                        {demoImageLoading
+                          ? "Generating..."
+                          : "Generate image (10 credits)"}
+                      </button>
+                    </>
+                  )}
                 </Credits.Root>
               </div>
             </div>

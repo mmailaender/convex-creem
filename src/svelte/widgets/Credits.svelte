@@ -17,7 +17,7 @@
   interface Props {
     unitLabel?: string;
     class?: string;
-    children?: Snippet;
+    children?: Snippet<[CreditsContextValue]>;
   }
 
   let {
@@ -87,7 +87,7 @@
   class={`w-full max-w-sm space-y-4 radius-xl border border-border-subtle bg-surface-base p-6 text-foreground-default ${className}`}
 >
   {#if children}
-    {@render children()}
+    {@render children(contextValue)}
   {:else}
     <div class="flex items-center justify-between gap-3">
       <CreditsTitle />
