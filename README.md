@@ -40,6 +40,7 @@ Add subscriptions, one-time purchases, and billing to your Convex app with
 - [Component Reference](#component-reference)
   - [Widgets](#widgets)
   - [Presentational components](#presentational-components)
+- [Migration Guide](#migration-guide)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -170,7 +171,7 @@ skip ahead to the [API Reference](#api-reference).
 ## Quick Start — Frontend (UI Widgets)
 
 The component ships pre-built Svelte and React widgets that handle checkout,
-plan switching, cancellation, seat management, and billing state — all connected
+plan switching, cancellation, unit management, and billing state — all connected
 to Convex. Complete these three extra steps to use them.
 
 ### 7. Install UI primitives
@@ -307,6 +308,16 @@ const billingApi: ConnectedBillingApi = {
 };
 ```
 
+Wrap your billing UI once with `CreemConvexProvider`; widgets read the connected
+API and optional catalog from context.
+
+```svelte
+<CreemConvexProvider api={billingApi} catalog={billingCatalog}>
+  <Subscription.Root plans={["pro"]} />
+  <BillingPortal />
+</CreemConvexProvider>
+```
+
 > The `ConnectedBillingApi` object is the same shape in both frameworks. Only
 > the Convex client setup differs: `setupConvex()` in Svelte vs
 > `<ConvexProvider>` in React (see
@@ -321,7 +332,7 @@ A typical pricing page with Free / Basic / Premium / Enterprise tiers. The
 billing toggle auto-derives from the cycles present in registered plans.
 
 ```svelte
-<Subscription.Root api={billingApi}>
+<Subscription.Root>
   <Subscription.Item type="free" title="Free" description="Up to 3 users" />
   <Subscription.Item
     planId="basic"
@@ -346,7 +357,7 @@ billing toggle auto-derives from the cycles present in registered plans.
     contactUrl="https://example.com/sales"
   />
 </Subscription.Root>
-<BillingPortal api={billingApi} />
+<BillingPortal />
 ```
 
 **What you get:**
@@ -361,42 +372,77 @@ billing toggle auto-derives from the cycles present in registered plans.
 - Cancel / resume subscription (with confirmation dialog)
 - Scheduled cancellation banner with "Undo" button
 
-#### 1.2 Seat-based subscriptions
+#### 1.2 Unit-based subscriptions
 
-Two workflows for seat-based pricing:
+Two workflows for unit-based pricing:
 
-**User-selectable seats** — the customer picks a quantity before checkout:
-
-```svelte
-<Subscription.Root api={billingApi} showSeatPicker>
-  <Subscription.Item
-    type="seat-based"
-    productIds={{ "every-month": "prod_team_monthly" }}
-  />
-  <Subscription.Item
-    type="seat-based"
-    productIds={{ "every-month": "prod_business_monthly" }}
-  />
-</Subscription.Root>
-```
-
-**Auto-derived seats** — pass a fixed count (e.g. org member count) to checkout:
+**User-selectable units** — the customer picks a quantity before checkout:
 
 ```svelte
-<Subscription.Root api={billingApi} units={orgMemberCount}>
-  <Subscription.Item
-    type="seat-based"
-    productIds={{ "every-month": "prod_team_monthly" }}
-  />
-</Subscription.Root>
+<Subscription.Root
+  plans={["team", "business"]}
+  showUnitPicker
+/>
 ```
 
-When `subscriptions.update` is provided in the API, active seat-based plans show
-a "Change seats" control.
+**Auto-derived units** — pass a fixed count (e.g. org member count) to checkout:
 
-> **Tip:** For auto-derived seats, keep the subscription in sync with your data.
+```svelte
+<Subscription.Root
+  plans={["team"]}
+  units={orgMemberCount}
+/>
+```
+
+When `subscriptions.update` is provided in the API, active unit-based plans show
+a "Change units" control.
+
+> **Tip:** For auto-derived units, keep the subscription in sync with your data.
 > When your member count changes, call `subscriptions.update` with the new
-> `units` so the billing reflects the current seat count.
+> `units` so the billing reflects the current quantity.
+
+**Individual vs Teams** — define stable plan IDs in a catalog, then render those
+IDs from `groups`. The root renders an internal selector and computes billing
+intervals from only the active group:
+
+```svelte
+<script lang="ts">
+  const billingCatalog = defineBillingCatalog({
+    version: "2026-05-01",
+    plans: [
+      {
+        planId: "basic-individual",
+        category: "paid",
+        billingType: "recurring",
+        products: { "every-month": env.CREEM_BASIC_INDIVIDUAL_MONTHLY },
+      },
+      {
+        planId: "basic-team",
+        category: "paid",
+        billingType: "recurring",
+        pricingModel: "unit",
+        products: { "every-month": env.CREEM_BASIC_TEAM_MONTHLY },
+      },
+    ],
+  } as const);
+</script>
+
+<Subscription.Root
+  showUnitPicker
+  groups={[
+    {
+      value: "individual",
+      label: "Individual",
+      plans: plansOf(billingCatalog, ["basic-individual"]),
+    },
+    {
+      value: "teams",
+      label: "Teams",
+      plans: plansOf(billingCatalog, ["basic-team"]),
+    },
+  ]}
+/>
+```
 
 ### 2. Products
 
@@ -405,7 +451,7 @@ a "Change seats" control.
 A standalone product purchased once. Shows "Owned" after purchase:
 
 ```svelte
-<Product.Root api={billingApi}>
+<Product.Root>
   <Product.Item type="one-time" productId="prod_license" />
 </Product.Root>
 ```
@@ -415,19 +461,118 @@ A standalone product purchased once. Shows "Owned" after purchase:
 Can be purchased multiple times — no "Owned" badge:
 
 ```svelte
-<Product.Root api={billingApi}>
+<Product.Root>
   <Product.Item type="recurring" productId="prod_credits" title="100 Credits" />
 </Product.Root>
 ```
 
-#### 2.3 Mutually exclusive product group
+For credit packs, keep the credit amount in your server-owned billing catalog
+and let the webhook derive the grant from the purchased Creem product ID:
+
+```ts
+const billingCatalog = defineBillingCatalog({
+  version: "2026-05-11",
+  plans: [
+    {
+      planId: "ai-credits-100",
+      category: "paid",
+      billingType: "onetime",
+      creemProductIds: { custom: process.env.CREEM_ONETIME_CREDITS! },
+      creditGrant: {
+        amount: "100",
+        accountName: "credits",
+        refundBehavior: "revoke_on_full_refund",
+      },
+    },
+  ],
+} as const);
+
+export const creem = new Creem(components.creem, { billingCatalog });
+```
+
+`refundBehavior` answers one question: what should happen to credits that were
+granted when this product is refunded?
+
+`"revoke_on_full_refund"` is the default. If the customer gets a full refund,
+the full granted credit amount is removed. If the customer gets a partial
+refund, nothing happens to the credits.
+
+Example: the customer bought 100 credits.
+
+- 100% refund removes 100 credits.
+- 50% refund removes 0 credits.
+
+This is the safest default for most apps because a purchase is only treated as
+fully undone when the full order is refunded.
+
+`"prorate"` removes credits proportional to the refund amount.
+
+Example: the customer bought 100 credits.
+
+- 100% refund removes 100 credits.
+- 50% refund removes 50 credits.
+- 25% refund removes 25 credits.
+
+This is useful when the product is clearly divisible, like credit packs.
+
+`"debit"` removes the full granted amount for any successful refund.
+
+Example: the customer bought 100 credits.
+
+- 100% refund removes 100 credits.
+- 50% refund removes 100 credits.
+- A tiny refund still removes 100 credits.
+
+This is useful when any refund should invalidate the whole grant.
+
+`"none"` means the library does not touch credits on refunds.
+
+Example: the customer bought 100 credits.
+
+- 100% refund removes 0 credits.
+- 50% refund removes 0 credits.
+
+Use this when your app wants to handle refund reversals manually, or when
+granted credits should never be revoked automatically.
+
+For deployed Convex functions, set the server-side product ID as a Convex env
+var, for example `CREEM_ONETIME_CREDITS=prod_...`. Vite `VITE_*` variables are
+for the browser demo and should not be the trusted source for webhook
+fulfillment.
+
+#### 2.3 Credit balance composition
+
+`Credits.Root` renders a default balance card, or you can compose the slots and
+call `credits.refresh()` after app-owned backend actions debit credits:
+
+```svelte
+<Credits.Root unitLabel="credits">
+  {#snippet children(credits)}
+    <Credits.Title />
+    <Credits.Amount />
+    <Credits.Error />
+
+    <button
+      onclick={async () => {
+        await convexClient.action(api.billing.generateImage, {});
+        await credits.refresh();
+      }}
+    >
+      Generate image
+    </button>
+  {/snippet}
+</Credits.Root>
+```
+
+The spend amount should live in the backend action, not in the credit widget.
+
+#### 2.4 Mutually exclusive product group
 
 Use the `transition` prop to define upgrade paths between products. When the
 user owns a lower-tier product, only valid upgrade paths are shown:
 
 ```svelte
 <Product.Root
-  api={billingApi}
   transition={[
     {
       from: "prod_basic_license",
@@ -455,15 +600,15 @@ the billing entity has no Creem customer record.
 Pass `permissions` to control who can access the portal (e.g. only admins):
 
 ```svelte
-<BillingPortal api={billingApi} permissions={{ canAccessPortal: isAdmin }} />
+<BillingPortal permissions={{ canAccessPortal: isAdmin }} />
 ```
 
 ```svelte
 <!-- After a subscription group -->
-<BillingPortal api={billingApi} />
+<BillingPortal />
 
 <!-- Standalone with custom label -->
-<BillingPortal api={billingApi}>Manage billing & invoices</BillingPortal>
+<BillingPortal>Manage billing & invoices</BillingPortal>
 ```
 
 ### 4. Feature Gating
@@ -496,7 +641,7 @@ Use `BillingGate` to conditionally render UI based on available billing actions:
 ```
 
 Available actions: `checkout`, `portal`, `cancel`, `reactivate`,
-`switch_interval`, `update_seats`, `contact_sales`.
+`switch_interval`, `update_units`, `contact_sales`.
 
 ### 5. Checkout Success
 
@@ -570,7 +715,8 @@ args; there is no hidden auth layer.
   | Export                   | Used by                                          |
   | ------------------------ | ------------------------------------------------ |
   | `checkoutCreateArgs`     | `<Subscription.Root>`, `<Product.Root>`          |
-  | `subscriptionUpdateArgs` | `<Subscription.Root>` (plan switch, seat update) |
+  | `subscriptionUpdateArgs` | `<Subscription.Root>` (plan switch, unit update) |
+  | `transactionsSearchArgs` | `<BillingHistory>`                               |
   | `subscriptionCancelArgs` | `<Subscription.Root>` (cancel button)            |
   | `subscriptionResumeArgs` | `<Subscription.Root>` (resume button)            |
   | `subscriptionPauseArgs`  | `<Subscription.Root>` (pause button)             |
@@ -638,7 +784,7 @@ type BillingPermissions = {
   canChangeSubscription?: boolean;
   canCancelSubscription?: boolean;
   canResumeSubscription?: boolean;
-  canUpdateSeats?: boolean;
+  canUpdateUnits?: boolean;
   canAccessPortal?: boolean;
 };
 ```
@@ -651,13 +797,15 @@ type BillingPermissions = {
     canChangeSubscription: isAdmin,
     canCancelSubscription: isAdmin,
     canResumeSubscription: isAdmin,
-    canUpdateSeats: isAdmin,
+    canUpdateUnits: isAdmin,
   });
 </script>
 
-<Subscription.Root api={billingApi} {permissions}>
-  ...
-</Subscription.Root>
+<CreemConvexProvider api={billingApi} {permissions}>
+  <Subscription.Root>
+    ...
+  </Subscription.Root>
+</CreemConvexProvider>
 ```
 
 When a permission is `false`, the button renders as disabled (greyed out). When
@@ -673,7 +821,7 @@ This is a generic hook — use it for authentication gates, terms acceptance,
 confirmation dialogs, analytics, or any logic that must run before checkout.
 
 ```svelte
-<Subscription.Root
+<CreemConvexProvider
   api={billingApi}
   onBeforeCheckout={(intent) => {
     if (!currentUser) {
@@ -684,8 +832,10 @@ confirmation dialogs, analytics, or any logic that must run before checkout.
     return true;
   }}
 >
-  ...
-</Subscription.Root>
+  <Subscription.Root>
+    ...
+  </Subscription.Root>
+</CreemConvexProvider>
 ```
 
 **`CheckoutIntent`** — the object passed to the callback:
@@ -780,7 +930,7 @@ functions, or let `creem.api({ resolve })` generate ready-to-export wrappers.
 | `.getCurrent(ctx, { entityId })`                                                   | Convex DB   | Current active subscription with product join                                                                                                                     |
 | `.list(ctx, { entityId })`                                                         | Convex DB   | Active subscriptions (excludes ended + expired trials)                                                                                                            |
 | `.listAll(ctx, { entityId })`                                                      | Convex DB   | All subscriptions including ended                                                                                                                                 |
-| `.update(ctx, { entityId, subscriptionId?, productId?, units?, updateBehavior? })` | Creem API   | Unified plan switch (`productId`) or seat update (`units`). Pass `subscriptionId` when the entity has multiple active subscriptions. Optional proration override. |
+| `.update(ctx, { entityId, subscriptionId?, productId?, units?, updateBehavior? })` | Creem API   | Unified plan switch (`productId`) or unit update (`units`). Pass `subscriptionId` when the entity has multiple active subscriptions. Optional proration override. |
 | `.cancel(ctx, { entityId, revokeImmediately? })`                                   | Creem API   | Cancel subscription                                                                                                                                               |
 | `.pause(ctx, { entityId })`                                                        | Creem API   | Pause an active subscription                                                                                                                                      |
 | `.resume(ctx, { entityId })`                                                       | Creem API   | Resume a paused or scheduled-cancel subscription                                                                                                                  |
@@ -838,6 +988,7 @@ Generates ready-to-export Convex function definitions. Each function calls your
 | `products.get`          | `products.get`          | query  | Public, no auth needed                                                             |
 | `customers.retrieve`    | `customers.retrieve`    | query  | Auto-resolves auth                                                                 |
 | `customers.portalUrl`   | `customers.portalUrl`   | action | Auto-resolves auth                                                                 |
+| `transactions.search`   | `transactions.search`   | action | Auto-resolves auth and returns paginated transaction history                       |
 | `orders.list`           | `orders.list`           | query  | Auto-resolves auth                                                                 |
 
 ### Infrastructure
@@ -909,7 +1060,7 @@ These query Convex directly and manage billing state end-to-end.
 #### `<Subscription.Root>`
 
 Container for subscription plan cards. Handles billing cycle toggle, checkout,
-plan switching, cancellation, and seat management.
+plan switching, cancellation, and unit management.
 
 | Prop                | Type                                                      | Default                                      | Description                                                                                                                                               |
 | ------------------- | --------------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -917,14 +1068,27 @@ plan switching, cancellation, and seat management.
 | `permissions`       | `BillingPermissions`                                      | all enabled                                  | Disable actions based on user role                                                                                                                        |
 | `class`/`className` | `string`                                                  | `""`                                         | Wrapper CSS class                                                                                                                                         |
 | `successUrl`        | `string`                                                  | product's `defaultSuccessUrl` → current page | Override redirect after checkout. When omitted, uses the product's `defaultSuccessUrl` from Creem; if that is also unset, falls back to the current page. |
-| `units`             | `number`                                                  | —                                            | Auto-derived seat count for seat-based plans                                                                                                              |
-| `showSeatPicker`    | `boolean`                                                 | `false`                                      | Show quantity picker on seat-based cards                                                                                                                  |
+| `units`             | `number`                                                  | —                                            | Auto-derived unit count for unit-based plans                                                                                                              |
+| `showUnitPicker`    | `boolean`                                                 | `false`                                      | Show quantity picker on unit-based cards                                                                                                                  |
 | `twoColumnLayout`   | `boolean`                                                 | `false`                                      | Use two-column card layout                                                                                                                                |
-| `updateBehavior`    | `UpdateBehavior`                                          | `"proration-charge-immediately"`             | How plan switches and seat updates are billed. See below.                                                                                                 |
+| `updateBehavior`    | `UpdateBehavior`                                          | `"proration-charge-immediately"`             | How plan switches and unit updates are billed. See below.                                                                                                 |
+| `unstyled`          | `boolean`                                                 | `false`                                      | Remove built-in visual classes from compound subscription pieces so custom children own their styling.                                                    |
 | `onBeforeCheckout`  | `(intent: CheckoutIntent) => Promise<boolean> \| boolean` | —                                            | Gate checkout (auth, terms, etc.). Return `false` to abort.                                                                                               |
 | `children`          | `Snippet` / `ReactNode`                                   | —                                            | `<Subscription.Item>` children                                                                                                                            |
 
-**`UpdateBehavior`** controls how the Creem API handles plan switches and seat
+Use `unstyled` when composing your own pricing cards with `Subscription.Grid`,
+`Subscription.ItemTitle`, `Subscription.ItemPrice`,
+`Subscription.ItemDescription`, `Subscription.ItemBadge`,
+`Subscription.ItemCTA`, `Subscription.GroupSelector`, or
+`Subscription.IntervalSelector`. The default generated pricing cards remain the
+fast styled path.
+
+Styled compound defaults use the package's `creem-base:` Tailwind variant, which
+places library defaults in the base cascade layer. Consumer `class`/`className`
+utilities like `font-bold`, `text-xl`, or `bg-emerald-600` therefore override
+the built-in defaults without `tailwind-merge`.
+
+**`UpdateBehavior`** controls how the Creem API handles plan switches and unit
 changes:
 
 - `"proration-charge-immediately"` — prorate and charge the difference now
@@ -937,15 +1101,17 @@ changes:
 Registers a plan inside `<Subscription.Root>`. Renders nothing on its own — the
 root component renders the pricing cards.
 
-| Prop          | Type                                                 | Default                    | Description                                                                                         |
-| ------------- | ---------------------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------- |
-| `type`        | `"free" \| "single" \| "seat-based" \| "enterprise"` | —                          | **Required.** Plan type                                                                             |
-| `planId`      | `string`                                             | first product ID or `type` | Unique plan identifier                                                                              |
-| `title`       | `string`                                             | from Creem product data    | Plan display title                                                                                  |
-| `description` | `string`                                             | from Creem product data    | Plan subtitle (rendered as Markdown)                                                                |
-| `contactUrl`  | `string`                                             | —                          | "Contact sales" link. **Required when `type="enterprise"`**.                                        |
-| `recommended` | `boolean`                                            | `false`                    | Highlight as recommended plan                                                                       |
-| `productIds`  | `Partial<Record<RecurringCycle, string>>`            | —                          | Creem product IDs keyed by billing cycle. **Required when `type="single"` or `type="seat-based"`**. |
+| Prop          | Type                                                 | Default                    | Description                                                                                   |
+| ------------- | ---------------------------------------------------- | -------------------------- | --------------------------------------------------------------------------------------------- |
+| `type`        | `"free" \| "single" \| "unit-based" \| "enterprise"` | —                          | **Required.** Plan type                                                                       |
+| `planId`      | `string`                                             | first product ID or `type` | Unique plan identifier                                                                        |
+| `groupId`     | `string`                                             | —                          | Optional pricing audience/group such as `"individual"` or `"teams"`                           |
+| `groupTitle`  | `string`                                             | formatted `groupId`        | Optional label for the root group selector                                                    |
+| `title`       | `string`                                             | from Creem product data    | Plan display title                                                                            |
+| `description` | `string`                                             | from Creem product data    | Plan subtitle (rendered as Markdown)                                                          |
+| `contactUrl`  | `string`                                             | —                          | "Contact sales" link. **Required when `type="enterprise"`**.                                  |
+| `recommended` | `boolean`                                            | `false`                    | Highlight as recommended plan                                                                 |
+| `productIds`  | `Partial<Record<RecurringCycle, string>>`            | —                          | Creem product IDs keyed by billing cycle. Migration escape hatch when no catalog is provided. |
 
 **Supported billing cycles:** `every-month`, `every-three-months`,
 `every-six-months`, `every-year`.
@@ -1005,6 +1171,30 @@ entity has no Creem customer record, or when `canAccessPortal` is `false`.
 | `class`/`className` | `string`                | `""`               | Button CSS class                                          |
 | `children`          | `Snippet` / `ReactNode` | `"Manage billing"` | Custom button label                                       |
 
+#### `<BillingHistory>`
+
+Paginated transaction history backed by Creem's transaction search endpoint.
+This renders transaction rows only. Invoice and receipt documents are not
+included in this component.
+
+| Prop                | Type                  | Default | Description                               |
+| ------------------- | --------------------- | ------- | ----------------------------------------- |
+| `api`               | `ConnectedBillingApi` | —       | **Required.** Backend function references |
+| `pageSize`          | `number`              | `10`    | Transactions per page                     |
+| `productId`         | `string`              | —       | Optional product filter                   |
+| `orderId`           | `string`              | —       | Optional order filter                     |
+| `class`/`className` | `string`              | `""`    | Wrapper CSS class                         |
+
+Add the generated transaction action to your connected API:
+
+```ts
+const billingApi: ConnectedBillingApi = {
+  uiModel: api.billing.uiModel,
+  checkouts: { create: api.billing.checkoutsCreate },
+  transactions: { search: api.billing.transactionsSearch },
+};
+```
+
 ### Presentational components
 
 Lower-level building blocks for custom layouts. These do **not** call Convex
@@ -1022,17 +1212,17 @@ Renders a grid of pricing cards with an optional billing cycle toggle.
 | `products`              | `ConnectedProduct[]`      | Product data for price resolution     |
 | `subscriptionProductId` | `string \| null`          | Currently subscribed product          |
 | `subscriptionStatus`    | `string \| null`          | Subscription status                   |
-| `units`                 | `number`                  | Seat count                            |
-| `showSeatPicker`        | `boolean`                 | Show quantity picker                  |
-| `subscribedSeats`       | `number \| null`          | Current seat count                    |
+| `units`                 | `number`                  | Checkout unit count                   |
+| `showUnitPicker`        | `boolean`                 | Show quantity picker                  |
+| `subscribedUnits`       | `number \| null`          | Current unit count                    |
 | `isGroupSubscribed`     | `boolean`                 | Whether group has active subscription |
 | `disableCheckout`       | `boolean`                 | Disable checkout buttons              |
 | `disableSwitch`         | `boolean`                 | Disable plan switch buttons           |
-| `disableSeats`          | `boolean`                 | Disable seat controls                 |
+| `disableUnits`          | `boolean`                 | Disable unit controls                 |
 | `onCycleChange`         | `(cycle) => void`         | Billing cycle change handler          |
 | `onCheckout`            | `(payload) => void`       | Checkout handler                      |
 | `onSwitchPlan`          | `(payload) => void`       | Plan switch handler                   |
-| `onUpdateSeats`         | `(payload) => void`       | Seat update handler                   |
+| `onUpdateUnits`         | `(payload) => void`       | Unit update handler                   |
 
 #### `<PricingCard>`
 
@@ -1147,6 +1337,62 @@ Inline status badge for one-time payments.
 
 ---
 
+## Migration Guide
+
+### Provider-based widget API
+
+Connected widgets no longer accept direct `api={billingApi}` props. Wrap the
+area that renders billing UI with `CreemConvexProvider` and pass the API,
+catalog, permissions, and consent hooks there.
+
+| Previous API                                      | New API                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------- |
+| `<Subscription.Root api={billingApi} ... />`      | `<CreemConvexProvider api={billingApi}><Subscription.Root ... />`   |
+| `<Product.Root api={billingApi} ... />`           | `<CreemConvexProvider api={billingApi}><Product.Root ... />`        |
+| `<BillingPortal api={billingApi} />`              | `<CreemConvexProvider api={billingApi}><BillingPortal />`           |
+| `<BillingHistory api={billingApi} />`             | `<CreemConvexProvider api={billingApi}><BillingHistory />`          |
+| Widget-level `catalog`, `permissions`, gate hooks | Provider-level defaults, with widget props only for local overrides |
+
+This is intentionally breaking so apps have one billing integration boundary
+instead of repeating Convex function references throughout the UI.
+
+### Unit-based billing rename
+
+The UI widget API now follows Creem's unit-based pricing language. There are no
+backward-compatible aliases for the previous seat-specific names.
+
+| Previous API                              | New API                                   |
+| ----------------------------------------- | ----------------------------------------- |
+| `<Subscription.Item type="seat-based" />` | `<Subscription.Item type="unit-based" />` |
+| `<Subscription.Root showSeatPicker />`    | `<Subscription.Root showUnitPicker />`    |
+| `BillingPermissions.canUpdateSeats`       | `BillingPermissions.canUpdateUnits`       |
+| `AvailableAction` value `"update_seats"`  | `AvailableAction` value `"update_units"`  |
+| `subscribedSeats`                         | `subscribedUnits`                         |
+| `disableSeats`                            | `disableUnits`                            |
+| `onUpdateSeats`                           | `onUpdateUnits`                           |
+
+The `units` prop remains the quantity passed to checkout and subscription
+updates. A unit can still represent a seat, but the public API no longer assumes
+that seats are the only unit-based pricing use case.
+
+### Product credit grants
+
+`Product.Item` no longer accepts checkout metadata for credit grants. Put
+purchase-to-credit mappings in the server-owned billing catalog with
+`creditGrant` so webhook fulfillment derives the amount from trusted app code.
+
+| Previous API                                                              | New API                                                 |
+| ------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `<Product.Item checkoutMetadata={{ convexCreemCreditsAmount: "100" }} />` | Catalog entry with `creditGrant: { amount: "100" }`     |
+| Client-supplied metadata deciding the credits granted after checkout      | Server-side `billingCatalog` passed to `new Creem(...)` |
+| App code manually deciding whether refunds should reverse granted credits | `creditGrant.refundBehavior` on the catalog entry       |
+
+By default, catalog-granted credits are reversed only on full refunds. Configure
+`refundBehavior` per product when your app needs proportional (`"prorate"`),
+eager (`"debit"`), or manual (`"none"`) refund handling.
+
+---
+
 ## Troubleshooting
 
 **Webhooks not receiving events** Verify your Creem dashboard webhook URL
@@ -1158,7 +1404,7 @@ verification errors.
 setting up webhooks. Ensure `CREEM_API_KEY` is set and the key has read access
 to products.
 
-**Widgets rendering unstyled** Ensure both Tailwind CSS v4 and
+**Widgets rendering without package styles** Ensure both Tailwind CSS v4 and
 `@import "@mmailaender/convex-creem/styles"` are in your CSS entry point. The
 styles import must come after the Tailwind import.
 
