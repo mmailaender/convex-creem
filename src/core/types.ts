@@ -50,6 +50,12 @@ export type CatalogProductRef =
       productSlug?: string;
     };
 
+export type CreditGrantRefundBehavior =
+  | "revoke_on_full_refund"
+  | "prorate"
+  | "debit"
+  | "none";
+
 /** App-side Customer Credits grant fulfilled after successful Creem commerce events. */
 export type CreditGrant = {
   /** Amount of credits to grant. String to preserve large integer values. */
@@ -60,11 +66,12 @@ export type CreditGrant = {
   unitLabel?: string;
   /**
    * Refund behavior for the grant.
+   * - `"revoke_on_full_refund"` deducts the full grant only when a refund covers the full order amount. This is the default.
    * - `"prorate"` deducts a proportional amount for partial refunds and the full grant for full refunds.
    * - `"debit"` deducts the full grant whenever a refund succeeds.
    * - `"none"` leaves credits untouched.
    */
-  refundBehavior?: "prorate" | "debit" | "none";
+  refundBehavior?: CreditGrantRefundBehavior;
 };
 
 /** A single plan definition in the billing catalog. */

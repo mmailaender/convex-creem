@@ -24,7 +24,7 @@ const billingCatalog = defineBillingCatalog({
         amount: "100",
         accountName: "credits",
         unitLabel: "credits",
-        refundBehavior: "prorate",
+        refundBehavior: "revoke_on_full_refund",
       },
     },
   ],

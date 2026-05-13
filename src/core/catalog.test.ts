@@ -260,14 +260,17 @@ describe("findCreditGrantByProductId", () => {
           category: "paid" as const,
           billingType: "onetime" as const,
           creemProductIds: { custom: "prod_credits" },
-          creditGrant: { amount: "100", refundBehavior: "prorate" as const },
+          creditGrant: {
+            amount: "100",
+            refundBehavior: "revoke_on_full_refund" as const,
+          },
         },
       ],
     };
 
     expect(findCreditGrantByProductId(catalog, "prod_credits")).toEqual({
       amount: "100",
-      refundBehavior: "prorate",
+      refundBehavior: "revoke_on_full_refund",
     });
   });
 

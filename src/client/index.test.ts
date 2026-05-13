@@ -1116,6 +1116,122 @@ describe("registerRoutes", () => {
     });
   });
 
+  it("does not debit catalog-granted credits for partial refunds by default", async () => {
+    const creem = new Creem(mockComponent, {
+      apiKey: "k",
+      webhookSecret: SECRET,
+      billingCatalog: defineBillingCatalog({
+        version: "test",
+        plans: [
+          {
+            planId: "ai-credits-100",
+            category: "paid",
+            billingType: "onetime",
+            creemProductIds: { custom: "prod_credits" },
+            creditGrant: { amount: "100" },
+          },
+        ],
+      }),
+    });
+    const debitAccount = vi.fn(async () => ({}));
+    vi.spyOn(creem.sdk as any, "customerCredits", "get").mockReturnValue({
+      listAccounts: vi.fn(async () => ({
+        data: [{ id: "cred_acct_1", name: "credits" }],
+      })),
+      debitAccount,
+    });
+    const { handler } = setupWebhookHandler(creem);
+    const ctx = createMockCtx();
+
+    const body = JSON.stringify({
+      eventType: "refund.created",
+      object: {
+        id: "ref_partial_credits",
+        object: "refund",
+        status: "succeeded",
+        refund_amount: 1000,
+        order: {
+          object: "order",
+          id: "ord_credits",
+          customer: "cust_6aVJrSJi8h9r7cGzWPVBF0",
+          product: "prod_credits",
+          amount: 2000,
+          amount_paid: 2000,
+          status: "paid",
+          type: "onetime",
+          transaction: "tran_credits",
+          mode: "test",
+        },
+        mode: "test",
+      },
+    });
+
+    const response = await signAndSend(handler!, ctx, body, SECRET);
+
+    expect(response.status).toBe(202);
+    expect(debitAccount).not.toHaveBeenCalled();
+  });
+
+  it("debits the full catalog credit grant for full refunds by default", async () => {
+    const creem = new Creem(mockComponent, {
+      apiKey: "k",
+      webhookSecret: SECRET,
+      billingCatalog: defineBillingCatalog({
+        version: "test",
+        plans: [
+          {
+            planId: "ai-credits-100",
+            category: "paid",
+            billingType: "onetime",
+            creemProductIds: { custom: "prod_credits" },
+            creditGrant: { amount: "100" },
+          },
+        ],
+      }),
+    });
+    const debitAccount = vi.fn(async () => ({}));
+    vi.spyOn(creem.sdk as any, "customerCredits", "get").mockReturnValue({
+      listAccounts: vi.fn(async () => ({
+        data: [{ id: "cred_acct_1", name: "credits" }],
+      })),
+      debitAccount,
+    });
+    const { handler } = setupWebhookHandler(creem);
+    const ctx = createMockCtx();
+
+    const body = JSON.stringify({
+      eventType: "refund.created",
+      object: {
+        id: "ref_full_credits",
+        object: "refund",
+        status: "succeeded",
+        refund_amount: 2000,
+        order: {
+          object: "order",
+          id: "ord_credits",
+          customer: "cust_6aVJrSJi8h9r7cGzWPVBF0",
+          product: "prod_credits",
+          amount: 2000,
+          amount_paid: 2000,
+          status: "paid",
+          type: "onetime",
+          transaction: "tran_credits",
+          mode: "test",
+        },
+        mode: "test",
+      },
+    });
+
+    const response = await signAndSend(handler!, ctx, body, SECRET);
+
+    expect(response.status).toBe(202);
+    expect(debitAccount).toHaveBeenCalledWith("cred_acct_1", {
+      amount: "100",
+      reference: "refund:ref_full_credits",
+      idempotencyKey: "creem:refund:ref_full_credits:credits:prod_credits:100",
+    });
+  });
+
   it("tolerates Customer Credits response validation drift after debit requests", async () => {
     const creem = new Creem(mockComponent, {
       apiKey: "k",

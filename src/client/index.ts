@@ -726,10 +726,21 @@ export class Creem {
     orderAmount: unknown,
   ): string | null {
     const amount = grant.amount.trim();
-    if (!amount || grant.refundBehavior === "none") return null;
-    if (grant.refundBehavior === "debit") return amount;
+    const refundBehavior = grant.refundBehavior ?? "revoke_on_full_refund";
+    if (!amount || refundBehavior === "none") return null;
+    if (refundBehavior === "debit") return amount;
 
-    if (typeof refundAmount !== "number" || typeof orderAmount !== "number") {
+    const hasRefundAmounts =
+      typeof refundAmount === "number" && typeof orderAmount === "number";
+
+    if (refundBehavior === "revoke_on_full_refund") {
+      if (!hasRefundAmounts || refundAmount <= 0 || orderAmount <= 0) {
+        return null;
+      }
+      return refundAmount >= orderAmount ? amount : null;
+    }
+
+    if (!hasRefundAmounts) {
       return amount;
     }
     if (refundAmount <= 0 || orderAmount <= 0) return null;
