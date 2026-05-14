@@ -11,6 +11,7 @@ import type {
   ConnectedTransactionList,
 } from "./types.js";
 import { formatPrice } from "../shared.js";
+import { resolveBillingI18n } from "../../core/i18n.js";
 import {
   requireCreemConvexApi,
   useCreemConvex,
@@ -21,14 +22,13 @@ const normalizeTimestamp = (timestamp: number | undefined): number | null => {
   return timestamp < 1_000_000_000_000 ? timestamp * 1000 : timestamp;
 };
 
-const formatDate = (timestamp: number | undefined) => {
+const formatTransactionDate = (
+  timestamp: number | undefined,
+  i18n: ReturnType<typeof resolveBillingI18n>,
+) => {
   const normalized = normalizeTimestamp(timestamp);
-  if (!normalized) return "Unknown";
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(normalized));
+  if (!normalized) return i18n.labels.billingHistory.unknown;
+  return i18n.formatDate({ date: new Date(normalized) });
 };
 
 const formatStatus = (value: string) =>
@@ -56,6 +56,7 @@ export const BillingHistory = ({
   className?: string;
 }) => {
   const provider = useCreemConvex();
+  const i18n = useMemo(() => resolveBillingI18n(provider?.i18n), [provider?.i18n]);
   const resolvedApi = requireCreemConvexApi("BillingHistory", provider);
   const client = useConvex();
   const searchRef = resolvedApi.transactions?.search;
@@ -85,12 +86,12 @@ export const BillingHistory = ({
       setError(
         cause instanceof Error
           ? cause.message
-          : "Could not load billing history",
+          : i18n.labels.billingHistory.loadError,
       );
     } finally {
       setIsLoading(false);
     }
-  }, [client, searchArgs, searchRef]);
+  }, [client, i18n.labels.billingHistory.loadError, searchArgs, searchRef]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -107,9 +108,13 @@ export const BillingHistory = ({
   return (
     <section className={`space-y-3 ${className}`}>
       <div className="flex items-center justify-between gap-3">
-        <h2 className="title-m text-foreground-default">Billing history</h2>
+        <h2 className="title-m text-foreground-default">
+          {i18n.labels.billingHistory.title}
+        </h2>
         {isLoading && (
-          <span className="body-s text-foreground-placeholder">Loading...</span>
+          <span className="body-s text-foreground-placeholder">
+            {i18n.labels.billingHistory.loading}
+          </span>
         )}
       </div>
 
@@ -124,11 +129,21 @@ export const BillingHistory = ({
           <table className="w-full min-w-[40rem] border-collapse text-left">
             <thead className="bg-surface-subtle">
               <tr className="label-s text-foreground-muted">
-                <th className="px-4 py-3 font-medium">Date</th>
-                <th className="px-4 py-3 font-medium">Description</th>
-                <th className="px-4 py-3 font-medium">Type</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 text-right font-medium">Amount</th>
+                <th className="px-4 py-3 font-medium">
+                  {i18n.labels.billingHistory.columns.date}
+                </th>
+                <th className="px-4 py-3 font-medium">
+                  {i18n.labels.billingHistory.columns.description}
+                </th>
+                <th className="px-4 py-3 font-medium">
+                  {i18n.labels.billingHistory.columns.type}
+                </th>
+                <th className="px-4 py-3 font-medium">
+                  {i18n.labels.billingHistory.columns.status}
+                </th>
+                <th className="px-4 py-3 text-right font-medium">
+                  {i18n.labels.billingHistory.columns.amount}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-subtle bg-surface-base">
@@ -139,7 +154,7 @@ export const BillingHistory = ({
                     className="body-s text-foreground-default"
                   >
                     <td className="px-4 py-3">
-                      {formatDate(transaction.createdAt)}
+                      {formatTransactionDate(transaction.createdAt, i18n)}
                     </td>
                     <td className="px-4 py-3">
                       {transaction.description ?? transaction.id}
@@ -154,6 +169,7 @@ export const BillingHistory = ({
                       {formatPrice(
                         getAmount(transaction),
                         transaction.currency,
+                        i18n.formatCurrency,
                       )}
                     </td>
                   </tr>
@@ -165,8 +181,8 @@ export const BillingHistory = ({
                     className="px-4 py-8 text-center body-s text-foreground-muted"
                   >
                     {isLoading
-                      ? "Loading billing history..."
-                      : "No transactions yet"}
+                      ? i18n.labels.billingHistory.loadingHistory
+                      : i18n.labels.billingHistory.empty}
                   </td>
                 </tr>
               )}
@@ -188,7 +204,7 @@ export const BillingHistory = ({
         >
           <Pagination.PrevTrigger
             className="icon-button-ghost-sm"
-            aria-label="Previous page"
+            aria-label={i18n.labels.accessibility.previousPage}
           >
             <ChevronLeft aria-hidden="true" className="size-4" />
           </Pagination.PrevTrigger>
@@ -221,7 +237,7 @@ export const BillingHistory = ({
           </Pagination.Context>
           <Pagination.NextTrigger
             className="icon-button-ghost-sm"
-            aria-label="Next page"
+            aria-label={i18n.labels.accessibility.nextPage}
           >
             <ChevronRight aria-hidden="true" className="size-4" />
           </Pagination.NextTrigger>

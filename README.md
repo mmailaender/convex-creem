@@ -318,6 +318,36 @@ API and optional catalog from context.
 </CreemConvexProvider>
 ```
 
+You can also pass `i18n` at the provider level to replace default UI labels and
+format dates/currency. This covers default cards, dialogs, billing history,
+portal buttons, recovery banners, credits, and accessibility labels. Product
+names and descriptions are still merchant-owned content; localize them in your
+catalog or with composition slots.
+
+```svelte
+<CreemConvexProvider
+  api={billingApi}
+  catalog={billingCatalog}
+  i18n={{
+    locale: "de-DE",
+    labels: {
+      subscription: {
+        currentPlan: "Aktueller Tarif",
+        subscribe: "Abonnieren",
+        switchPlan: "Tarif wechseln",
+        cancelSubscription: "Abo beenden",
+        unitCount: (units) => `${units} Einheit${units === 1 ? "" : "en"}`,
+      },
+      billingHistory: {
+        title: "Rechnungsverlauf",
+      },
+    },
+  }}
+>
+  <Subscription.Root plans={["pro"]} />
+</CreemConvexProvider>
+```
+
 > The `ConnectedBillingApi` object is the same shape in both frameworks. Only
 > the Convex client setup differs: `setupConvex()` in Svelte vs
 > `<ConvexProvider>` in React (see
@@ -1078,6 +1108,8 @@ plan switching, cancellation, and unit management.
 | `twoColumnLayout`            | `boolean`                                                         | `false`                                      | Use two-column card layout                                                                                                                                |
 | `updateBehavior`             | `UpdateBehavior`                                                  | `"proration-charge-immediately"`             | How plan switches and unit updates are billed. See below.                                                                                                 |
 | `unstyled`                   | `boolean`                                                         | `false`                                      | Remove built-in visual classes from compound subscription pieces so custom children own their styling.                                                    |
+| `labels`                     | `BillingLabelOverrides`                                           | provider labels                              | Override subscription labels locally for this root.                                                                                                       |
+| `i18n`                       | `BillingI18n`                                                     | provider i18n                                | Override locale, labels, or formatters locally for this root.                                                                                             |
 | `onBeforeCheckout`           | `(intent: CheckoutIntent) => Promise<boolean> \| boolean`         | —                                            | Gate checkout (auth, terms, etc.). Return `false` to abort.                                                                                               |
 | `onBeforePlanChange`         | `(intent: PlanChangeIntent) => Promise<boolean> \| boolean`       | —                                            | Gate paid plan switches. Return `false` to abort.                                                                                                         |
 | `onBeforeFreePlanActivation` | `(intent: { freePlanId: string }) => Promise<boolean> \| boolean` | —                                            | Gate free-plan activation. Return `false` to abort.                                                                                                       |

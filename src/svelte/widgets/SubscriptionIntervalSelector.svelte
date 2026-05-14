@@ -7,13 +7,6 @@
     type SubscriptionContextValue,
   } from "./subscriptionContext.js";
 
-  const CYCLE_LABELS: Record<string, string> = {
-    "every-month": "Monthly",
-    "every-three-months": "Quarterly",
-    "every-six-months": "Semi-annual",
-    "every-year": "Yearly",
-  };
-
   interface Props {
     cycles?: RecurringCycle[];
     value?: RecurringCycle;
@@ -47,7 +40,7 @@
   const items = $derived(
     resolvedCycles.map((cycle) => ({
       value: cycle,
-      label: CYCLE_LABELS[cycle] ?? cycle,
+      label: rootContext?.getLabels().billingCycle[cycle] ?? cycle,
     })),
   );
   const handleValueChange = (next: string) => {

@@ -1,5 +1,10 @@
 import type { RecurringCycle, UIPlanEntry } from "../../core/types.js";
 import type {
+  BillingCurrencyFormatInput,
+  BillingDateFormatInput,
+  BillingLabels,
+} from "../../core/i18n.js";
+import type {
   ConnectedProduct,
   SubscriptionPlanRegistration,
 } from "./types.js";
@@ -22,6 +27,9 @@ export type SubscriptionContextValue = {
   getDisableSwitch: () => boolean;
   getDisableUnits: () => boolean;
   getUnstyled: () => boolean;
+  getLabels: () => BillingLabels;
+  formatCurrency: (input: BillingCurrencyFormatInput) => string;
+  formatDate: (input: BillingDateFormatInput) => string;
   checkout: (payload: {
     plan: UIPlanEntry;
     productId: string;

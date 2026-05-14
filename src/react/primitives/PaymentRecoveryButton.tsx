@@ -1,6 +1,10 @@
 import { useState, useCallback, type PropsWithChildren } from "react";
 import type { FunctionReference } from "convex/server";
 import { useConvex } from "convex/react";
+import {
+  defaultBillingLabels,
+  type BillingLabels,
+} from "../../core/i18n.js";
 
 /**
  * Button that opens the Creem customer portal for payment recovery.
@@ -18,10 +22,12 @@ import { useConvex } from "convex/react";
 export const PaymentRecoveryButton = ({
   portalUrl,
   className = "",
+  labels = defaultBillingLabels,
   children,
 }: PropsWithChildren<{
   portalUrl: FunctionReference<"action">;
   className?: string;
+  labels?: BillingLabels;
 }>) => {
   const client = useConvex();
   const [isLoading, setIsLoading] = useState(false);
@@ -35,11 +41,11 @@ export const PaymentRecoveryButton = ({
       window.location.href = result.url;
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to open billing portal",
+        err instanceof Error ? err.message : labels.portal.failedToOpen,
       );
       setIsLoading(false);
     }
-  }, [client, portalUrl]);
+  }, [client, labels.portal.failedToOpen, portalUrl]);
 
   return (
     <>
@@ -49,7 +55,9 @@ export const PaymentRecoveryButton = ({
         disabled={isLoading}
         onClick={handleClick}
       >
-        {isLoading ? "Opening portal…" : (children ?? "Update payment method")}
+        {isLoading
+          ? labels.paymentRecovery.openingPortal
+          : (children ?? labels.paymentRecovery.updatePaymentMethod)}
       </button>
       {error && (
         <p className="label-s mt-1 text-error-foreground-muted">{error}</p>

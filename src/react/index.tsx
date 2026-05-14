@@ -82,6 +82,13 @@ export type {
   PlanChangeIntent as PlanChangeIntentCore,
 } from "../core/types.js";
 export type {
+  BillingI18n,
+  BillingLabels,
+  BillingLabelOverrides,
+  BillingCurrencyFormatInput,
+  BillingDateFormatInput,
+} from "../core/i18n.js";
+export type {
   BillingContextValue,
   BillingProviderConfig,
 } from "../core/context.js";

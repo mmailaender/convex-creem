@@ -5,12 +5,17 @@
     SubscriptionSnapshot,
   } from "../../core/types.js";
   import { derivePaymentRecoveryState } from "../../core/selectors.js";
+  import {
+    defaultBillingLabels,
+    type BillingLabels,
+  } from "../../core/i18n.js";
 
   interface Props {
     snapshot?: BillingSnapshot | null;
     subscriptions?: SubscriptionSnapshot | SubscriptionSnapshot[] | null;
     recoveryState?: PaymentRecoveryState;
     class?: string;
+    labels?: BillingLabels;
   }
 
   let {
@@ -18,6 +23,7 @@
     subscriptions = undefined,
     recoveryState: externalState = undefined,
     class: className = "",
+    labels = defaultBillingLabels,
   }: Props = $props();
 
   const state = $derived.by<PaymentRecoveryState>(() => {
@@ -47,9 +53,9 @@
     } ${className}`}
   >
     {#if isBlocked}
-      Your subscription payment has failed. Please update your payment method to restore access.
+      {labels.paymentRecovery.blocked}
     {:else}
-      Your subscription payment is past due. Please update your payment method to avoid service interruption.
+      {labels.paymentRecovery.warning}
     {/if}
   </div>
 {/if}

@@ -6,6 +6,7 @@ import type {
   RecurringCycle,
   UpdateBehavior,
 } from "./types.js";
+import type { BillingI18n } from "./i18n.js";
 
 /**
  * Framework-agnostic billing context contract.
@@ -136,6 +137,9 @@ export type BillingContextValue = {
       idempotencyKey: string;
     }) => Promise<void>;
   };
+
+  /** Optional UI label and formatting configuration. */
+  i18n?: BillingI18n;
 };
 
 /** Options for configuring a billing provider. */
@@ -150,4 +154,6 @@ export type BillingProviderConfig = {
   onBeforePlanChange?: BillingContextValue["onBeforePlanChange"];
   /** Consent gate: called before free plan activation. */
   onBeforeFreePlanActivation?: BillingContextValue["onBeforeFreePlanActivation"];
+  /** Optional UI label and formatting configuration. */
+  i18n?: BillingI18n;
 };

@@ -8,6 +8,7 @@
     CREEM_CONVEX_CONTEXT_KEY,
     type CreemConvexContextValue,
   } from "../creemConvexContext.js";
+  import { resolveBillingI18n } from "../../core/i18n.js";
 
   interface Props {
     permissions?: BillingPermissions;
@@ -27,6 +28,7 @@
     );
   }
   const resolvedPermissions = $derived(permissions ?? provider?.permissions);
+  const i18n = $derived(resolveBillingI18n(provider?.i18n));
 
   const canAccess = $derived(resolvedPermissions?.canAccessPortal !== false);
 
@@ -58,11 +60,12 @@
     disabled={isLoading}
     onOpenPortal={openPortal}
     {className}
+    labels={i18n.labels}
   >
     {#if children}
       {@render children()}
     {:else}
-      Manage billing
+      {i18n.labels.portal.manageBilling}
     {/if}
   </CustomerPortalButton>
 {/if}

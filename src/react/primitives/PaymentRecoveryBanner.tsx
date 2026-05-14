@@ -5,6 +5,10 @@ import type {
   SubscriptionSnapshot,
 } from "../../core/types.js";
 import { derivePaymentRecoveryState } from "../../core/selectors.js";
+import {
+  defaultBillingLabels,
+  type BillingLabels,
+} from "../../core/i18n.js";
 
 /**
  * Subscription-focused payment recovery banner.
@@ -23,11 +27,13 @@ export const PaymentRecoveryBanner = ({
   subscriptions,
   recoveryState: externalState,
   className = "",
+  labels = defaultBillingLabels,
 }: {
   snapshot?: BillingSnapshot | null;
   subscriptions?: SubscriptionSnapshot | SubscriptionSnapshot[] | null;
   recoveryState?: PaymentRecoveryState;
   className?: string;
+  labels?: BillingLabels;
 }) => {
   const state = useMemo<PaymentRecoveryState>(() => {
     if (externalState) return externalState;
@@ -55,9 +61,7 @@ export const PaymentRecoveryBanner = ({
           : "border-warning-border-subtle bg-warning-surface-subtle text-warning-foreground-default"
       } ${className}`}
     >
-      {isBlocked
-        ? "Your subscription payment has failed. Please update your payment method to restore access."
-        : "Your subscription payment is past due. Please update your payment method to avoid service interruption."}
+      {isBlocked ? labels.paymentRecovery.blocked : labels.paymentRecovery.warning}
     </div>
   );
 };

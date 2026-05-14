@@ -12,6 +12,7 @@
     ConnectedTransactionList,
   } from "./types.js";
   import { formatPrice } from "../primitives/shared.js";
+  import { resolveBillingI18n } from "../../core/i18n.js";
   import {
     CREEM_CONVEX_CONTEXT_KEY,
     type CreemConvexContextValue,
@@ -42,6 +43,7 @@
     );
   }
   const searchRef = resolvedApi.transactions?.search;
+  const i18n = $derived(resolveBillingI18n(provider?.i18n));
 
   let pageNumber = $state(1);
   let result = $state<ConnectedTransactionList | null>(null);
@@ -53,14 +55,10 @@
     return timestamp < 1_000_000_000_000 ? timestamp * 1000 : timestamp;
   };
 
-  const formatDate = (timestamp: number | undefined) => {
+  const formatTransactionDate = (timestamp: number | undefined) => {
     const normalized = normalizeTimestamp(timestamp);
-    if (!normalized) return "Unknown";
-    return new Intl.DateTimeFormat(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }).format(new Date(normalized));
+    if (!normalized) return i18n.labels.billingHistory.unknown;
+    return i18n.formatDate({ date: new Date(normalized) });
   };
 
   const formatStatus = (value: string) =>
@@ -89,7 +87,7 @@
     } catch (cause) {
       error = cause instanceof Error
         ? cause.message
-        : "Could not load billing history";
+        : i18n.labels.billingHistory.loadError;
     } finally {
       isLoading = false;
     }
@@ -132,9 +130,9 @@
 {#if searchRef}
   <section class={`space-y-3 ${className}`}>
     <div class="flex items-center justify-between gap-3">
-      <h2 class="title-m text-foreground-default">Billing history</h2>
+      <h2 class="title-m text-foreground-default">{i18n.labels.billingHistory.title}</h2>
       {#if isLoading}
-        <span class="body-s text-foreground-placeholder">Loading...</span>
+        <span class="body-s text-foreground-placeholder">{i18n.labels.billingHistory.loading}</span>
       {/if}
     </div>
 
@@ -149,23 +147,23 @@
         <table class="w-full min-w-[40rem] border-collapse text-left">
           <thead class="bg-surface-subtle">
             <tr class="label-s text-foreground-muted">
-              <th class="px-4 py-3 font-medium">Date</th>
-              <th class="px-4 py-3 font-medium">Description</th>
-              <th class="px-4 py-3 font-medium">Type</th>
-              <th class="px-4 py-3 font-medium">Status</th>
-              <th class="px-4 py-3 text-right font-medium">Amount</th>
+              <th class="px-4 py-3 font-medium">{i18n.labels.billingHistory.columns.date}</th>
+              <th class="px-4 py-3 font-medium">{i18n.labels.billingHistory.columns.description}</th>
+              <th class="px-4 py-3 font-medium">{i18n.labels.billingHistory.columns.type}</th>
+              <th class="px-4 py-3 font-medium">{i18n.labels.billingHistory.columns.status}</th>
+              <th class="px-4 py-3 text-right font-medium">{i18n.labels.billingHistory.columns.amount}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-border-subtle bg-surface-base">
             {#if transactions.length > 0}
               {#each transactions as transaction (transaction.id)}
                 <tr class="body-s text-foreground-default">
-                  <td class="px-4 py-3">{formatDate(transaction.createdAt)}</td>
+                  <td class="px-4 py-3">{formatTransactionDate(transaction.createdAt)}</td>
                   <td class="px-4 py-3">{transaction.description ?? transaction.id}</td>
                   <td class="px-4 py-3">{formatStatus(transaction.type)}</td>
                   <td class="px-4 py-3">{formatStatus(transaction.status)}</td>
                   <td class="px-4 py-3 text-right">
-                    {formatPrice(getAmount(transaction), transaction.currency)}
+                    {formatPrice(getAmount(transaction), transaction.currency, i18n.formatCurrency)}
                   </td>
                 </tr>
               {/each}
@@ -175,7 +173,7 @@
                   colspan="5"
                   class="px-4 py-8 text-center body-s text-foreground-muted"
                 >
-                  {isLoading ? "Loading billing history..." : "No transactions yet"}
+                  {isLoading ? i18n.labels.billingHistory.loadingHistory : i18n.labels.billingHistory.empty}
                 </td>
               </tr>
             {/if}
@@ -197,14 +195,14 @@
       >
         <Pagination.PrevTrigger
           class="icon-button-ghost-sm"
-          aria-label="Previous page"
+          aria-label={i18n.labels.accessibility.previousPage}
         >
           <ChevronLeft aria-hidden="true" class="size-4" />
         </Pagination.PrevTrigger>
         <Pagination.Context render={paginationItems} />
         <Pagination.NextTrigger
           class="icon-button-ghost-sm"
-          aria-label="Next page"
+          aria-label={i18n.labels.accessibility.nextPage}
         >
           <ChevronRight aria-hidden="true" class="size-4" />
         </Pagination.NextTrigger>

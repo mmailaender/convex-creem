@@ -15,7 +15,12 @@
 
   const ctx = getSubscriptionItemContext();
   const text = $derived(
-    label ?? (ctx.isActive ? "Current" : ctx.isRecommended ? "Recommended" : null),
+    label ??
+      (ctx.isActive
+        ? ctx.labels.subscription.current
+        : ctx.isRecommended
+          ? ctx.labels.subscription.recommended
+          : null),
   );
   const show = $derived(text != null || children != null);
   const resolvedClass = $derived(

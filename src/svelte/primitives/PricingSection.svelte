@@ -2,6 +2,11 @@
   import BillingToggle from "./BillingToggle.svelte";
   import PricingCard from "./PricingCard.svelte";
   import type { BillingSnapshot, UIPlanEntry, RecurringCycle } from "../../core/types.js";
+  import {
+    defaultBillingLabels,
+    type BillingCurrencyFormatInput,
+    type BillingLabels,
+  } from "../../core/i18n.js";
   import type { ConnectedProduct } from "../widgets/types.js";
     import { SvelteSet } from "svelte/reactivity";
 
@@ -37,6 +42,8 @@
     onUpdateUnits?: (payload: { units: number }) => Promise<void> | void;
     onContactSales?: (payload: { plan: UIPlanEntry }) => Promise<void> | void;
     onCancelSubscription?: () => void;
+    labels?: BillingLabels;
+    formatCurrency?: (input: BillingCurrencyFormatInput) => string;
   }
 
   let {
@@ -63,6 +70,8 @@
     onUpdateUnits,
     onContactSales,
     onCancelSubscription,
+    labels = defaultBillingLabels,
+    formatCurrency = undefined,
   }: Props = $props();
 
   const toUniqueCycles = (entries: UIPlanEntry[]) => {
@@ -90,6 +99,7 @@
         cycles={availableCycles}
         value={effectiveCycle}
         onValueChange={onCycleChange}
+        {labels}
       />
     </div>
   {/if}
@@ -116,6 +126,8 @@
         {onUpdateUnits}
         {onContactSales}
         {onCancelSubscription}
+        {labels}
+        {formatCurrency}
         className=""
       />
     {/each}

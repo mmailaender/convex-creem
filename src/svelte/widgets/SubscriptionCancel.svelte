@@ -6,7 +6,7 @@
     label?: string;
   }
 
-  let { class: className = "", label = "Cancel subscription" }: Props =
+  let { class: className = "", label = undefined }: Props =
     $props();
 
   const ctx = getSubscriptionItemContext();
@@ -19,6 +19,6 @@
 
 {#if ctx.isActive && ctx.onCancelSubscription}
   <button type="button" class={resolvedClass} onclick={ctx.onCancelSubscription}>
-    {label}
+    {label ?? ctx.labels.subscription.cancelSubscription}
   </button>
 {/if}

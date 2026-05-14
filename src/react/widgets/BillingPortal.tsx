@@ -1,4 +1,4 @@
-import { useState, type PropsWithChildren } from "react";
+import { useMemo, useState, type PropsWithChildren } from "react";
 import { useQuery, useConvex } from "convex/react";
 import { CustomerPortalButton } from "../primitives/CustomerPortalButton.js";
 import {
@@ -6,6 +6,7 @@ import {
   useCreemConvex,
 } from "../CreemConvexProvider.js";
 import type { BillingPermissions, ConnectedBillingModel } from "./types.js";
+import { resolveBillingI18n } from "../../core/i18n.js";
 
 export const BillingPortal = ({
   permissions,
@@ -19,6 +20,7 @@ export const BillingPortal = ({
   const provider = useCreemConvex();
   const resolvedApi = requireCreemConvexApi("BillingPortal", provider);
   const resolvedPermissions = permissions ?? provider?.permissions;
+  const i18n = useMemo(() => resolveBillingI18n(provider?.i18n), [provider?.i18n]);
   const canAccess = resolvedPermissions?.canAccessPortal !== false;
 
   const client = useConvex();
@@ -50,8 +52,9 @@ export const BillingPortal = ({
       disabled={isLoading}
       onOpenPortal={openPortal}
       className={className}
+      labels={i18n.labels}
     >
-      {children ?? "Manage billing"}
+      {children ?? i18n.labels.portal.manageBilling}
     </CustomerPortalButton>
   );
 };

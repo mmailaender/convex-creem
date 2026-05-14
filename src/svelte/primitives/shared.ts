@@ -4,6 +4,11 @@ import type {
   UIPlanEntry,
   RecurringCycle,
 } from "../../core/types.js";
+import {
+  defaultBillingLabels,
+  type BillingLabels,
+  type BillingCurrencyFormatInput,
+} from "../../core/i18n.js";
 import type { ConnectedProduct } from "../widgets/types.js";
 
 const CYCLE_KEY_ALIASES: Record<RecurringCycle, string[]> = {
@@ -14,12 +19,11 @@ const CYCLE_KEY_ALIASES: Record<RecurringCycle, string[]> = {
   custom: ["custom"],
 };
 
-export const formatRecurringCycle = (cycle: RecurringCycle) => {
-  if (cycle === "every-month") return "Monthly";
-  if (cycle === "every-three-months") return "Quarterly";
-  if (cycle === "every-six-months") return "Semi-annual";
-  if (cycle === "every-year") return "Yearly";
-  return "Custom";
+export const formatRecurringCycle = (
+  cycle: RecurringCycle,
+  labels: BillingLabels = defaultBillingLabels,
+) => {
+  return labels.billingCycle[cycle];
 };
 
 export const resolveProductIdForPlan = (
@@ -54,24 +58,33 @@ export const hasBillingActionLocal = (
   action: AvailableAction,
 ) => snapshot.availableActions.includes(action);
 
-export const formatPrice = (amount: number, currency: string): string => {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(amount / 100);
+export const formatPrice = (
+  amount: number,
+  currency: string,
+  formatCurrency?: (input: BillingCurrencyFormatInput) => string,
+): string => {
+  return (
+    formatCurrency ??
+    ((input) =>
+      new Intl.NumberFormat(input.locale, {
+        style: "currency",
+        currency: input.currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(input.amount / 100))
+  )({ amount, currency });
 };
 
 export const resolveProductPrice = (
   productId: string | undefined,
   products: ConnectedProduct[],
+  formatCurrency?: (input: BillingCurrencyFormatInput) => string,
 ): { formatted: string; interval?: string } | null => {
   if (!productId || !products.length) return null;
   const product = products.find((p) => p.id === productId);
   if (!product) return null;
   if (product.price == null || !product.currency) return null;
-  const formatted = formatPrice(product.price, product.currency);
+  const formatted = formatPrice(product.price, product.currency, formatCurrency);
   return { formatted, interval: product.billingPeriod ?? undefined };
 };
 
@@ -88,8 +101,10 @@ export const formatUnitPrice = (
   productId: string | undefined,
   products: ConnectedProduct[],
   units: number,
+  labels: BillingLabels = defaultBillingLabels,
+  formatCurrency?: (input: BillingCurrencyFormatInput) => string,
 ): string | null => {
-  const resolved = resolveProductPrice(productId, products);
+  const resolved = resolveProductPrice(productId, products, formatCurrency);
   if (!resolved) return null;
   const suffix = resolved.interval
     ? (INTERVAL_LABELS[resolved.interval] ?? "")
@@ -97,13 +112,15 @@ export const formatUnitPrice = (
   if (units <= 1) {
     return `${resolved.formatted}${suffix}`;
   }
-  return `${resolved.formatted}${suffix} × ${units} units`;
+  return `${resolved.formatted}${suffix} × ${labels.subscription.unitCount(units)}`;
 };
 
 export const formatUnitPriceBreakdown = (
   productId: string | undefined,
   products: ConnectedProduct[],
   units: number,
+  labels: BillingLabels = defaultBillingLabels,
+  formatCurrency?: (input: BillingCurrencyFormatInput) => string,
 ): { total: string; calculation: string } | null => {
   if (!productId || !products.length) return null;
   const product = products.find((p) => p.id === productId);
@@ -112,19 +129,24 @@ export const formatUnitPriceBreakdown = (
   const suffix = product.billingPeriod
     ? (INTERVAL_LABELS[product.billingPeriod] ?? "")
     : "";
-  const unit = `${formatPrice(product.price, product.currency)}${suffix}`;
-  const total = `${formatPrice(product.price * units, product.currency)}${suffix}`;
+  const unit = `${formatPrice(product.price, product.currency, formatCurrency)}${suffix}`;
+  const total = `${formatPrice(product.price * units, product.currency, formatCurrency)}${suffix}`;
   return {
     total,
-    calculation: `${unit} × ${units} unit${units === 1 ? "" : "s"}`,
+    calculation: labels.subscription.unitPriceCalculation({
+      unitPrice: unit,
+      units,
+      total,
+    }),
   };
 };
 
 export const formatPriceWithInterval = (
   productId: string | undefined,
   products: ConnectedProduct[],
+  formatCurrency?: (input: BillingCurrencyFormatInput) => string,
 ): string | null => {
-  const resolved = resolveProductPrice(productId, products);
+  const resolved = resolveProductPrice(productId, products, formatCurrency);
   if (!resolved) return null;
   const suffix = resolved.interval
     ? (INTERVAL_LABELS[resolved.interval] ?? "")

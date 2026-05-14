@@ -1,10 +1,12 @@
 import { createContext, useContext } from "react";
+import type { BillingLabels } from "../../core/i18n.js";
 
 export interface CreditsContextValue {
   balance: string | null;
   loading: boolean;
   error: string | null;
   unitLabel: string;
+  labels: BillingLabels;
   refresh: () => Promise<void>;
 }
 

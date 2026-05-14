@@ -1,5 +1,6 @@
 import { getContext } from "svelte";
 import type { UIPlanEntry, RecurringCycle } from "../../core/types.js";
+import type { BillingLabels } from "../../core/i18n.js";
 
 /** Context value exposed to Subscription.Item slot components. */
 export type SubscriptionItemContextValue = {
@@ -15,6 +16,7 @@ export type SubscriptionItemContextValue = {
   subscribedUnits: number | null;
   disableUnits: boolean;
   unstyled: boolean;
+  labels: BillingLabels;
   setCheckoutUnits: (units: number) => void;
   onCheckout?: () => void;
   onSwitch?: () => void;

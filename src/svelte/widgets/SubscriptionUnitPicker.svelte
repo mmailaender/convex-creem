@@ -25,10 +25,10 @@
     secondaryClass: secondaryClassName = "",
     primaryClass: primaryClassName = "",
     numberInputClass: numberInputClassName = "",
-    label = "Units:",
-    changeLabel = "Change units",
-    updateLabel = "Update",
-    cancelLabel = "Cancel",
+    label = undefined,
+    changeLabel = undefined,
+    updateLabel = undefined,
+    cancelLabel = undefined,
     detailed = false,
   }: Props = $props();
 
@@ -70,6 +70,10 @@
   const unitsChanged = $derived(
     ctx.subscribedUnits != null && draftUnits !== ctx.subscribedUnits,
   );
+  const resolvedLabel = $derived(label ?? ctx.labels.subscription.units);
+  const resolvedChangeLabel = $derived(changeLabel ?? ctx.labels.subscription.changeUnits);
+  const resolvedUpdateLabel = $derived(updateLabel ?? ctx.labels.subscription.update);
+  const resolvedCancelLabel = $derived(cancelLabel ?? ctx.labels.common.cancel);
 </script>
 
 {#if isUnitPlan && !ctx.isSwitchPlan}
@@ -77,7 +81,7 @@
     {#if !ctx.onUpdateUnits}
       <div class={outerClass}>
         <div class={rowClass}>
-          <span class={labelClass}>{label}</span>
+          <span class={labelClass}>{resolvedLabel}</span>
           <span>{ctx.subscribedUnits ?? ctx.checkoutUnits}</span>
         </div>
       </div>
@@ -85,7 +89,7 @@
       <div class={outerClass}>
         {#if detailed}
           <div class={rowClass}>
-            <span class={labelClass}>{label}</span>
+            <span class={labelClass}>{resolvedLabel}</span>
             <span>{ctx.subscribedUnits ?? ctx.checkoutUnits}</span>
           </div>
         {/if}
@@ -98,19 +102,21 @@
             editing = true;
           }}
         >
-          {changeLabel}
+          {resolvedChangeLabel}
         </button>
       </div>
     {:else}
       <div class={outerClass}>
         <div class={rowClass}>
-          <span class={labelClass}>{label}</span>
+          <span class={labelClass}>{resolvedLabel}</span>
           <NumberInput
             value={draftUnits}
             min={1}
             compact
             disabled={ctx.disableUnits}
             className={numberInputClassName}
+            decreaseLabel={ctx.labels.accessibility.decreaseValue}
+            increaseLabel={ctx.labels.accessibility.increaseValue}
             onValueChange={(next) => {
               if (next > 0) draftUnits = next;
             }}
@@ -125,7 +131,7 @@
               editing = false;
             }}
           >
-            {cancelLabel}
+            {resolvedCancelLabel}
           </button>
           <button
             type="button"
@@ -133,7 +139,7 @@
             disabled={ctx.disableUnits || !unitsChanged}
             onclick={() => ctx.onUpdateUnits?.(draftUnits)}
           >
-            {updateLabel}
+            {resolvedUpdateLabel}
           </button>
         </div>
       </div>
@@ -141,13 +147,15 @@
   {:else}
     <div class={outerClass}>
       <div class={rowClass}>
-        <span class={labelClass}>{label}</span>
+        <span class={labelClass}>{resolvedLabel}</span>
         <NumberInput
           value={ctx.checkoutUnits}
           min={1}
           compact
           disabled={ctx.disableUnits}
           className={numberInputClassName}
+          decreaseLabel={ctx.labels.accessibility.decreaseValue}
+          increaseLabel={ctx.labels.accessibility.increaseValue}
           onValueChange={ctx.setCheckoutUnits}
         />
       </div>

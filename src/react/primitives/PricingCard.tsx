@@ -2,6 +2,11 @@ import { useMemo, useState } from "react";
 import { CheckoutButton } from "./CheckoutButton.js";
 import { NumberInput } from "./NumberInput.js";
 import type { UIPlanEntry, RecurringCycle } from "../../core/types.js";
+import {
+  defaultBillingLabels,
+  type BillingCurrencyFormatInput,
+  type BillingLabels,
+} from "../../core/i18n.js";
 import type { ConnectedProduct } from "../widgets/types.js";
 import {
   resolveProductIdForPlan,
@@ -38,6 +43,8 @@ export const PricingCard = ({
   onUpdateUnits,
   onContactSales,
   onCancelSubscription,
+  labels = defaultBillingLabels,
+  formatCurrency,
 }: {
   plan: UIPlanEntry;
   selectedCycle?: RecurringCycle;
@@ -67,6 +74,8 @@ export const PricingCard = ({
   onUpdateUnits?: (payload: { units: number }) => Promise<void> | void;
   onContactSales?: (payload: { plan: UIPlanEntry }) => Promise<void> | void;
   onCancelSubscription?: () => void;
+  labels?: BillingLabels;
+  formatCurrency?: (input: BillingCurrencyFormatInput) => string;
 }) => {
   const isUnitPlan = plan.pricingModel === "unit";
   const [unitCount, setUnitCount] = useState(units ?? 1);
@@ -96,7 +105,11 @@ export const PricingCard = ({
     : undefined;
 
   const productId = resolveProductIdForPlan(plan, selectedCycle);
-  const priceLabel = formatPriceWithInterval(productId, products);
+  const priceLabel = formatPriceWithInterval(
+    productId,
+    products,
+    formatCurrency,
+  );
 
   // Exact match: user is subscribed to THIS specific product (plan + cycle)
   const isActiveProduct =
@@ -139,7 +152,13 @@ export const PricingCard = ({
       : null;
   const unitPriceBreakdown =
     inheritedUnits != null
-      ? formatUnitPriceBreakdown(productId, products, inheritedUnits)
+      ? formatUnitPriceBreakdown(
+          productId,
+          products,
+          inheritedUnits,
+          labels,
+          formatCurrency,
+        )
       : null;
   const unitsChanged =
     isActiveProduct &&
@@ -148,12 +167,12 @@ export const PricingCard = ({
     unitAdjustCount !== subscribedUnits;
 
   const checkoutLabel = isActivePlanOtherCycle
-    ? "Switch interval"
+    ? labels.subscription.switchInterval
     : isSiblingPlan
-      ? "Switch plan"
+      ? labels.subscription.switchPlan
       : plan.billingType === "onetime"
-        ? "Buy now"
-        : "Subscribe";
+        ? labels.subscription.buyNow
+        : labels.subscription.subscribe;
 
   const handleCheckout = (payload: { productId: string }) => {
     if ((isSiblingPlan || isActivePlanOtherCycle) && onSwitchPlan) {
@@ -194,28 +213,33 @@ export const PricingCard = ({
           <span className="badge-faded-sm">
             {isTrialing ? (
               <>
-                Free trial
+                {labels.subscription.freeTrial}
                 {trialDaysLeft != null && (
                   <>
-                    &ensp;·&ensp;{trialDaysLeft} day
-                    {trialDaysLeft === 1 ? "" : "s"} left
+                    &ensp;·&ensp;{labels.subscription.trialDaysLeft(trialDaysLeft)}
                   </>
                 )}
               </>
             ) : (
-              "Current plan"
+              labels.subscription.currentPlan
             )}
           </span>
         ) : plan.recommended ? (
-          <span className="badge-filled-sm">Recommended</span>
+          <span className="badge-filled-sm">
+            {labels.subscription.recommended}
+          </span>
         ) : null}
       </div>
 
       <div className="flex items-baseline gap-1">
         {plan.category === "free" ? (
-          <span className="heading-s text-foreground-default">Free</span>
+          <span className="heading-s text-foreground-default">
+            {labels.subscription.free}
+          </span>
         ) : plan.category === "enterprise" ? (
-          <span className="heading-s text-foreground-default">Custom</span>
+          <span className="heading-s text-foreground-default">
+            {labels.subscription.custom}
+          </span>
         ) : splitPrice ? (
           <>
             <span className="heading-s text-foreground-default">
@@ -245,12 +269,16 @@ export const PricingCard = ({
       >
         {showUnitCheckoutControls && (
           <div className="flex w-full items-center justify-between rounded-xl bg-surface-subtle py-2 pl-4 pr-2">
-            <span className="label-m text-foreground-default">Units:</span>
+            <span className="label-m text-foreground-default">
+              {labels.subscription.units}
+            </span>
             <NumberInput
               value={unitCount}
               min={1}
               compact
               disabled={disableUnits}
+              decreaseLabel={labels.accessibility.decreaseValue}
+              increaseLabel={labels.accessibility.increaseValue}
               onValueChange={(next) => {
                 if (next > 0) setUnitCount(next);
               }}
@@ -269,13 +297,15 @@ export const PricingCard = ({
                 <>
                   <div className="flex w-full items-center justify-between rounded-xl bg-surface-subtle py-2 pl-4 pr-2">
                     <span className="label-m text-foreground-default">
-                      Units:
+                      {labels.subscription.units}
                     </span>
                     <NumberInput
                       value={unitAdjustCount}
                       min={1}
                       compact
                       disabled={disableUnits}
+                      decreaseLabel={labels.accessibility.decreaseValue}
+                      increaseLabel={labels.accessibility.increaseValue}
                       onValueChange={(next) => {
                         if (next > 0) setUnitAdjustCount(next);
                       }}
@@ -290,7 +320,7 @@ export const PricingCard = ({
                         setEditingUnits(false);
                       }}
                     >
-                      Cancel
+                      {labels.common.cancel}
                     </button>
                     <button
                       type="button"
@@ -300,7 +330,7 @@ export const PricingCard = ({
                         onUpdateUnits?.({ units: unitAdjustCount })
                       }
                     >
-                      Update
+                      {labels.subscription.update}
                     </button>
                   </div>
                 </>
@@ -311,7 +341,7 @@ export const PricingCard = ({
                     className="button-faded w-full"
                     onClick={() => setEditingUnits(true)}
                   >
-                    Change units
+                    {labels.subscription.changeUnits}
                   </button>
                   {onCancelSubscription && (
                     <button
@@ -319,7 +349,7 @@ export const PricingCard = ({
                       className="button-outline w-full"
                       onClick={onCancelSubscription}
                     >
-                      Cancel subscription
+                      {labels.subscription.cancelSubscription}
                     </button>
                   )}
                 </>
@@ -331,7 +361,7 @@ export const PricingCard = ({
               className="button-outline w-full"
               onClick={onCancelSubscription}
             >
-              Cancel subscription
+              {labels.subscription.cancelSubscription}
             </button>
           ) : isActiveProduct ||
             isActiveFreePlan /* Keep CTA row height but intentionally empty when current plan has no action */ ? null : (isSiblingPlan ||
@@ -341,6 +371,7 @@ export const PricingCard = ({
               productId={productId}
               disabled={disableSwitch}
               onCheckout={handleCheckout}
+              labels={labels}
               className={`${plan.recommended ? "button-filled" : "button-faded"} w-full`}
             >
               {checkoutLabel}
@@ -348,7 +379,7 @@ export const PricingCard = ({
           ) : plan.category === "enterprise" ? (
             plan.contactUrl ? (
               <a href={plan.contactUrl} className="button-outline w-full">
-                Contact sales
+                {labels.subscription.contactSales}
               </a>
             ) : onContactSales ? (
               <button
@@ -356,7 +387,7 @@ export const PricingCard = ({
                 className="button-outline w-full"
                 onClick={() => onContactSales?.({ plan })}
               >
-                Contact sales
+                {labels.subscription.contactSales}
               </button>
             ) : null
           ) : productId ? (
@@ -364,13 +395,14 @@ export const PricingCard = ({
               productId={productId}
               disabled={disableCheckout}
               onCheckout={handleCheckout}
+              labels={labels}
               className={`${plan.recommended ? "button-filled" : "button-faded"} w-full`}
             >
               {checkoutLabel}
             </CheckoutButton>
           ) : plan.category !== "free" ? (
             <span className="body-m text-foreground-muted">
-              Configure a checkout handler to activate this plan.
+              {labels.subscription.configureCheckout}
             </span>
           ) : null}
         </div>

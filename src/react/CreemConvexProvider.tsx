@@ -6,6 +6,7 @@ import {
   type PropsWithChildren,
 } from "react";
 import type { PlanCatalog, RecurringCycle } from "../core/types.js";
+import type { BillingI18n } from "../core/i18n.js";
 import type {
   BillingPermissions,
   CheckoutIntent,
@@ -23,6 +24,7 @@ export interface CreemConvexContextValue {
   onBeforeFreePlanActivation?: (intent: {
     freePlanId: string;
   }) => Promise<boolean> | boolean;
+  i18n?: BillingI18n;
 }
 
 const CreemConvexContext = createContext<CreemConvexContextValue | null>(null);
@@ -50,6 +52,7 @@ export const CreemConvexProvider = ({
   onBeforeCheckout,
   onBeforePlanChange,
   onBeforeFreePlanActivation,
+  i18n,
   children,
 }: PropsWithChildren<CreemConvexContextValue>) => {
   const value = useMemo(
@@ -61,6 +64,7 @@ export const CreemConvexProvider = ({
       onBeforeCheckout,
       onBeforePlanChange,
       onBeforeFreePlanActivation,
+      i18n,
     }),
     [
       api,
@@ -70,6 +74,7 @@ export const CreemConvexProvider = ({
       onBeforeCheckout,
       onBeforePlanChange,
       onBeforeFreePlanActivation,
+      i18n,
     ],
   );
 

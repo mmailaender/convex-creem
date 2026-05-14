@@ -16,6 +16,7 @@
     resolveProductIdForPlan,
   } from "../primitives/shared.js";
   import type { UIPlanEntry } from "../../core/types.js";
+  import { defaultBillingLabels } from "../../core/i18n.js";
 
   type BaseProps = {
     planId?: string;
@@ -126,8 +127,12 @@
   );
   const price = $derived.by(() => {
     if (!plan) return null;
-    if (plan.category === "free") return "Free";
-    if (plan.category === "enterprise") return "Custom";
+    if (plan.category === "free") {
+      return rootContext?.getLabels().subscription.free ?? defaultBillingLabels.subscription.free;
+    }
+    if (plan.category === "enterprise") {
+      return rootContext?.getLabels().subscription.custom ?? defaultBillingLabels.subscription.custom;
+    }
     if (
       plan.pricingModel === "unit" &&
       (isActiveProduct || isSiblingPlan || isActivePlanOtherCycle)
@@ -136,9 +141,19 @@
         productId,
         rootContext?.getProducts() ?? [],
         rootContext?.getSubscribedUnits() ?? checkoutUnits,
-      )?.total ?? formatPriceWithInterval(productId, rootContext?.getProducts() ?? []);
+        rootContext?.getLabels() ?? defaultBillingLabels,
+        rootContext?.formatCurrency,
+      )?.total ?? formatPriceWithInterval(
+        productId,
+        rootContext?.getProducts() ?? [],
+        rootContext?.formatCurrency,
+      );
     }
-    return formatPriceWithInterval(productId, rootContext?.getProducts() ?? []);
+    return formatPriceWithInterval(
+      productId,
+      rootContext?.getProducts() ?? [],
+      rootContext?.formatCurrency,
+    );
   });
   const priceCaption = $derived.by(() => {
     if (
@@ -153,6 +168,8 @@
         productId,
         rootContext?.getProducts() ?? [],
         rootContext?.getSubscribedUnits() ?? checkoutUnits,
+        rootContext?.getLabels() ?? defaultBillingLabels,
+        rootContext?.formatCurrency,
       )?.calculation ?? null
     );
   });
@@ -213,6 +230,9 @@
     get unstyled() {
       return rootContext?.getUnstyled() ?? false;
     },
+    get labels() {
+      return rootContext?.getLabels() ?? defaultBillingLabels;
+    },
     setCheckoutUnits(units) {
       if (units > 0) checkoutUnits = units;
     },
@@ -263,6 +283,8 @@
       onSwitchPlan={rootContext.switchPlan}
       onUpdateUnits={rootContext.updateUnits}
       onCancelSubscription={rootContext.cancelSubscription}
+      labels={rootContext.getLabels()}
+      formatCurrency={rootContext.formatCurrency}
     />
   {/if}
 {/if}

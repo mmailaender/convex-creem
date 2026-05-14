@@ -1,4 +1,5 @@
 import type { ChangeEvent } from "react";
+import { defaultBillingLabels } from "../../core/i18n.js";
 
 export const NumberInput = ({
   value = 1,
@@ -8,6 +9,8 @@ export const NumberInput = ({
   compact = false,
   disabled = false,
   className = "",
+  decreaseLabel = defaultBillingLabels.accessibility.decreaseValue,
+  increaseLabel = defaultBillingLabels.accessibility.increaseValue,
   onValueChange,
 }: {
   value?: number;
@@ -17,6 +20,8 @@ export const NumberInput = ({
   compact?: boolean;
   disabled?: boolean;
   className?: string;
+  decreaseLabel?: string;
+  increaseLabel?: string;
   onValueChange?: (value: number) => void;
 }) => {
   const clamp = (candidate: number) => Math.min(max, Math.max(min, candidate));
@@ -39,7 +44,7 @@ export const NumberInput = ({
     <div className={`number-input ${className}`}>
       <button
         type="button"
-        aria-label="Decrease value"
+        aria-label={decreaseLabel}
         disabled={disabled}
         className="icon-button-sm"
         onClick={decrement}
@@ -64,7 +69,7 @@ export const NumberInput = ({
 
       <button
         type="button"
-        aria-label="Increase value"
+        aria-label={increaseLabel}
         disabled={disabled}
         className="icon-button-sm"
         onClick={increment}

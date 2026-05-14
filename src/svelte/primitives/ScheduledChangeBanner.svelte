@@ -1,20 +1,41 @@
 <script lang="ts">
   /* global $props, $derived */
   import type { BillingSnapshot } from "../../core/types.js";
+  import {
+    defaultBillingLabels,
+    type BillingDateFormatInput,
+    type BillingLabels,
+  } from "../../core/i18n.js";
 
   interface Props {
     snapshot?: BillingSnapshot | null;
     className?: string;
     isLoading?: boolean;
     onResume?: () => void;
+    labels?: BillingLabels;
+    formatDate?: (input: BillingDateFormatInput) => string;
   }
 
-  let { snapshot = null, className = "", isLoading = false, onResume = undefined }: Props = $props();
+  let {
+    snapshot = null,
+    className = "",
+    isLoading = false,
+    onResume = undefined,
+    labels = defaultBillingLabels,
+    formatDate = undefined,
+  }: Props = $props();
 
   const show = $derived(snapshot?.metadata?.cancelAtPeriodEnd === true);
   const currentPeriodEnd = $derived(
     typeof snapshot?.metadata?.currentPeriodEnd === "string"
       ? snapshot.metadata.currentPeriodEnd
+      : undefined,
+  );
+  const formattedPeriodEnd = $derived(
+    currentPeriodEnd
+      ? (formatDate ?? (({ date }) => date.toLocaleDateString()))({
+          date: new Date(currentPeriodEnd),
+        })
       : undefined,
   );
 </script>
@@ -25,10 +46,11 @@
   >
     <div class="flex flex-col gap-6 md:flex-row md:items-start md:justify-between md:gap-4">
       <div class="space-y-2">
-        <p class="title-s text-foreground-default">Cancellation scheduled</p>
+        <p class="title-s text-foreground-default">
+          {labels.scheduledChange.cancellationScheduled}
+        </p>
         <p class="body-m text-foreground-muted">
-          You will continue to have access until the end of your current billing period
-          {#if currentPeriodEnd} ({new Date(currentPeriodEnd).toLocaleDateString()}){/if}.
+          {labels.scheduledChange.accessUntilPeriodEnd(formattedPeriodEnd)}
         </p>
       </div>
       {#if onResume}
@@ -38,7 +60,7 @@
           disabled={isLoading}
           onclick={onResume}
         >
-          {isLoading ? "Resuming…" : "Undo cancellation"}
+          {isLoading ? labels.scheduledChange.resuming : labels.scheduledChange.undoCancellation}
         </button>
       {/if}
     </div>

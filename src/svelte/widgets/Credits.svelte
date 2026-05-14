@@ -13,6 +13,7 @@
     CREEM_CONVEX_CONTEXT_KEY,
     type CreemConvexContextValue,
   } from "../creemConvexContext.js";
+  import { resolveBillingI18n } from "../../core/i18n.js";
 
   interface Props {
     unitLabel?: string;
@@ -38,6 +39,7 @@
 
   const client = useConvexClient();
   const getBalanceRef = resolvedApi.credits?.getBalance;
+  const i18n = $derived(resolveBillingI18n(provider?.i18n));
 
   let balance = $state<string | null>(null);
   let loading = $state(false);
@@ -45,7 +47,7 @@
 
   async function refreshBalance() {
     if (!getBalanceRef) {
-      error = "Credits API is not configured.";
+      error = i18n.labels.credits.apiNotConfigured;
       return;
     }
     loading = true;
@@ -54,7 +56,7 @@
       const result = await client.action(getBalanceRef, {});
       balance = result?.balance ?? "0";
     } catch (cause: unknown) {
-      error = cause instanceof Error ? cause.message : "Failed to load balance";
+      error = cause instanceof Error ? cause.message : i18n.labels.credits.loadFailed;
     } finally {
       loading = false;
     }
@@ -72,6 +74,9 @@
     },
     get unitLabel() {
       return unitLabel;
+    },
+    get labels() {
+      return i18n.labels;
     },
     refresh: refreshBalance,
   };

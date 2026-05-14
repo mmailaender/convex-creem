@@ -2,6 +2,11 @@
   import CheckoutButton from "./CheckoutButton.svelte";
   import NumberInput from "./NumberInput.svelte";
   import type { UIPlanEntry, RecurringCycle } from "../../core/types.js";
+  import {
+    defaultBillingLabels,
+    type BillingCurrencyFormatInput,
+    type BillingLabels,
+  } from "../../core/i18n.js";
   import type { ConnectedProduct } from "../widgets/types.js";
   import {
     resolveProductIdForPlan,
@@ -39,6 +44,8 @@
     onUpdateUnits?: (payload: { units: number }) => Promise<void> | void;
     onContactSales?: (payload: { plan: UIPlanEntry }) => Promise<void> | void;
     onCancelSubscription?: () => void;
+    labels?: BillingLabels;
+    formatCurrency?: (input: BillingCurrencyFormatInput) => string;
   }
 
   let {
@@ -62,6 +69,8 @@
     onUpdateUnits,
     onContactSales,
     onCancelSubscription,
+    labels = defaultBillingLabels,
+    formatCurrency = undefined,
   }: Props = $props();
 
   const isUnitPlan = $derived(plan.pricingModel === "unit");
@@ -77,7 +86,7 @@
   );
 
   const productId = $derived(resolveProductIdForPlan(plan, selectedCycle));
-  const priceLabel = $derived(formatPriceWithInterval(productId, products));
+  const priceLabel = $derived(formatPriceWithInterval(productId, products, formatCurrency));
 
   // Exact match: user is subscribed to THIS specific product (plan + cycle)
   const isActiveProduct = $derived(
@@ -117,7 +126,13 @@
   );
   const unitPriceBreakdown = $derived(
     inheritedUnits != null
-      ? formatUnitPriceBreakdown(productId, products, inheritedUnits)
+      ? formatUnitPriceBreakdown(
+          productId,
+          products,
+          inheritedUnits,
+          labels,
+          formatCurrency,
+        )
       : null,
   );
   const unitsChanged = $derived(
@@ -126,12 +141,12 @@
 
   const checkoutLabel = $derived(
     isActivePlanOtherCycle
-      ? "Switch interval"
+      ? labels.subscription.switchInterval
       : isSiblingPlan
-        ? "Switch plan"
+        ? labels.subscription.switchPlan
         : plan.billingType === "onetime"
-          ? "Buy now"
-          : "Subscribe",
+          ? labels.subscription.buyNow
+          : labels.subscription.subscribe,
   );
   const handleCheckout = (payload: { productId: string }) => {
     if ((isSiblingPlan || isActivePlanOtherCycle) && onSwitchPlan) {
@@ -169,23 +184,23 @@
     {#if isActiveProduct || isActiveFreePlan}
       <span class="badge-faded-sm">
         {#if isTrialing}
-          Free trial{#if trialDaysLeft != null}&ensp;·&ensp;{trialDaysLeft} day{trialDaysLeft === 1 ? '' : 's'} left{/if}
+          {labels.subscription.freeTrial}{#if trialDaysLeft != null}&ensp;·&ensp;{labels.subscription.trialDaysLeft(trialDaysLeft)}{/if}
         {:else}
-          Current plan
+          {labels.subscription.currentPlan}
         {/if}
       </span>
     {:else if plan.recommended}
       <span class="badge-filled-sm">
-        Recommended
+        {labels.subscription.recommended}
       </span>
     {/if}
   </div>
 
   <div class="flex items-baseline gap-1">
     {#if plan.category === "free"}
-      <span class="heading-s text-foreground-default">Free</span>
+      <span class="heading-s text-foreground-default">{labels.subscription.free}</span>
     {:else if plan.category === "enterprise"}
-      <span class="heading-s text-foreground-default">Custom</span>
+      <span class="heading-s text-foreground-default">{labels.subscription.custom}</span>
     {:else if splitPrice}
       <span class="heading-s text-foreground-default">{splitPrice.main}</span>
       {#if splitPrice.suffix}
@@ -206,12 +221,14 @@
   <div class={`mb-4 mt-6 ${showUnitCheckoutControls ? "flex flex-col gap-2" : "flex min-h-8 items-start"}`}>
     {#if showUnitCheckoutControls}
       <div class="flex w-full items-center justify-between rounded-xl bg-surface-subtle py-2 pl-4 pr-2">
-        <span class="label-m text-foreground-default">Units:</span>
+        <span class="label-m text-foreground-default">{labels.subscription.units}</span>
         <NumberInput
           value={unitCount}
           min={1}
           compact
           disabled={disableUnits}
+          decreaseLabel={labels.accessibility.decreaseValue}
+          increaseLabel={labels.accessibility.increaseValue}
           onValueChange={(next) => {
             if (next > 0) unitCount = next;
           }}
@@ -228,12 +245,14 @@
       <div class="flex w-full flex-col gap-2">
         {#if editingUnits}
           <div class="flex w-full items-center justify-between rounded-xl bg-surface-subtle py-2 pl-4 pr-2">
-            <span class="label-m text-foreground-default">Units:</span>
+            <span class="label-m text-foreground-default">{labels.subscription.units}</span>
             <NumberInput
               value={unitAdjustCount}
               min={1}
               compact
               disabled={disableUnits}
+              decreaseLabel={labels.accessibility.decreaseValue}
+              increaseLabel={labels.accessibility.increaseValue}
               onValueChange={(next) => {
                 if (next > 0) unitAdjustCount = next;
               }}
@@ -245,7 +264,7 @@
               class="button-faded h-8 w-full"
               onclick={() => { unitAdjustCount = subscribedUnits ?? 1; editingUnits = false; }}
             >
-              Cancel
+              {labels.common.cancel}
             </button>
             <button
               type="button"
@@ -253,23 +272,23 @@
               class="button-filled h-8 w-full disabled:cursor-not-allowed disabled:opacity-50"
               onclick={() => onUpdateUnits?.({ units: unitAdjustCount })}
             >
-              Update
+              {labels.subscription.update}
             </button>
           </div>
         {:else}
           <button type="button" class="button-faded w-full" onclick={() => editingUnits = true}>
-            Change units
+            {labels.subscription.changeUnits}
           </button>
           {#if onCancelSubscription}
             <button type="button" class="button-outline w-full" onclick={onCancelSubscription}>
-              Cancel subscription
+              {labels.subscription.cancelSubscription}
             </button>
           {/if}
         {/if}
       </div>
     {:else if isActiveProduct && onCancelSubscription}
       <button type="button" class="button-outline w-full" onclick={onCancelSubscription}>
-        Cancel subscription
+        {labels.subscription.cancelSubscription}
       </button>
     {:else if isActiveProduct || isActiveFreePlan}
       <!-- Keep CTA row height but intentionally empty when current plan has no action -->
@@ -278,6 +297,7 @@
         {productId}
         disabled={disableSwitch}
         onCheckout={handleCheckout}
+        {labels}
         className={`${plan.recommended ? "button-filled" : "button-faded"} w-full`}
       >
         {checkoutLabel}
@@ -288,7 +308,7 @@
           href={plan.contactUrl}
           class="button-outline w-full"
         >
-          Contact sales
+          {labels.subscription.contactSales}
         </a>
       {:else if onContactSales}
         <button
@@ -296,7 +316,7 @@
           class="button-outline w-full"
           onclick={() => onContactSales?.({ plan })}
         >
-          Contact sales
+          {labels.subscription.contactSales}
         </button>
       {/if}
     {:else if productId}
@@ -304,13 +324,14 @@
           {productId}
           disabled={disableCheckout}
           onCheckout={handleCheckout}
+          {labels}
           className={`${plan.recommended ? "button-filled" : "button-faded"} w-full`}
         >
           {checkoutLabel}
         </CheckoutButton>
       {:else if plan.category !== "free"}
         <span class="body-m text-foreground-muted">
-          Configure a checkout handler to activate this plan.
+          {labels.subscription.configureCheckout}
         </span>
       {/if}
     </div>

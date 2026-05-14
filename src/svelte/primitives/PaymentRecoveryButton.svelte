@@ -1,16 +1,22 @@
 <script lang="ts">
   import type { FunctionReference } from "convex/server";
   import { useConvexClient } from "@mmailaender/convex-svelte";
+  import {
+    defaultBillingLabels,
+    type BillingLabels,
+  } from "../../core/i18n.js";
 
   interface Props {
     portalUrl: FunctionReference<"action">;
     class?: string;
+    labels?: BillingLabels;
     children?: import("svelte").Snippet;
   }
 
   let {
     portalUrl,
     class: className = "",
+    labels = defaultBillingLabels,
     children,
   }: Props = $props();
 
@@ -26,7 +32,7 @@
       window.location.href = result.url;
     } catch (err) {
       error =
-        err instanceof Error ? err.message : "Failed to open billing portal";
+        err instanceof Error ? err.message : labels.portal.failedToOpen;
       isLoading = false;
     }
   };
@@ -39,11 +45,11 @@
   onclick={handleClick}
 >
   {#if isLoading}
-    Opening portal…
+    {labels.paymentRecovery.openingPortal}
   {:else if children}
     {@render children()}
   {:else}
-    Update payment method
+    {labels.paymentRecovery.updatePaymentMethod}
   {/if}
 </button>
 {#if error}

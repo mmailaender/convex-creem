@@ -10,9 +10,9 @@
 
   let {
     class: className = "",
-    activeLabel = "Current plan",
-    checkoutLabel = "Get started",
-    switchLabel = "Switch plan",
+    activeLabel = undefined,
+    checkoutLabel = undefined,
+    switchLabel = undefined,
   }: Props = $props();
 
   const ctx = getSubscriptionItemContext();
@@ -32,7 +32,7 @@
     class={activeClass}
     disabled
   >
-    {activeLabel}
+    {activeLabel ?? ctx.labels.subscription.currentPlan}
   </button>
 {:else if ctx.onSwitch}
   <button
@@ -40,7 +40,7 @@
     class={actionClass}
     onclick={ctx.onSwitch}
   >
-    {switchLabel}
+    {switchLabel ?? ctx.labels.subscription.switchPlan}
   </button>
 {:else if ctx.onCheckout}
   <button
@@ -48,6 +48,6 @@
     class={actionClass}
     onclick={ctx.onCheckout}
   >
-    {checkoutLabel}
+    {checkoutLabel ?? ctx.labels.subscription.getStarted}
   </button>
 {/if}

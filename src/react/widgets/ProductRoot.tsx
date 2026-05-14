@@ -13,6 +13,7 @@ import { formatPriceWithInterval, splitPriceLabel } from "../shared.js";
 import { ProductGroupContext } from "./productGroupContext.js";
 import { renderMarkdown } from "../../core/markdown.js";
 import { pendingCheckout } from "../../core/pendingCheckout.js";
+import { resolveBillingI18n } from "../../core/i18n.js";
 import {
   getActiveOwnedProductId,
   getEffectiveOwnedProductIds,
@@ -73,6 +74,7 @@ export const ProductRoot = ({
   const resolvedPermissions = permissions ?? provider?.permissions;
   const resolvedOnBeforeCheckout =
     onBeforeCheckout ?? provider?.onBeforeCheckout;
+  const i18n = useMemo(() => resolveBillingI18n(provider?.i18n), [provider?.i18n]);
 
   const client = useConvex();
 
@@ -158,13 +160,19 @@ export const ProductRoot = ({
         setError(
           checkoutError instanceof Error
             ? checkoutError.message
-            : "Checkout failed",
+            : i18n.labels.product.checkoutFailed,
         );
       } finally {
         setIsLoading(false);
       }
     },
-    [client, checkoutLinkRef, successUrl, resolvedOnBeforeCheckout],
+    [
+      client,
+      checkoutLinkRef,
+      successUrl,
+      resolvedOnBeforeCheckout,
+      i18n.labels.product.checkoutFailed,
+    ],
   );
 
   // Pending checkout resume after auth
@@ -253,6 +261,7 @@ export const ProductRoot = ({
             const resolvedPrice = formatPriceWithInterval(
               item.productId,
               allProducts,
+              i18n.formatCurrency,
             );
             const splitPrice = splitPriceLabel(resolvedPrice);
             const descriptionHtml = renderMarkdown(resolvedDescription);
@@ -280,9 +289,13 @@ export const ProductRoot = ({
                         {resolvedTitle}
                       </h3>
                       {isOwned ? (
-                        <span className="badge-faded-sm">Owned</span>
+                        <span className="badge-faded-sm">
+                          {i18n.labels.product.owned}
+                        </span>
                       ) : isIncluded ? (
-                        <span className="badge-faded-sm">Included</span>
+                        <span className="badge-faded-sm">
+                          {i18n.labels.product.included}
+                        </span>
                       ) : null}
                     </div>
 
@@ -310,20 +323,22 @@ export const ProductRoot = ({
                           productId={checkoutProductId}
                           disabled={isLoading || !canCheckout}
                           onCheckout={() => startCheckout(checkoutProductId)}
+                          labels={i18n.labels}
                           className={`${pricingCtaVariant === "filled" ? "button-filled" : "button-faded"} w-full`}
                         >
                           {item.type === "one-time" && activeOwnedProductId
-                            ? "Upgrade"
-                            : "Buy now"}
+                            ? i18n.labels.product.upgrade
+                            : i18n.labels.product.buyNow}
                         </CheckoutButton>
                       ) : !isOwned && !isIncluded ? (
                         <CheckoutButton
                           productId={item.productId}
                           disabled={isLoading || !canCheckout}
                           onCheckout={() => startCheckout(item.productId)}
+                          labels={i18n.labels}
                           className={`${pricingCtaVariant === "filled" ? "button-filled" : "button-faded"} w-full`}
                         >
-                          Buy now
+                          {i18n.labels.product.buyNow}
                         </CheckoutButton>
                       ) : null}
                     </div>
@@ -368,29 +383,31 @@ export const ProductRoot = ({
                 <div className="mt-4">
                   {isOwned ? (
                     <span className="inline-flex rounded-md bg-emerald-100 px-3 py-2 text-sm font-medium text-emerald-700">
-                      Owned
+                      {i18n.labels.product.owned}
                     </span>
                   ) : isIncluded ? (
                     <span className="inline-flex rounded-md bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                      Included
+                      {i18n.labels.product.included}
                     </span>
                   ) : checkoutProductId ? (
                     <CheckoutButton
                       productId={checkoutProductId}
                       disabled={isLoading || !canCheckout}
                       onCheckout={() => startCheckout(checkoutProductId)}
+                      labels={i18n.labels}
                     >
                       {item.type === "one-time" && activeOwnedProductId
-                        ? "Upgrade"
-                        : "Buy now"}
+                        ? i18n.labels.product.upgrade
+                        : i18n.labels.product.buyNow}
                     </CheckoutButton>
                   ) : (
                     <CheckoutButton
                       productId={item.productId}
                       disabled={isLoading || !canCheckout}
                       onCheckout={() => startCheckout(item.productId)}
+                      labels={i18n.labels}
                     >
-                      Buy now
+                      {i18n.labels.product.buyNow}
                     </CheckoutButton>
                   )}
                 </div>

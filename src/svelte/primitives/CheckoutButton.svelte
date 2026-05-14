@@ -1,6 +1,10 @@
 <script lang="ts">
   /* global $props, $state */
   import type { Snippet } from "svelte";
+  import {
+    defaultBillingLabels,
+    type BillingLabels,
+  } from "../../core/i18n.js";
 
   interface Props {
     productId: string;
@@ -8,6 +12,7 @@
     disabled?: boolean;
     className?: string;
     onCheckout?: (payload: { productId: string }) => Promise<void> | void;
+    labels?: BillingLabels;
     children?: Snippet;
   }
 
@@ -17,6 +22,7 @@
     disabled = false,
     className = "",
     onCheckout,
+    labels = defaultBillingLabels,
     children,
   }: Props = $props();
 
@@ -43,7 +49,7 @@
     {#if children}
       {@render children()}
     {:else}
-      {isLoading ? "Loading..." : "Checkout"}
+      {isLoading ? labels.checkout.loading : labels.checkout.checkout}
     {/if}
   </button>
 {:else}
@@ -54,7 +60,7 @@
     {#if children}
       {@render children()}
     {:else}
-      Checkout
+      {labels.checkout.checkout}
     {/if}
   </a>
 {/if}

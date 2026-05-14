@@ -3,13 +3,6 @@ import { SegmentGroup } from "../primitives/SegmentGroup.js";
 import type { RecurringCycle } from "../../core/types.js";
 import { SubscriptionContext } from "./subscriptionContext.js";
 
-const CYCLE_LABELS: Record<string, string> = {
-  "every-month": "Monthly",
-  "every-three-months": "Quarterly",
-  "every-six-months": "Semi-annual",
-  "every-year": "Yearly",
-};
-
 /**
  * Renders the billing interval selector control.
  *
@@ -44,6 +37,7 @@ export const SubscriptionIntervalSelector = ({
       : resolvedCycles[0];
   const handleValueChange = onValueChange ?? rootContext?.setCycle;
   const unstyled = rootContext?.unstyled ?? false;
+  const labels = rootContext?.labels;
 
   if (resolvedCycles.length <= 1 || !resolvedValue || !handleValueChange) {
     return null;
@@ -51,7 +45,7 @@ export const SubscriptionIntervalSelector = ({
 
   const items = resolvedCycles.map((cycle) => ({
     value: cycle,
-    label: CYCLE_LABELS[cycle] ?? cycle,
+    label: labels?.billingCycle[cycle] ?? cycle,
   }));
 
   return (

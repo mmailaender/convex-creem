@@ -1,15 +1,24 @@
 import type { BillingSnapshot } from "../../core/types.js";
+import {
+  defaultBillingLabels,
+  type BillingDateFormatInput,
+  type BillingLabels,
+} from "../../core/i18n.js";
 
 export const ScheduledChangeBanner = ({
   snapshot,
   className = "",
   isLoading = false,
   onResume,
+  labels = defaultBillingLabels,
+  formatDate,
 }: {
   snapshot?: BillingSnapshot | null;
   className?: string;
   isLoading?: boolean;
   onResume?: () => void;
+  labels?: BillingLabels;
+  formatDate?: (input: BillingDateFormatInput) => string;
 }) => {
   if (!snapshot?.metadata || snapshot.metadata.cancelAtPeriodEnd !== true) {
     return null;
@@ -19,21 +28,21 @@ export const ScheduledChangeBanner = ({
     typeof snapshot.metadata.currentPeriodEnd === "string"
       ? snapshot.metadata.currentPeriodEnd
       : undefined;
+  const formattedPeriodEnd = currentPeriodEnd
+    ? (formatDate ?? (({ date }) => date.toLocaleDateString()))({
+        date: new Date(currentPeriodEnd),
+      })
+    : undefined;
 
   return (
     <div className={`rounded-xl bg-surface-base p-6 ${className}`}>
       <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between md:gap-4">
         <div className="space-y-2">
           <p className="title-s text-foreground-default">
-            Cancellation scheduled
+            {labels.scheduledChange.cancellationScheduled}
           </p>
           <p className="body-m text-foreground-muted">
-            You will continue to have access until the end of your current
-            billing period
-            {currentPeriodEnd
-              ? ` (${new Date(currentPeriodEnd).toLocaleDateString()})`
-              : ""}
-            .
+            {labels.scheduledChange.accessUntilPeriodEnd(formattedPeriodEnd)}
           </p>
         </div>
         {onResume && (
@@ -43,7 +52,9 @@ export const ScheduledChangeBanner = ({
             disabled={isLoading}
             onClick={onResume}
           >
-            {isLoading ? "Resuming…" : "Undo cancellation"}
+            {isLoading
+              ? labels.scheduledChange.resuming
+              : labels.scheduledChange.undoCancellation}
           </button>
         )}
       </div>

@@ -9,7 +9,7 @@
 
   let {
     class: className = "label-s text-foreground-muted",
-    loadingLabel = "Refreshing...",
+    loadingLabel = undefined,
     idleLabel = "",
   }: Props = $props();
 
@@ -17,5 +17,7 @@
 </script>
 
 {#if credits.loading || idleLabel}
-  <div class={className}>{credits.loading ? loadingLabel : idleLabel}</div>
+  <div class={className}>
+    {credits.loading ? (loadingLabel ?? credits.labels.credits.refreshing) : idleLabel}
+  </div>
 {/if}

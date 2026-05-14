@@ -25,6 +25,12 @@ import type {
   RecurringCycle,
   UpdateBehavior,
 } from "../../core/types.js";
+import {
+  mergeBillingLabels,
+  resolveBillingI18n,
+  type BillingI18n,
+  type BillingLabelOverrides,
+} from "../../core/i18n.js";
 import { findPlanById, normalizePlanCatalog } from "../../core/catalog.js";
 import { buildUpdateSummary } from "../../core/subscriptionUpdate.js";
 import {
@@ -104,6 +110,8 @@ export const SubscriptionRoot = ({
   onBeforeCheckout,
   onBeforePlanChange,
   onBeforeFreePlanActivation,
+  labels: labelOverrides,
+  i18n,
   children,
 }: PropsWithChildren<{
   catalog?: PlanCatalog;
@@ -131,6 +139,8 @@ export const SubscriptionRoot = ({
   onBeforeFreePlanActivation?: (intent: {
     freePlanId: string;
   }) => Promise<boolean> | boolean;
+  labels?: BillingLabelOverrides;
+  i18n?: BillingI18n;
 }>) => {
   const provider = useCreemConvex();
   const resolvedApi = requireCreemConvexApi("Subscription.Root", provider);
@@ -144,6 +154,18 @@ export const SubscriptionRoot = ({
     onBeforePlanChange ?? provider?.onBeforePlanChange;
   const resolvedOnBeforeFreePlanActivation =
     onBeforeFreePlanActivation ?? provider?.onBeforeFreePlanActivation;
+  const resolvedI18n = useMemo(() => {
+    const providerI18n = resolveBillingI18n(provider?.i18n);
+    return {
+      locale: i18n?.locale ?? providerI18n.locale,
+      labels: mergeBillingLabels(
+        labelOverrides,
+        mergeBillingLabels(i18n?.labels, providerI18n.labels),
+      ),
+      formatCurrency: i18n?.formatCurrency ?? providerI18n.formatCurrency,
+      formatDate: i18n?.formatDate ?? providerI18n.formatDate,
+    };
+  }, [provider?.i18n, i18n, labelOverrides]);
 
   const canChange = resolvedPermissions?.canChangeSubscription !== false;
   const canCancel = resolvedPermissions?.canCancelSubscription !== false;
@@ -472,13 +494,21 @@ export const SubscriptionRoot = ({
         window.location.href = url;
       } catch (error) {
         setActionError(
-          error instanceof Error ? error.message : "Checkout failed",
+          error instanceof Error
+            ? error.message
+            : resolvedI18n.labels.subscription.checkoutFailed,
         );
       } finally {
         setIsActionLoading(false);
       }
     },
-    [client, checkoutLinkRef, successUrl, resolvedOnBeforeCheckout],
+    [
+      client,
+      checkoutLinkRef,
+      successUrl,
+      resolvedOnBeforeCheckout,
+      resolvedI18n.labels.subscription.checkoutFailed,
+    ],
   );
 
   // Pending checkout resume after auth
@@ -618,8 +648,8 @@ export const SubscriptionRoot = ({
         error instanceof Error
           ? error.message
           : update.kind === "plan-switch"
-            ? "Switch failed"
-            : "Unit update failed",
+            ? resolvedI18n.labels.subscription.switchFailed
+            : resolvedI18n.labels.subscription.unitUpdateFailed,
       );
     }
   }, [
@@ -630,6 +660,8 @@ export const SubscriptionRoot = ({
     billingUiModelRef,
     ownProductIds,
     updateBehavior,
+    resolvedI18n.labels.subscription.switchFailed,
+    resolvedI18n.labels.subscription.unitUpdateFailed,
   ]);
 
   const handleUpdateUnits = useCallback((payload: { units: number }) => {
@@ -648,7 +680,8 @@ export const SubscriptionRoot = ({
           pids.includes(localSubscriptionProductId)
         );
       });
-      const currentTitle = currentPlan?.title ?? "Current plan";
+      const currentTitle =
+        currentPlan?.title ?? resolvedI18n.labels.subscription.currentPlan;
       const switchUnits =
         pendingUpdate.units ?? localSubscribedUnits ?? units ?? 1;
       const useUnitBreakdown =
@@ -659,6 +692,8 @@ export const SubscriptionRoot = ({
             localSubscriptionProductId ?? undefined,
             allProducts,
             switchUnits,
+            resolvedI18n.labels,
+            resolvedI18n.formatCurrency,
           )
         : null;
       const newBreakdown = useUnitBreakdown
@@ -666,6 +701,8 @@ export const SubscriptionRoot = ({
             pendingUpdate.productId,
             allProducts,
             switchUnits,
+            resolvedI18n.labels,
+            resolvedI18n.formatCurrency,
           )
         : null;
       const currentPrice =
@@ -673,10 +710,15 @@ export const SubscriptionRoot = ({
         formatPriceWithInterval(
           localSubscriptionProductId ?? undefined,
           allProducts,
+          resolvedI18n.formatCurrency,
         );
       const newPrice =
         newBreakdown?.total ??
-        formatPriceWithInterval(pendingUpdate.productId, allProducts);
+        formatPriceWithInterval(
+          pendingUpdate.productId,
+          allProducts,
+          resolvedI18n.formatCurrency,
+        );
 
       return buildUpdateSummary({
         kind: "plan-switch",
@@ -685,13 +727,15 @@ export const SubscriptionRoot = ({
           ? `${currentTitle} \u00b7 ${currentPrice}`
           : currentTitle,
         newLabel: newPrice
-          ? `${pendingUpdate.plan.title ?? "New plan"} \u00b7 ${newPrice}`
-          : (pendingUpdate.plan.title ?? "New plan"),
+          ? `${pendingUpdate.plan.title ?? resolvedI18n.labels.subscription.newPlan} \u00b7 ${newPrice}`
+          : (pendingUpdate.plan.title ?? resolvedI18n.labels.subscription.newPlan),
         currentCaption: currentBreakdown?.calculation ?? null,
         newCaption: newBreakdown?.calculation ?? null,
         currentPeriodEnd: matchedSubscription?.currentPeriodEnd,
         isTrialing: matchedSubscription?.status === "trialing",
         trialEnd: matchedSubscription?.trialEnd,
+        labels: resolvedI18n.labels,
+        formatDate: resolvedI18n.formatDate,
       });
     }
 
@@ -700,24 +744,30 @@ export const SubscriptionRoot = ({
       localSubscriptionProductId ?? undefined,
       allProducts,
       currentUnits,
+      resolvedI18n.labels,
+      resolvedI18n.formatCurrency,
     );
     const newPrice = formatUnitPrice(
       localSubscriptionProductId ?? undefined,
       allProducts,
       pendingUpdate.units,
+      resolvedI18n.labels,
+      resolvedI18n.formatCurrency,
     );
 
     return buildUpdateSummary({
       kind: "unit-update",
       updateBehavior,
       currentLabel:
-        currentPrice ?? `${currentUnits} unit${currentUnits !== 1 ? "s" : ""}`,
+        currentPrice ?? resolvedI18n.labels.subscription.unitCount(currentUnits),
       newLabel:
         newPrice ??
-        `${pendingUpdate.units} unit${pendingUpdate.units !== 1 ? "s" : ""}`,
+        resolvedI18n.labels.subscription.unitCount(pendingUpdate.units),
       currentPeriodEnd: matchedSubscription?.currentPeriodEnd,
       isTrialing: matchedSubscription?.status === "trialing",
       trialEnd: matchedSubscription?.trialEnd,
+      labels: resolvedI18n.labels,
+      formatDate: resolvedI18n.formatDate,
     });
   }, [
     pendingUpdate,
@@ -728,6 +778,7 @@ export const SubscriptionRoot = ({
     units,
     updateBehavior,
     matchedSubscription,
+    resolvedI18n,
   ]);
 
   const confirmCancelSubscription = useCallback(async () => {
@@ -763,7 +814,11 @@ export const SubscriptionRoot = ({
         },
       );
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Cancel failed");
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : resolvedI18n.labels.subscription.cancelFailed,
+      );
     }
   }, [
     cancelRef,
@@ -771,6 +826,7 @@ export const SubscriptionRoot = ({
     client,
     billingUiModelRef,
     ownProductIds,
+    resolvedI18n.labels.subscription.cancelFailed,
   ]);
 
   const resumeSubscription = useCallback(async () => {
@@ -805,7 +861,11 @@ export const SubscriptionRoot = ({
         },
       );
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Resume failed");
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : resolvedI18n.labels.subscription.resumeFailed,
+      );
     }
   }, [
     resumeRef,
@@ -813,6 +873,7 @@ export const SubscriptionRoot = ({
     client,
     billingUiModelRef,
     ownProductIds,
+    resolvedI18n.labels.subscription.resumeFailed,
   ]);
 
   const openCancelDialog = useCallback(() => {
@@ -840,6 +901,9 @@ export const SubscriptionRoot = ({
       disableSwitch: !canChange,
       disableUnits: !canUpdateUnits,
       unstyled,
+      labels: resolvedI18n.labels,
+      formatCurrency: resolvedI18n.formatCurrency,
+      formatDate: resolvedI18n.formatDate,
       checkout: handlePricingCheckout,
       switchPlan: updateRef && canChange ? requestSwitchPlan : undefined,
       updateUnits: updateRef && canUpdateUnits ? handleUpdateUnits : undefined,
@@ -874,6 +938,7 @@ export const SubscriptionRoot = ({
       canChange,
       canUpdateUnits,
       unstyled,
+      resolvedI18n,
       handlePricingCheckout,
       updateRef,
       requestSwitchPlan,
@@ -913,7 +978,7 @@ export const SubscriptionRoot = ({
               unstyled ? "" : "creem-base:text-sm creem-base:text-zinc-500"
             }
           >
-            Loading billing model…
+            {resolvedI18n.labels.subscription.loadingBillingModel}
           </p>
         ) : (
           <>
@@ -931,9 +996,14 @@ export const SubscriptionRoot = ({
                 onResume={
                   resumeRef && canResume ? resumeSubscription : undefined
                 }
+                labels={resolvedI18n.labels}
+                formatDate={resolvedI18n.formatDate}
               />
             )}
-            <PaymentWarningBanner snapshot={snapshot} />
+            <PaymentWarningBanner
+              snapshot={snapshot}
+              labels={resolvedI18n.labels}
+            />
 
             {groupSelector === "auto" && groupItems.length > 1 && (
               <div
@@ -990,6 +1060,8 @@ export const SubscriptionRoot = ({
                     ? openCancelDialog
                     : undefined
                 }
+                labels={resolvedI18n.labels}
+                formatCurrency={resolvedI18n.formatCurrency}
               />
             )}
 
@@ -1006,7 +1078,7 @@ export const SubscriptionRoot = ({
                   <Dialog.Content className="dialog-content">
                     <Dialog.CloseTrigger
                       className="icon-button-ghost-sm absolute right-2 top-2"
-                      aria-label="Close dialog"
+                      aria-label={resolvedI18n.labels.accessibility.closeDialog}
                     >
                       <svg
                         aria-hidden="true"
@@ -1024,12 +1096,10 @@ export const SubscriptionRoot = ({
                       </svg>
                     </Dialog.CloseTrigger>
                     <Dialog.Title className="dialog-title">
-                      Cancel subscription?
+                      {resolvedI18n.labels.subscription.dialogs.cancelTitle}
                     </Dialog.Title>
                     <Dialog.Description className="dialog-description">
-                      Are you sure you want to cancel your subscription? You
-                      will continue to have access until the end of your current
-                      billing period.
+                      {resolvedI18n.labels.subscription.dialogs.cancelDescription}
                     </Dialog.Description>
                     <div className="dialog-actions">
                       <button
@@ -1037,10 +1107,10 @@ export const SubscriptionRoot = ({
                         className="dialog-action-danger"
                         onClick={confirmCancelSubscription}
                       >
-                        Yes, cancel
+                        {resolvedI18n.labels.subscription.dialogs.confirmCancel}
                       </button>
                       <Dialog.CloseTrigger className="button-faded h-8 w-full">
-                        Keep subscription
+                        {resolvedI18n.labels.subscription.dialogs.keepSubscription}
                       </Dialog.CloseTrigger>
                     </div>
                   </Dialog.Content>
@@ -1062,7 +1132,7 @@ export const SubscriptionRoot = ({
                   <Dialog.Content className="dialog-content">
                     <Dialog.CloseTrigger
                       className="icon-button-ghost-sm absolute right-2 top-2"
-                      aria-label="Close dialog"
+                      aria-label={resolvedI18n.labels.accessibility.closeDialog}
                     >
                       <svg
                         aria-hidden="true"
@@ -1119,10 +1189,11 @@ export const SubscriptionRoot = ({
                         className="button-filled h-8 w-full"
                         onClick={confirmUpdate}
                       >
-                        {updateSummary?.confirmLabel ?? "Confirm"}
+                        {updateSummary?.confirmLabel ??
+                          resolvedI18n.labels.common.confirm}
                       </button>
                       <Dialog.CloseTrigger className="button-faded h-8 w-full">
-                        Cancel
+                        {resolvedI18n.labels.common.cancel}
                       </Dialog.CloseTrigger>
                     </div>
                   </Dialog.Content>

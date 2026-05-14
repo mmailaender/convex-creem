@@ -1,6 +1,7 @@
 <script lang="ts">
   import { setContext, type Snippet } from "svelte";
   import type { PlanCatalog, RecurringCycle } from "../core/types.js";
+  import type { BillingI18n } from "../core/i18n.js";
   import {
     CREEM_CONVEX_CONTEXT_KEY,
     type CreemConvexContextValue,
@@ -24,6 +25,7 @@
     onBeforeFreePlanActivation?: (intent: {
       freePlanId: string;
     }) => Promise<boolean> | boolean;
+    i18n?: BillingI18n;
     children?: Snippet;
   }
 
@@ -35,6 +37,7 @@
     onBeforeCheckout = undefined,
     onBeforePlanChange = undefined,
     onBeforeFreePlanActivation = undefined,
+    i18n = undefined,
     children,
   }: Props = $props();
 
@@ -59,6 +62,9 @@
     },
     get onBeforeFreePlanActivation() {
       return onBeforeFreePlanActivation;
+    },
+    get i18n() {
+      return i18n;
     },
   };
 

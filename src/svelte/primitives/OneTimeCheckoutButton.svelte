@@ -2,6 +2,10 @@
   /* global $props */
   import type { Snippet } from "svelte";
   import CheckoutButton from "./CheckoutButton.svelte";
+  import {
+    defaultBillingLabels,
+    type BillingLabels,
+  } from "../../core/i18n.js";
 
   interface Props {
     productId: string;
@@ -9,6 +13,7 @@
     disabled?: boolean;
     className?: string;
     onCheckout?: (payload: { productId: string }) => Promise<void> | void;
+    labels?: BillingLabels;
     children?: Snippet;
   }
 
@@ -18,6 +23,7 @@
     disabled = false,
     className = "",
     onCheckout,
+    labels = defaultBillingLabels,
     children,
   }: Props = $props();
 </script>
@@ -28,10 +34,11 @@
   {disabled}
   {className}
   {onCheckout}
+  {labels}
 >
   {#if children}
     {@render children()}
   {:else}
-    Buy now
+    {labels.checkout.buyNow}
   {/if}
 </CheckoutButton>

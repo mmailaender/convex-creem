@@ -1,4 +1,5 @@
 import { getContext } from "svelte";
+import type { BillingLabels } from "../../core/i18n.js";
 
 export const CREDITS_CONTEXT_KEY = Symbol("credits-context");
 
@@ -7,6 +8,7 @@ export interface CreditsContextValue {
   readonly loading: boolean;
   readonly error: string | null;
   readonly unitLabel: string;
+  readonly labels: BillingLabels;
   refresh: () => Promise<void>;
 }
 

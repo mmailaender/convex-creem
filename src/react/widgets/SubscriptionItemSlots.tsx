@@ -100,16 +100,17 @@ export const SubscriptionItemDescription = ({
  */
 export const SubscriptionItemCTA = ({
   className = "",
-  activeLabel = "Current plan",
-  checkoutLabel = "Get started",
-  switchLabel = "Switch plan",
+  activeLabel,
+  checkoutLabel,
+  switchLabel,
 }: {
   className?: string;
   activeLabel?: string;
   checkoutLabel?: string;
   switchLabel?: string;
 }) => {
-  const { isActive, onCheckout, onSwitch, unstyled } = useSubscriptionItem();
+  const { isActive, onCheckout, onSwitch, unstyled, labels } =
+    useSubscriptionItem();
   const activeClassName = unstyled
     ? className
     : `creem-base:w-full creem-base:rounded-lg creem-base:bg-zinc-100 creem-base:px-4 creem-base:py-2 creem-base:text-sm creem-base:font-medium creem-base:text-zinc-500 dark:creem-base:bg-zinc-800 dark:creem-base:text-zinc-400 ${className}`;
@@ -120,7 +121,7 @@ export const SubscriptionItemCTA = ({
   if (isActive) {
     return (
       <button type="button" className={activeClassName} disabled>
-        {activeLabel}
+        {activeLabel ?? labels.subscription.currentPlan}
       </button>
     );
   }
@@ -128,7 +129,7 @@ export const SubscriptionItemCTA = ({
   if (onSwitch) {
     return (
       <button type="button" className={actionClassName} onClick={onSwitch}>
-        {switchLabel}
+        {switchLabel ?? labels.subscription.switchPlan}
       </button>
     );
   }
@@ -136,7 +137,7 @@ export const SubscriptionItemCTA = ({
   if (onCheckout) {
     return (
       <button type="button" className={actionClassName} onClick={onCheckout}>
-        {checkoutLabel}
+        {checkoutLabel ?? labels.subscription.getStarted}
       </button>
     );
   }
@@ -150,12 +151,13 @@ export const SubscriptionItemCTA = ({
  */
 export const SubscriptionCancel = ({
   className = "",
-  label = "Cancel subscription",
+  label,
 }: {
   className?: string;
   label?: string;
 }) => {
-  const { isActive, onCancelSubscription, unstyled } = useSubscriptionItem();
+  const { isActive, onCancelSubscription, unstyled, labels } =
+    useSubscriptionItem();
   if (!isActive || !onCancelSubscription) return null;
 
   const resolvedClassName = unstyled
@@ -168,7 +170,7 @@ export const SubscriptionCancel = ({
       className={resolvedClassName}
       onClick={onCancelSubscription}
     >
-      {label}
+      {label ?? labels.subscription.cancelSubscription}
     </button>
   );
 };
@@ -186,10 +188,10 @@ export const SubscriptionUnitPicker = ({
   secondaryClassName = "",
   primaryClassName = "",
   numberInputClassName = "",
-  label = "Units:",
-  changeLabel = "Change units",
-  updateLabel = "Update",
-  cancelLabel = "Cancel",
+  label,
+  changeLabel,
+  updateLabel,
+  cancelLabel,
   detailed = false,
 }: {
   className?: string;
@@ -207,6 +209,10 @@ export const SubscriptionUnitPicker = ({
   detailed?: boolean;
 }) => {
   const ctx = useSubscriptionItem();
+  const resolvedLabel = label ?? ctx.labels.subscription.units;
+  const resolvedChangeLabel = changeLabel ?? ctx.labels.subscription.changeUnits;
+  const resolvedUpdateLabel = updateLabel ?? ctx.labels.subscription.update;
+  const resolvedCancelLabel = cancelLabel ?? ctx.labels.common.cancel;
   const [editing, setEditing] = useState(false);
   const [draftUnits, setDraftUnits] = useState(
     ctx.subscribedUnits ?? ctx.checkoutUnits,
@@ -240,7 +246,7 @@ export const SubscriptionUnitPicker = ({
       return (
         <div className={outerClassName}>
           <div className={resolvedRowClassName}>
-            <span className={resolvedLabelClassName}>{label}</span>
+            <span className={resolvedLabelClassName}>{resolvedLabel}</span>
             <span>{ctx.subscribedUnits ?? ctx.checkoutUnits}</span>
           </div>
         </div>
@@ -252,7 +258,7 @@ export const SubscriptionUnitPicker = ({
         <div className={outerClassName}>
           {detailed && (
             <div className={resolvedRowClassName}>
-              <span className={resolvedLabelClassName}>{label}</span>
+              <span className={resolvedLabelClassName}>{resolvedLabel}</span>
               <span>{ctx.subscribedUnits ?? ctx.checkoutUnits}</span>
             </div>
           )}
@@ -265,7 +271,7 @@ export const SubscriptionUnitPicker = ({
               setEditing(true);
             }}
           >
-            {changeLabel}
+            {resolvedChangeLabel}
           </button>
         </div>
       );
@@ -277,13 +283,15 @@ export const SubscriptionUnitPicker = ({
     return (
       <div className={outerClassName}>
         <div className={resolvedRowClassName}>
-          <span className={resolvedLabelClassName}>{label}</span>
+          <span className={resolvedLabelClassName}>{resolvedLabel}</span>
           <NumberInput
             value={draftUnits}
             min={1}
             compact
             disabled={ctx.disableUnits}
             className={numberInputClassName}
+            decreaseLabel={ctx.labels.accessibility.decreaseValue}
+            increaseLabel={ctx.labels.accessibility.increaseValue}
             onValueChange={(next) => {
               if (next > 0) setDraftUnits(next);
             }}
@@ -298,7 +306,7 @@ export const SubscriptionUnitPicker = ({
               setEditing(false);
             }}
           >
-            {cancelLabel}
+            {resolvedCancelLabel}
           </button>
           <button
             type="button"
@@ -306,7 +314,7 @@ export const SubscriptionUnitPicker = ({
             disabled={ctx.disableUnits || !unitsChanged}
             onClick={() => ctx.onUpdateUnits?.(draftUnits)}
           >
-            {updateLabel}
+            {resolvedUpdateLabel}
           </button>
         </div>
       </div>
@@ -316,13 +324,15 @@ export const SubscriptionUnitPicker = ({
   return (
     <div className={outerClassName}>
       <div className={resolvedRowClassName}>
-        <span className={resolvedLabelClassName}>{label}</span>
+        <span className={resolvedLabelClassName}>{resolvedLabel}</span>
         <NumberInput
           value={ctx.checkoutUnits}
           min={1}
           compact
           disabled={ctx.disableUnits}
           className={numberInputClassName}
+          decreaseLabel={ctx.labels.accessibility.decreaseValue}
+          increaseLabel={ctx.labels.accessibility.increaseValue}
           onValueChange={ctx.setCheckoutUnits}
         />
       </div>
@@ -342,9 +352,14 @@ export const SubscriptionItemBadge = ({
   label?: string;
   className?: string;
 }>) => {
-  const { isRecommended, isActive, unstyled } = useSubscriptionItem();
+  const { isRecommended, isActive, unstyled, labels } = useSubscriptionItem();
   const text =
-    label ?? (isActive ? "Current" : isRecommended ? "Recommended" : null);
+    label ??
+    (isActive
+      ? labels.subscription.current
+      : isRecommended
+        ? labels.subscription.recommended
+        : null);
   if (!text && !children) return null;
   return (
     <span

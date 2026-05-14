@@ -1,4 +1,5 @@
 import type { RecurringCycle, PlanCatalog } from "../core/types.js";
+import type { BillingI18n } from "../core/i18n.js";
 import type {
   BillingPermissions,
   CheckoutIntent,
@@ -22,4 +23,5 @@ export interface CreemConvexContextValue {
   readonly onBeforeFreePlanActivation?: (intent: {
     freePlanId: string;
   }) => Promise<boolean> | boolean;
+  readonly i18n?: BillingI18n;
 }

@@ -17,7 +17,7 @@
 </script>
 
 {#if credits.loading && credits.balance === null}
-  <div class="body-m py-3 text-foreground-muted">Loading...</div>
+  <div class="body-m py-3 text-foreground-muted">{credits.labels.credits.loading}</div>
 {:else}
   <div class={className}>
     <span class={amountClass}>{credits.balance ?? "-"}</span>

@@ -7,7 +7,7 @@
     label?: string;
   }
 
-  let { class: className = "icon-button-ghost-sm", label = "Refresh balance" }:
+  let { class: className = "icon-button-ghost-sm", label = undefined }:
     Props = $props();
 
   const credits = getCreditsContext();
@@ -17,7 +17,7 @@
   class={className}
   onclick={() => void credits.refresh()}
   disabled={credits.loading}
-  aria-label={label}
+  aria-label={label ?? credits.labels.credits.refreshBalance}
 >
   <RefreshCw
     aria-hidden="true"

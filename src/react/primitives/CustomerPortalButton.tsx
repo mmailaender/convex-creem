@@ -1,16 +1,22 @@
 import { useState, type PropsWithChildren } from "react";
+import {
+  defaultBillingLabels,
+  type BillingLabels,
+} from "../../core/i18n.js";
 
 export const CustomerPortalButton = ({
   href,
   disabled = false,
   className = "",
   onOpenPortal,
+  labels = defaultBillingLabels,
   children,
 }: PropsWithChildren<{
   href?: string;
   disabled?: boolean;
   className?: string;
   onOpenPortal?: () => Promise<void> | void;
+  labels?: BillingLabels;
 }>) => {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -32,7 +38,8 @@ export const CustomerPortalButton = ({
         disabled={disabled}
         onClick={handleClick}
       >
-        {children ?? (isLoading ? "Loading..." : "Manage billing")}
+        {children ??
+          (isLoading ? labels.portal.loading : labels.portal.manageBilling)}
       </button>
     );
   }
@@ -44,7 +51,7 @@ export const CustomerPortalButton = ({
       rel="noopener noreferrer"
       className={className || "button-outline"}
     >
-      {children ?? "Manage billing"}
+      {children ?? labels.portal.manageBilling}
     </a>
   );
 };

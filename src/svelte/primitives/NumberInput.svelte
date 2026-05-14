@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { defaultBillingLabels } from "../../core/i18n.js";
+
   interface Props {
     value?: number;
     min?: number;
@@ -7,6 +9,8 @@
     compact?: boolean;
     disabled?: boolean;
     className?: string;
+    decreaseLabel?: string;
+    increaseLabel?: string;
     onValueChange?: (value: number) => void | Promise<void>;
   }
 
@@ -18,6 +22,8 @@
     compact = false,
     disabled = false,
     className = "",
+    decreaseLabel = defaultBillingLabels.accessibility.decreaseValue,
+    increaseLabel = defaultBillingLabels.accessibility.increaseValue,
     onValueChange,
   }: Props = $props();
 
@@ -35,7 +41,7 @@
 <div class={`number-input ${className}`}>
   <button
     type="button"
-    aria-label="Decrease value"
+    aria-label={decreaseLabel}
     {disabled}
     class="icon-button-sm"
     onclick={decrement}
@@ -59,7 +65,7 @@
 
   <button
     type="button"
-    aria-label="Increase value"
+    aria-label={increaseLabel}
     {disabled}
     class="icon-button-sm"
     onclick={increment}

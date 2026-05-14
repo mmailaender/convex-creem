@@ -6,6 +6,11 @@ import type {
   UIPlanEntry,
   RecurringCycle,
 } from "../../core/types.js";
+import {
+  defaultBillingLabels,
+  type BillingCurrencyFormatInput,
+  type BillingLabels,
+} from "../../core/i18n.js";
 import type { ConnectedProduct } from "../widgets/types.js";
 
 export const PricingSection = ({
@@ -32,6 +37,8 @@ export const PricingSection = ({
   onUpdateUnits,
   onContactSales,
   onCancelSubscription,
+  labels = defaultBillingLabels,
+  formatCurrency,
 }: {
   plans?: UIPlanEntry[];
   snapshot?: BillingSnapshot | null;
@@ -64,6 +71,8 @@ export const PricingSection = ({
   onUpdateUnits?: (payload: { units: number }) => Promise<void> | void;
   onContactSales?: (payload: { plan: UIPlanEntry }) => Promise<void> | void;
   onCancelSubscription?: () => void;
+  labels?: BillingLabels;
+  formatCurrency?: (input: BillingCurrencyFormatInput) => string;
 }) => {
   const availableCycles = useMemo(() => {
     const set = new Set<RecurringCycle>();
@@ -88,6 +97,7 @@ export const PricingSection = ({
             cycles={availableCycles}
             value={effectiveCycle}
             onValueChange={onCycleChange}
+            labels={labels}
           />
         </div>
       )}
@@ -123,6 +133,8 @@ export const PricingSection = ({
             onUpdateUnits={onUpdateUnits}
             onContactSales={onContactSales}
             onCancelSubscription={onCancelSubscription}
+            labels={labels}
+            formatCurrency={formatCurrency}
           />
         ))}
       </div>

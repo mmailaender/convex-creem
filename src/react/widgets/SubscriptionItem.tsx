@@ -7,6 +7,7 @@ import {
   type PropsWithChildren,
 } from "react";
 import type { RecurringCycle } from "../../core/types.js";
+import { defaultBillingLabels } from "../../core/i18n.js";
 import { SubscriptionContext } from "./subscriptionContext.js";
 import { SubscriptionItemContext } from "./subscriptionItemContext.js";
 import { PricingCard } from "../primitives/PricingCard.js";
@@ -171,15 +172,23 @@ export const SubscriptionItem = ({
             productId,
             rootContext?.products ?? [],
             inheritedUnits,
+            rootContext?.labels,
+            rootContext?.formatCurrency,
           )
         : null;
     const price =
       plan.category === "free"
-        ? "Free"
+        ? (rootContext?.labels.subscription.free ??
+          defaultBillingLabels.subscription.free)
         : plan.category === "enterprise"
-          ? "Custom"
+          ? (rootContext?.labels.subscription.custom ??
+            defaultBillingLabels.subscription.custom)
           : (unitPriceBreakdown?.total ??
-            formatPriceWithInterval(productId, rootContext?.products ?? []));
+            formatPriceWithInterval(
+              productId,
+              rootContext?.products ?? [],
+              rootContext?.formatCurrency,
+            ));
 
     return {
       plan,
@@ -194,6 +203,7 @@ export const SubscriptionItem = ({
       subscribedUnits: rootContext?.subscribedUnits ?? null,
       disableUnits: rootContext?.disableUnits ?? false,
       unstyled: rootContext?.unstyled ?? false,
+      labels: rootContext?.labels ?? defaultBillingLabels,
       setCheckoutUnits: setItemCheckoutUnits,
       onCheckout:
         rootContext &&
@@ -269,6 +279,8 @@ export const SubscriptionItem = ({
       onSwitchPlan={rootContext.switchPlan}
       onUpdateUnits={rootContext.updateUnits}
       onCancelSubscription={rootContext.cancelSubscription}
+      labels={rootContext.labels}
+      formatCurrency={rootContext.formatCurrency}
     />
   );
 };

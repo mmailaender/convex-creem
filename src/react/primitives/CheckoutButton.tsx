@@ -1,4 +1,8 @@
 import { useState, type PropsWithChildren } from "react";
+import {
+  defaultBillingLabels,
+  type BillingLabels,
+} from "../../core/i18n.js";
 
 export const CheckoutButton = ({
   productId,
@@ -6,6 +10,7 @@ export const CheckoutButton = ({
   disabled = false,
   className = "",
   onCheckout,
+  labels = defaultBillingLabels,
   children,
 }: PropsWithChildren<{
   productId: string;
@@ -13,6 +18,7 @@ export const CheckoutButton = ({
   disabled?: boolean;
   className?: string;
   onCheckout?: (payload: { productId: string }) => Promise<void> | void;
+  labels?: BillingLabels;
 }>) => {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -34,14 +40,15 @@ export const CheckoutButton = ({
         disabled={disabled}
         onClick={handleClick}
       >
-        {children ?? (isLoading ? "Loading..." : "Checkout")}
+        {children ??
+          (isLoading ? labels.checkout.loading : labels.checkout.checkout)}
       </button>
     );
   }
 
   return (
     <a href={href} className={`button-filled ${className}`}>
-      {children ?? "Checkout"}
+      {children ?? labels.checkout.checkout}
     </a>
   );
 };

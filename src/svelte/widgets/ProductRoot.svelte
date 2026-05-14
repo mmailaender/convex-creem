@@ -2,6 +2,7 @@
   import { getContext, setContext, untrack } from "svelte";
   import { useConvexClient, useQuery } from "@mmailaender/convex-svelte";
   import { formatPriceWithInterval } from "../primitives/shared.js";
+  import { resolveBillingI18n } from "../../core/i18n.js";
   import {
     PRODUCT_GROUP_CONTEXT_KEY,
     type ProductGroupContextValue,
@@ -67,6 +68,7 @@
   const resolvedOnBeforeCheckout = $derived(
     onBeforeCheckout ?? provider?.onBeforeCheckout,
   );
+  const i18n = $derived(resolveBillingI18n(provider?.i18n));
 
   const client = useConvexClient();
 
@@ -201,7 +203,7 @@
       error =
         checkoutError instanceof Error
           ? checkoutError.message
-          : "Checkout failed";
+          : i18n.labels.product.checkoutFailed;
       isLoading = false;
     }
   };
@@ -264,6 +266,7 @@
       {@const resolvedPrice = formatPriceWithInterval(
         item.productId,
         allProducts,
+        i18n.formatCurrency,
       )}
       {@const splitPrice = splitPriceLabel(resolvedPrice)}
       {@const descriptionHtml = renderMarkdown(resolvedDescription)}
@@ -288,9 +291,9 @@
             <div class="mb-3 flex min-h-6 items-center justify-between gap-2">
               <h3 class="title-s text-foreground-default">{resolvedTitle}</h3>
               {#if isOwned}
-                <span class="badge-faded-sm">Owned</span>
+                <span class="badge-faded-sm">{i18n.labels.product.owned}</span>
               {:else if isIncluded}
-                <span class="badge-faded-sm">Included</span>
+                <span class="badge-faded-sm">{i18n.labels.product.included}</span>
               {/if}
             </div>
 
@@ -321,7 +324,7 @@
                   onclick={(event) =>
                     handleCheckoutClick(event, checkoutProductId)}
                 >
-                  {item.type === "one-time" && activeOwnedProductId ? "Upgrade" : "Buy now"}
+                  {item.type === "one-time" && activeOwnedProductId ? i18n.labels.product.upgrade : i18n.labels.product.buyNow}
                 </button>
               {:else if !isOwned && !isIncluded}
                 <button
@@ -331,7 +334,7 @@
                   onclick={(event) =>
                     handleCheckoutClick(event, item.productId)}
                 >
-                  Buy now
+                  {i18n.labels.product.buyNow}
                 </button>
               {/if}
             </div>
@@ -361,13 +364,13 @@
               <span
                 class="inline-flex rounded-md bg-emerald-100 px-3 py-2 text-sm font-medium text-emerald-700"
               >
-                Owned
+                {i18n.labels.product.owned}
               </span>
             {:else if isIncluded}
               <span
                 class="inline-flex rounded-md bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
               >
-                Included
+                {i18n.labels.product.included}
               </span>
             {:else if checkoutProductId}
               <button
@@ -377,7 +380,7 @@
                 onclick={(event) =>
                   handleCheckoutClick(event, checkoutProductId)}
               >
-                {item.type === "one-time" && activeOwnedProductId ? "Upgrade" : "Buy now"}
+                {item.type === "one-time" && activeOwnedProductId ? i18n.labels.product.upgrade : i18n.labels.product.buyNow}
               </button>
             {:else}
               <button
@@ -387,7 +390,7 @@
                 onclick={(event) =>
                   handleCheckoutClick(event, item.productId)}
               >
-                Buy now
+                {i18n.labels.product.buyNow}
               </button>
             {/if}
           </div>

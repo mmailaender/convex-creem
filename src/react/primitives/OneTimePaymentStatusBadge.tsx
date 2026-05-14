@@ -1,18 +1,19 @@
 import type { OneTimePaymentStatus } from "../../core/types.js";
-
-const labels: Record<OneTimePaymentStatus, string> = {
-  pending: "Pending",
-  paid: "Paid",
-  refunded: "Refunded",
-  partially_refunded: "Partially refunded",
-};
+import {
+  defaultBillingLabels,
+  type BillingLabels,
+} from "../../core/i18n.js";
 
 export const OneTimePaymentStatusBadge = ({
   status,
   className = "",
+  labels = defaultBillingLabels,
 }: {
   status: OneTimePaymentStatus;
   className?: string;
+  labels?: BillingLabels;
 }) => {
-  return <span className={className}>{labels[status]}</span>;
+  return (
+    <span className={className}>{labels.oneTimePaymentStatus[status]}</span>
+  );
 };

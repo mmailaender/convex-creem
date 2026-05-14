@@ -17,6 +17,7 @@ import {
   CreditsRefresh,
   CreditsTitle,
 } from "./CreditsSlots.js";
+import { resolveBillingI18n } from "../../core/i18n.js";
 
 export const CreditsRoot = ({
   unitLabel = "credits",
@@ -29,6 +30,7 @@ export const CreditsRoot = ({
   children?: ReactNode | ((credits: CreditsContextValue) => ReactNode);
 }) => {
   const provider = useCreemConvex();
+  const i18n = useMemo(() => resolveBillingI18n(provider?.i18n), [provider?.i18n]);
   const resolvedApi = requireCreemConvexApi("Credits.Root", provider);
   const client = useConvex();
   const getBalanceRef = resolvedApi.credits?.getBalance;
@@ -39,7 +41,7 @@ export const CreditsRoot = ({
 
   const refresh = useCallback(async () => {
     if (!getBalanceRef) {
-      setError("Credits API is not configured.");
+      setError(i18n.labels.credits.apiNotConfigured);
       return;
     }
     setLoading(true);
@@ -49,12 +51,12 @@ export const CreditsRoot = ({
       setBalance(result?.balance ?? "0");
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "Failed to load balance",
+        cause instanceof Error ? cause.message : i18n.labels.credits.loadFailed,
       );
     } finally {
       setLoading(false);
     }
-  }, [client, getBalanceRef]);
+  }, [client, getBalanceRef, i18n.labels.credits]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -64,8 +66,8 @@ export const CreditsRoot = ({
   }, [refresh]);
 
   const contextValue = useMemo(
-    () => ({ balance, loading, error, unitLabel, refresh }),
-    [balance, error, loading, refresh, unitLabel],
+    () => ({ balance, loading, error, unitLabel, labels: i18n.labels, refresh }),
+    [balance, error, i18n.labels, loading, refresh, unitLabel],
   );
 
   return (

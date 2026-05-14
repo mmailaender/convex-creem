@@ -1,12 +1,17 @@
 <script lang="ts">
   /* global $props, $state */
   import type { Snippet } from "svelte";
+  import {
+    defaultBillingLabels,
+    type BillingLabels,
+  } from "../../core/i18n.js";
 
   interface Props {
     href?: string;
     disabled?: boolean;
     className?: string;
     onOpenPortal?: () => Promise<void> | void;
+    labels?: BillingLabels;
     children?: Snippet;
   }
 
@@ -15,6 +20,7 @@
     disabled = false,
     className = "",
     onOpenPortal,
+    labels = defaultBillingLabels,
     children,
   }: Props = $props();
 
@@ -41,7 +47,7 @@
     {#if children}
       {@render children()}
     {:else}
-      {isLoading ? "Loading..." : "Manage billing"}
+      {isLoading ? labels.portal.loading : labels.portal.manageBilling}
     {/if}
   </button>
 {:else}
@@ -54,7 +60,7 @@
     {#if children}
       {@render children()}
     {:else}
-      Manage billing
+      {labels.portal.manageBilling}
     {/if}
   </a>
 {/if}

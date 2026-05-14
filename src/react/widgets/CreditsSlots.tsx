@@ -9,7 +9,10 @@ export const CreditsTitle = ({
   class?: string;
   className?: string;
   children?: ReactNode;
-}) => <h3 className={className}>{children ?? "Credit Balance"}</h3>;
+}) => {
+  const credits = useCredits();
+  return <h3 className={className}>{children ?? credits.labels.credits.title}</h3>;
+};
 
 export const CreditsAmount = ({
   className = "flex items-baseline gap-2",
@@ -23,7 +26,11 @@ export const CreditsAmount = ({
 }) => {
   const credits = useCredits();
   if (credits.loading && credits.balance === null) {
-    return <div className="body-m py-3 text-foreground-muted">Loading...</div>;
+    return (
+      <div className="body-m py-3 text-foreground-muted">
+        {credits.labels.credits.loading}
+      </div>
+    );
   }
   return (
     <div className={className}>
@@ -35,7 +42,7 @@ export const CreditsAmount = ({
 
 export const CreditsRefresh = ({
   className = "icon-button-ghost-sm",
-  label = "Refresh balance",
+  label,
 }: {
   class?: string;
   className?: string;
@@ -47,7 +54,7 @@ export const CreditsRefresh = ({
       className={className}
       onClick={() => void credits.refresh()}
       disabled={credits.loading}
-      aria-label={label}
+      aria-label={label ?? credits.labels.credits.refreshBalance}
     >
       <RefreshCw
         aria-hidden="true"
@@ -71,7 +78,7 @@ export const CreditsError = ({
 
 export const CreditsStatus = ({
   className = "label-s text-foreground-muted",
-  loadingLabel = "Refreshing...",
+  loadingLabel,
   idleLabel = "",
 }: {
   class?: string;
@@ -83,7 +90,9 @@ export const CreditsStatus = ({
   if (!credits.loading && !idleLabel) return null;
   return (
     <div className={className}>
-      {credits.loading ? loadingLabel : idleLabel}
+      {credits.loading
+        ? (loadingLabel ?? credits.labels.credits.refreshing)
+        : idleLabel}
     </div>
   );
 };
