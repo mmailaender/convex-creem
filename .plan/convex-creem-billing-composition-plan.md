@@ -1195,6 +1195,9 @@ Impact on `convex-creem`:
 - The new compound widget structure still supports app-owned i18n through
   `Subscription.ItemTitle`, `Subscription.ItemDescription`, and custom children.
   Creem-native i18n makes the simple default path work better.
+- Runtime UI-label i18n for default widgets, dialogs, tables, status messages,
+  and accessibility labels is tracked separately in
+  `convex-creem-i18n-plan.md`.
 
 ## Implementation Order
 
