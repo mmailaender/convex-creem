@@ -356,21 +356,31 @@
   // Consent gate handlers (demo)
   // ────────────────────────────────────────────────────────────────────────────
 
-  const onBeforePlanChange = async (intent: {
+  let consentAccepted = $state(false);
+  let consentError = $state("");
+
+  const ensureConsentAccepted = () => {
+    if (consentAccepted) {
+      consentError = "";
+      return true;
+    }
+    consentError = "Please accept the billing policy before continuing.";
+    return false;
+  };
+
+  const onBeforeCheckout = async (_intent: {
+    productId: string;
+    units?: number;
+  }) => ensureConsentAccepted();
+
+  const onBeforePlanChange = async (_intent: {
     fromPlanId: string | null;
     toPlanId: string;
     productId: string;
-  }) => {
-    return confirm(
-      `Switch from "${intent.fromPlanId ?? "none"}" to "${intent.toPlanId}"?`,
-    );
-  };
+  }) => ensureConsentAccepted();
 
-  const onBeforeFreePlanActivation = async (intent: { freePlanId: string }) => {
-    return confirm(
-      `Downgrade to free plan "${intent.freePlanId}"? Your paid features will end at period end.`,
-    );
-  };
+  const onBeforeFreePlanActivation = async (_intent: { freePlanId: string }) =>
+    ensureConsentAccepted();
 
   // ────────────────────────────────────────────────────────────────────────────
   // Feature / usage gate demo state
@@ -875,7 +885,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 07: Consent Gates — confirm before plan change or free activation
+       VARIANT 07: Consent Gates — checkbox policy gate before checkout or plan changes
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="sub-consent-gates"
@@ -893,16 +903,35 @@
             <p
               class="body-l col-span-12 mt-6 text-center text-foreground-muted lg:col-start-4 lg:col-span-6"
             >
-              Demonstrates <code>onBeforePlanChange</code> and
-              <code>onBeforeFreePlanActivation</code>. A browser confirm dialog
-              appears before any plan switch or free plan activation. If
-              declined, the action is blocked.
+              Demonstrates <code>onBeforeCheckout</code>,
+              <code>onBeforePlanChange</code>, and
+              <code>onBeforeFreePlanActivation</code> with an app-owned policy
+              checkbox. Checkout and plan changes continue only after consent is
+              accepted.
             </p>
           </div>
 
-          <div class="mt-[6.5rem]">
+          <div class="mt-12 flex flex-col items-center gap-2">
+            <label class="body-m flex items-center gap-3 text-foreground-default">
+              <input
+                type="checkbox"
+                class="h-4 w-4"
+                bind:checked={consentAccepted}
+                onchange={() => {
+                  if (consentAccepted) consentError = "";
+                }}
+              />
+              <span>I accept the billing policy for this demo.</span>
+            </label>
+            {#if consentError}
+              <p class="body-s text-red-500">{consentError}</p>
+            {/if}
+          </div>
+
+          <div class="mt-12">
             <Subscription.Root
               plans={plansOf(billingCatalog, ["free", "basic", "premium"])}
+              {onBeforeCheckout}
               {onBeforePlanChange}
               {onBeforeFreePlanActivation}
             />
@@ -999,8 +1028,9 @@
                     <Subscription.ItemCTA
                       class="button-filled mt-8 w-full disabled:cursor-not-allowed disabled:opacity-60"
                       checkoutLabel="Start individual"
-                      switchLabel="Switch individual"
+                      switchLabel="Switch to individual"
                     />
+                    <Subscription.Cancel class="button-outline mt-2 w-full" />
                   </Subscription.Item>
 
                   <Subscription.Item
@@ -1034,6 +1064,7 @@
                       checkoutLabel="Go premium"
                       switchLabel="Switch to premium"
                     />
+                    <Subscription.Cancel class="button-outline mt-2 w-full" />
                   </Subscription.Item>
                 </Subscription.Grid>
               </Subscription.Group>
@@ -1062,6 +1093,18 @@
                       <Subscription.ItemPrice
                         class="display-s text-foreground-default"
                       />
+                      <Subscription.ItemPriceCaption
+                        class="body-m text-foreground-muted"
+                      />
+                      <Subscription.UnitPicker
+                        detailed
+                        class="flex w-full flex-col gap-2"
+                        rowClass="flex w-full items-center justify-between rounded-xl bg-surface-subtle py-2 pl-4 pr-2"
+                        labelClass="label-m text-foreground-default"
+                        actionsClass="flex w-full items-center gap-2"
+                        secondaryClass="button-faded h-8 w-full"
+                        primaryClass="button-filled h-8 w-full disabled:cursor-not-allowed disabled:opacity-50"
+                      />
                       <ul class="body-m space-y-2 text-foreground-default">
                         <li>Shared billing for every unit</li>
                         <li>Team workspace</li>
@@ -1073,6 +1116,7 @@
                       checkoutLabel="Start team plan"
                       switchLabel="Switch team plan"
                     />
+                    <Subscription.Cancel class="button-outline mt-2 w-full" />
                   </Subscription.Item>
 
                   <Subscription.Item
@@ -1095,6 +1139,18 @@
                       <Subscription.ItemPrice
                         class="display-s text-foreground-default"
                       />
+                      <Subscription.ItemPriceCaption
+                        class="body-m text-foreground-muted"
+                      />
+                      <Subscription.UnitPicker
+                        detailed
+                        class="flex w-full flex-col gap-2"
+                        rowClass="flex w-full items-center justify-between rounded-xl bg-surface-subtle py-2 pl-4 pr-2"
+                        labelClass="label-m text-foreground-default"
+                        actionsClass="flex w-full items-center gap-2"
+                        secondaryClass="button-faded h-8 w-full"
+                        primaryClass="button-filled h-8 w-full disabled:cursor-not-allowed disabled:opacity-50"
+                      />
                       <ul class="body-m space-y-2 text-foreground-default">
                         <li>Advanced team controls</li>
                         <li>Higher usage limits</li>
@@ -1106,6 +1162,7 @@
                       checkoutLabel="Upgrade team"
                       switchLabel="Switch team plan"
                     />
+                    <Subscription.Cancel class="button-outline mt-2 w-full" />
                   </Subscription.Item>
                 </Subscription.Grid>
               </Subscription.Group>
@@ -1359,7 +1416,10 @@
               <code>PaymentRecoveryBanner</code> auto-detects payment issues
               from subscription state.
               <code>PaymentRecoveryButton</code> opens the customer portal for payment
-              method updates. (Shown with forced "warning" state for demo purposes.)
+              method updates. The demo backend also uses scheduled cancellation,
+              so canceling a subscription keeps access until period end and surfaces
+              the <code>subscription.scheduled_cancel</code> state.
+              (Shown with forced "warning" state for demo purposes.)
             </p>
           </div>
 

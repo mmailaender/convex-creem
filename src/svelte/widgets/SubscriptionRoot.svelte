@@ -24,7 +24,11 @@
   import type { PlanCatalog, PlanCatalogEntry, UIPlanEntry, RecurringCycle, UpdateBehavior } from "../../core/types.js";
   import { findPlanById, normalizePlanCatalog } from "../../core/catalog.js";
   import { buildUpdateSummary } from "../../core/subscriptionUpdate.js";
-  import { formatPriceWithInterval, formatUnitPrice } from "../primitives/shared.js";
+  import {
+    formatPriceWithInterval,
+    formatUnitPrice,
+    formatUnitPriceBreakdown,
+  } from "../primitives/shared.js";
   import type {
     BillingPermissions,
     CheckoutIntent,
@@ -172,7 +176,14 @@
     checkout: (payload) => handlePricingCheckout(payload),
     switchPlan: (payload) => requestSwitchPlan(payload),
     updateUnits: (payload) => handleUpdateUnits(payload),
-    cancelSubscription: () => openCancelDialog(),
+    get cancelSubscription() {
+      return cancelRef &&
+        canCancel &&
+        ownsActiveSubscription &&
+        !localCancelAtPeriodEnd
+        ? () => openCancelDialog()
+        : undefined;
+    },
     groupItems: () => groupItems,
     activeGroupId: () => activeGroupId,
     setGroup: (nextGroup) => {
@@ -616,8 +627,34 @@
         return localSubscriptionProductId != null && pids.includes(localSubscriptionProductId);
       });
       const currentTitle = currentPlan?.title ?? "Current plan";
-      const currentPrice = formatPriceWithInterval(localSubscriptionProductId ?? undefined, allProducts);
-      const newPrice = formatPriceWithInterval(pendingUpdate.productId, allProducts);
+      const switchUnits =
+        pendingUpdate.units ?? localSubscribedUnits ?? units ?? 1;
+      const useUnitBreakdown =
+        currentPlan?.pricingModel === "unit" ||
+        pendingUpdate.plan.pricingModel === "unit";
+      const currentBreakdown = useUnitBreakdown
+        ? formatUnitPriceBreakdown(
+            localSubscriptionProductId ?? undefined,
+            allProducts,
+            switchUnits,
+          )
+        : null;
+      const newBreakdown = useUnitBreakdown
+        ? formatUnitPriceBreakdown(
+            pendingUpdate.productId,
+            allProducts,
+            switchUnits,
+          )
+        : null;
+      const currentPrice =
+        currentBreakdown?.total ??
+        formatPriceWithInterval(
+          localSubscriptionProductId ?? undefined,
+          allProducts,
+        );
+      const newPrice =
+        newBreakdown?.total ??
+        formatPriceWithInterval(pendingUpdate.productId, allProducts);
 
       return buildUpdateSummary({
         kind: "plan-switch",
@@ -626,6 +663,8 @@
         newLabel: newPrice
           ? `${pendingUpdate.plan.title ?? "New plan"} \u00b7 ${newPrice}`
           : (pendingUpdate.plan.title ?? "New plan"),
+        currentCaption: currentBreakdown?.calculation ?? null,
+        newCaption: newBreakdown?.calculation ?? null,
         currentPeriodEnd: matchedSubscription?.currentPeriodEnd,
         isTrialing: matchedSubscription?.status === "trialing",
         trialEnd: matchedSubscription?.trialEnd,
@@ -898,10 +937,20 @@
                 <span class="label-m text-foreground-muted">
                   {updateSummary.currentLabel}
                 </span>
+                {#if updateSummary.currentCaption}
+                  <span class="body-s text-foreground-placeholder">
+                    {updateSummary.currentCaption}
+                  </span>
+                {/if}
                 <span class="body-s text-foreground-placeholder">→</span>
                 <span class="label-m text-foreground-default">
                   {updateSummary.newLabel}
                 </span>
+                {#if updateSummary.newCaption}
+                  <span class="body-s text-foreground-placeholder">
+                    {updateSummary.newCaption}
+                  </span>
+                {/if}
               </div>
               <Dialog.Description class="dialog-description">
                 {updateSummary.description}

@@ -5,6 +5,8 @@ export type UpdateSummaryInput = {
   updateBehavior: UpdateBehavior;
   currentLabel: string;
   newLabel: string;
+  currentCaption?: string | null;
+  newCaption?: string | null;
   currentPeriodEnd?: string | null;
   isTrialing?: boolean;
   trialEnd?: string | null;
@@ -15,6 +17,8 @@ export type UpdateSummary = {
   description: string;
   currentLabel: string;
   newLabel: string;
+  currentCaption: string | null;
+  newCaption: string | null;
   dateNote: string | null;
   confirmLabel: string;
 };
@@ -69,6 +73,8 @@ export const buildUpdateSummary = (
     updateBehavior,
     currentLabel,
     newLabel,
+    currentCaption = null,
+    newCaption = null,
     currentPeriodEnd,
     isTrialing,
     trialEnd,
@@ -83,6 +89,8 @@ export const buildUpdateSummary = (
         "Your free trial will continue. The new price will take effect once the trial ends.",
       currentLabel,
       newLabel,
+      currentCaption,
+      newCaption,
       dateNote: null,
       confirmLabel:
         kind === "plan-switch" ? "Confirm switch" : "Confirm update",
@@ -94,6 +102,8 @@ export const buildUpdateSummary = (
     description: getBehaviorDescription(updateBehavior),
     currentLabel,
     newLabel,
+    currentCaption,
+    newCaption,
     dateNote: currentPeriodEnd
       ? formatPeriodEnd(currentPeriodEnd, updateBehavior)
       : null,

@@ -30,7 +30,12 @@ const billingCatalog = defineBillingCatalog({
   ],
 } as const);
 
-export const creem = new Creem(components.creem, { billingCatalog });
+export const creem = new Creem(components.creem, {
+  billingCatalog,
+  // Demo cancellation should keep access until period end so
+  // `subscription.scheduled_cancel` and resume flows are visible in examples.
+  cancelMode: "scheduled",
+});
 
 // ── Auth resolver ───────────────────────────────────────────────
 // Replace with your own auth logic (e.g. ctx.auth.getUserIdentity()).

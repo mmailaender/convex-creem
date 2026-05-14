@@ -12,6 +12,7 @@
   import PricingCard from "../primitives/PricingCard.svelte";
   import {
     formatPriceWithInterval,
+    formatUnitPriceBreakdown,
     resolveProductIdForPlan,
   } from "../primitives/shared.js";
   import type { UIPlanEntry } from "../../core/types.js";
@@ -112,18 +113,48 @@
       plan?.category !== "free" &&
       plan?.category !== "enterprise",
   );
+  let checkoutUnits = $derived(rootContext?.getUnits() ?? 1);
+
   const effectiveUnits = $derived(
     plan?.pricingModel === "unit"
-      ? rootContext?.getShowUnitPicker()
-        ? (rootContext?.getUnits() ?? 1)
-        : rootContext?.getUnits()
+      ? children
+        ? checkoutUnits
+        : rootContext?.getShowUnitPicker()
+          ? (rootContext?.getUnits() ?? 1)
+          : rootContext?.getUnits()
       : undefined,
   );
   const price = $derived.by(() => {
     if (!plan) return null;
     if (plan.category === "free") return "Free";
     if (plan.category === "enterprise") return "Custom";
+    if (
+      plan.pricingModel === "unit" &&
+      (isActiveProduct || isSiblingPlan || isActivePlanOtherCycle)
+    ) {
+      return formatUnitPriceBreakdown(
+        productId,
+        rootContext?.getProducts() ?? [],
+        rootContext?.getSubscribedUnits() ?? checkoutUnits,
+      )?.total ?? formatPriceWithInterval(productId, rootContext?.getProducts() ?? []);
+    }
     return formatPriceWithInterval(productId, rootContext?.getProducts() ?? []);
+  });
+  const priceCaption = $derived.by(() => {
+    if (
+      !plan ||
+      plan.pricingModel !== "unit" ||
+      !(isActiveProduct || isSiblingPlan || isActivePlanOtherCycle)
+    ) {
+      return null;
+    }
+    return (
+      formatUnitPriceBreakdown(
+        productId,
+        rootContext?.getProducts() ?? [],
+        rootContext?.getSubscribedUnits() ?? checkoutUnits,
+      )?.calculation ?? null
+    );
   });
   const onCheckout = $derived.by(() => {
     if (!rootContext || !plan || !productId || isActiveProduct || isActiveFreePlan || isSiblingPlan || isActivePlanOtherCycle) {
@@ -152,6 +183,9 @@
     get isActive() {
       return isActiveProduct || isActiveFreePlan;
     },
+    get isSwitchPlan() {
+      return isSiblingPlan || isActivePlanOtherCycle;
+    },
     get isRecommended() {
       return plan?.recommended === true;
     },
@@ -164,14 +198,39 @@
     get price() {
       return price;
     },
+    get priceCaption() {
+      return priceCaption;
+    },
+    get checkoutUnits() {
+      return checkoutUnits;
+    },
+    get subscribedUnits() {
+      return rootContext?.getSubscribedUnits() ?? null;
+    },
+    get disableUnits() {
+      return rootContext?.getDisableUnits() ?? false;
+    },
     get unstyled() {
       return rootContext?.getUnstyled() ?? false;
+    },
+    setCheckoutUnits(units) {
+      if (units > 0) checkoutUnits = units;
     },
     get onCheckout() {
       return onCheckout;
     },
     get onSwitch() {
       return onSwitch;
+    },
+    get onUpdateUnits() {
+      return rootContext?.updateUnits
+        ? (units: number) => rootContext.updateUnits?.({ units })
+        : undefined;
+    },
+    get onCancelSubscription() {
+      return isActiveProduct || isActiveFreePlan
+        ? rootContext?.cancelSubscription
+        : undefined;
     },
   };
 

@@ -3,7 +3,11 @@
   import NumberInput from "./NumberInput.svelte";
   import type { UIPlanEntry, RecurringCycle } from "../../core/types.js";
   import type { ConnectedProduct } from "../widgets/types.js";
-  import { resolveProductIdForPlan, formatPriceWithInterval, formatUnitPrice } from "./shared.js";
+  import {
+    resolveProductIdForPlan,
+    formatPriceWithInterval,
+    formatUnitPriceBreakdown,
+  } from "./shared.js";
   import { renderMarkdown } from "../../core/markdown.js";
 
   interface Props {
@@ -106,9 +110,14 @@
     isUnitPlan && showUnitPicker && (isActiveProduct || isSiblingPlan || isActivePlanOtherCycle),
   );
 
-  const unitPriceLabel = $derived(
-    isActiveProduct && isUnitPlan && subscribedUnits
-      ? formatUnitPrice(productId, products, subscribedUnits)
+  const inheritedUnits = $derived(
+    isUnitPlan && (isActiveProduct || isSiblingPlan || isActivePlanOtherCycle)
+      ? subscribedUnits
+      : null,
+  );
+  const unitPriceBreakdown = $derived(
+    inheritedUnits != null
+      ? formatUnitPriceBreakdown(productId, products, inheritedUnits)
       : null,
   );
   const unitsChanged = $derived(
@@ -143,7 +152,7 @@
     };
   };
 
-  const splitPrice = $derived(splitPriceLabel(unitPriceLabel ?? priceLabel));
+  const splitPrice = $derived(splitPriceLabel(unitPriceBreakdown?.total ?? priceLabel));
 
   const descriptionHtml = $derived(renderMarkdown(plan.description));
 </script>
@@ -187,6 +196,11 @@
       {/if}
     {/if}
   </div>
+  {#if unitPriceBreakdown?.calculation}
+    <p class="label-m mt-1 text-foreground-placeholder">
+      {unitPriceBreakdown.calculation}
+    </p>
+  {/if}
 
 
   <div class={`mb-4 mt-6 ${showUnitCheckoutControls ? "flex flex-col gap-2" : "flex min-h-8 items-start"}`}>

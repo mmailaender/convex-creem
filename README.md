@@ -935,6 +935,11 @@ functions, or let `creem.api({ resolve })` generate ready-to-export wrappers.
 | `.pause(ctx, { entityId })`                                                        | Creem API   | Pause an active subscription                                                                                                                                      |
 | `.resume(ctx, { entityId })`                                                       | Creem API   | Resume a paused or scheduled-cancel subscription                                                                                                                  |
 
+Set `new Creem(components.creem, { cancelMode: "scheduled" })` to make normal
+cancel actions end at the paid period boundary and surface
+`subscription.scheduled_cancel`. Pass `revokeImmediately` on an individual
+cancel call when you need to override that default.
+
 **`creem.checkouts.*`**
 
 | Method                                                                                                              | Data source | Description                                                                  |
@@ -1062,26 +1067,29 @@ These query Convex directly and manage billing state end-to-end.
 Container for subscription plan cards. Handles billing cycle toggle, checkout,
 plan switching, cancellation, and unit management.
 
-| Prop                | Type                                                      | Default                                      | Description                                                                                                                                               |
-| ------------------- | --------------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api`               | `ConnectedBillingApi`                                     | —                                            | **Required.** Backend function references                                                                                                                 |
-| `permissions`       | `BillingPermissions`                                      | all enabled                                  | Disable actions based on user role                                                                                                                        |
-| `class`/`className` | `string`                                                  | `""`                                         | Wrapper CSS class                                                                                                                                         |
-| `successUrl`        | `string`                                                  | product's `defaultSuccessUrl` → current page | Override redirect after checkout. When omitted, uses the product's `defaultSuccessUrl` from Creem; if that is also unset, falls back to the current page. |
-| `units`             | `number`                                                  | —                                            | Auto-derived unit count for unit-based plans                                                                                                              |
-| `showUnitPicker`    | `boolean`                                                 | `false`                                      | Show quantity picker on unit-based cards                                                                                                                  |
-| `twoColumnLayout`   | `boolean`                                                 | `false`                                      | Use two-column card layout                                                                                                                                |
-| `updateBehavior`    | `UpdateBehavior`                                          | `"proration-charge-immediately"`             | How plan switches and unit updates are billed. See below.                                                                                                 |
-| `unstyled`          | `boolean`                                                 | `false`                                      | Remove built-in visual classes from compound subscription pieces so custom children own their styling.                                                    |
-| `onBeforeCheckout`  | `(intent: CheckoutIntent) => Promise<boolean> \| boolean` | —                                            | Gate checkout (auth, terms, etc.). Return `false` to abort.                                                                                               |
-| `children`          | `Snippet` / `ReactNode`                                   | —                                            | `<Subscription.Item>` children                                                                                                                            |
+| Prop                         | Type                                                              | Default                                      | Description                                                                                                                                               |
+| ---------------------------- | ----------------------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api`                        | `ConnectedBillingApi`                                             | —                                            | **Required.** Backend function references                                                                                                                 |
+| `permissions`                | `BillingPermissions`                                              | all enabled                                  | Disable actions based on user role                                                                                                                        |
+| `class`/`className`          | `string`                                                          | `""`                                         | Wrapper CSS class                                                                                                                                         |
+| `successUrl`                 | `string`                                                          | product's `defaultSuccessUrl` → current page | Override redirect after checkout. When omitted, uses the product's `defaultSuccessUrl` from Creem; if that is also unset, falls back to the current page. |
+| `units`                      | `number`                                                          | —                                            | Auto-derived unit count for unit-based plans                                                                                                              |
+| `showUnitPicker`             | `boolean`                                                         | `false`                                      | Show quantity picker on unit-based cards                                                                                                                  |
+| `twoColumnLayout`            | `boolean`                                                         | `false`                                      | Use two-column card layout                                                                                                                                |
+| `updateBehavior`             | `UpdateBehavior`                                                  | `"proration-charge-immediately"`             | How plan switches and unit updates are billed. See below.                                                                                                 |
+| `unstyled`                   | `boolean`                                                         | `false`                                      | Remove built-in visual classes from compound subscription pieces so custom children own their styling.                                                    |
+| `onBeforeCheckout`           | `(intent: CheckoutIntent) => Promise<boolean> \| boolean`         | —                                            | Gate checkout (auth, terms, etc.). Return `false` to abort.                                                                                               |
+| `onBeforePlanChange`         | `(intent: PlanChangeIntent) => Promise<boolean> \| boolean`       | —                                            | Gate paid plan switches. Return `false` to abort.                                                                                                         |
+| `onBeforeFreePlanActivation` | `(intent: { freePlanId: string }) => Promise<boolean> \| boolean` | —                                            | Gate free-plan activation. Return `false` to abort.                                                                                                       |
+| `children`                   | `Snippet` / `ReactNode`                                           | —                                            | `<Subscription.Item>` children                                                                                                                            |
 
 Use `unstyled` when composing your own pricing cards with `Subscription.Grid`,
 `Subscription.ItemTitle`, `Subscription.ItemPrice`,
 `Subscription.ItemDescription`, `Subscription.ItemBadge`,
-`Subscription.ItemCTA`, `Subscription.GroupSelector`, or
-`Subscription.IntervalSelector`. The default generated pricing cards remain the
-fast styled path.
+`Subscription.ItemCTA`, `Subscription.ItemPriceCaption`,
+`Subscription.UnitPicker`, `Subscription.Cancel`, `Subscription.GroupSelector`,
+or `Subscription.IntervalSelector`. The default generated pricing cards remain
+the fast styled path.
 
 Styled compound defaults use the package's `creem-base:` Tailwind variant, which
 places library defaults in the base cascade layer. Consumer `class`/`className`
@@ -1118,6 +1126,33 @@ root component renders the pricing cards.
 
 `Subscription` and `Subscription.Item` are aliases — use whichever reads better
 in your markup.
+
+#### `<Subscription.ItemPriceCaption>`
+
+Secondary price text for inherited unit quantities, such as `$30/mo × 3 units`.
+Pair it with `<Subscription.ItemPrice>` when a custom card should show the total
+bill as the primary price and the unit calculation as supporting text.
+
+#### `<Subscription.UnitPicker>`
+
+Composable quantity control for unit-based plans. Use it inside a custom
+`<Subscription.Item>` when your card owns the markup. For inactive unit plans it
+updates the checkout quantity; for the active unit plan it renders the
+change/update flow when subscription unit updates are available. Pass `detailed`
+to also show the current subscribed quantity above the change button. It returns
+`null` on switch-plan cards so the current subscribed quantity is not mistaken
+for a target quantity.
+
+In `unstyled` mode, pass `class`/`className` plus slot classes such as
+`rowClass`, `labelClass`, `actionsClass`, `secondaryClass`, `primaryClass`, and
+`numberInputClass` in Svelte. React uses the same names with `Name` suffixes,
+for example `rowClassName` and `primaryClassName`.
+
+#### `<Subscription.Cancel>`
+
+Composable cancel button for the active subscription card. It opens the same
+root-owned confirmation dialog as the default pricing card, and renders nothing
+when the card is not active or cancellation is unavailable.
 
 #### `<Product.Root>`
 

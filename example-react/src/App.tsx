@@ -642,6 +642,7 @@ export default function App() {
                           checkoutLabel="Start individual"
                           switchLabel="Switch individual"
                         />
+                        <Subscription.Cancel className="mt-2" />
                       </Subscription.Item>
 
                       <Subscription.Item
@@ -666,6 +667,7 @@ export default function App() {
                           checkoutLabel="Go premium"
                           switchLabel="Switch to premium"
                         />
+                        <Subscription.Cancel className="mt-2" />
                       </Subscription.Item>
                     </Subscription.Grid>
                   </Subscription.Group>
@@ -686,6 +688,8 @@ export default function App() {
                             <Subscription.ItemDescription className="body-m text-foreground-muted" />
                           </div>
                           <Subscription.ItemPrice className="display-s text-foreground-default" />
+                          <Subscription.ItemPriceCaption className="body-m text-foreground-muted" />
+                          <Subscription.UnitPicker detailed />
                           <ul className="body-m space-y-2 text-foreground-default">
                             <li>Shared billing for every unit</li>
                             <li>Team workspace</li>
@@ -697,6 +701,7 @@ export default function App() {
                           checkoutLabel="Start team plan"
                           switchLabel="Switch team plan"
                         />
+                        <Subscription.Cancel className="mt-2" />
                       </Subscription.Item>
 
                       <Subscription.Item
@@ -710,6 +715,8 @@ export default function App() {
                             <Subscription.ItemDescription className="body-m text-foreground-muted" />
                           </div>
                           <Subscription.ItemPrice className="display-s text-foreground-default" />
+                          <Subscription.ItemPriceCaption className="body-m text-foreground-muted" />
+                          <Subscription.UnitPicker detailed />
                           <ul className="body-m space-y-2 text-foreground-default">
                             <li>Advanced team controls</li>
                             <li>Higher usage limits</li>
@@ -721,6 +728,7 @@ export default function App() {
                           checkoutLabel="Upgrade team"
                           switchLabel="Switch team plan"
                         />
+                        <Subscription.Cancel className="mt-2" />
                       </Subscription.Item>
                     </Subscription.Grid>
                   </Subscription.Group>

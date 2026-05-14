@@ -6,7 +6,7 @@ import type { ConnectedProduct } from "../widgets/types.js";
 import {
   resolveProductIdForPlan,
   formatPriceWithInterval,
-  formatUnitPrice,
+  formatUnitPriceBreakdown,
   splitPriceLabel,
 } from "../shared.js";
 import { renderMarkdown } from "../../core/markdown.js";
@@ -133,9 +133,13 @@ export const PricingCard = ({
     showUnitPicker &&
     (isActiveProduct || isSiblingPlan || isActivePlanOtherCycle);
 
-  const unitPriceLabel =
-    isActiveProduct && isUnitPlan && subscribedUnits
-      ? formatUnitPrice(productId, products, subscribedUnits)
+  const inheritedUnits =
+    isUnitPlan && (isActiveProduct || isSiblingPlan || isActivePlanOtherCycle)
+      ? subscribedUnits
+      : null;
+  const unitPriceBreakdown =
+    inheritedUnits != null
+      ? formatUnitPriceBreakdown(productId, products, inheritedUnits)
       : null;
   const unitsChanged =
     isActiveProduct &&
@@ -169,7 +173,7 @@ export const PricingCard = ({
     }
   };
 
-  const splitPrice = splitPriceLabel(unitPriceLabel ?? priceLabel);
+  const splitPrice = splitPriceLabel(unitPriceBreakdown?.total ?? priceLabel);
 
   const descriptionHtml = useMemo(
     () => renderMarkdown(plan.description),
@@ -230,6 +234,11 @@ export const PricingCard = ({
           </>
         ) : null}
       </div>
+      {unitPriceBreakdown?.calculation && (
+        <p className="label-m mt-1 text-foreground-placeholder">
+          {unitPriceBreakdown.calculation}
+        </p>
+      )}
 
       <div
         className={`mb-4 mt-6 ${showUnitCheckoutControls ? "flex flex-col gap-2" : "flex min-h-8 items-start"}`}

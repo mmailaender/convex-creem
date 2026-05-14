@@ -106,6 +106,27 @@ export const formatUnitPrice = (
   return `${resolved.formatted}${suffix} × ${units} units`;
 };
 
+/** Format unit pricing as total + calculation (e.g. `"$90/mo"` + `"$30/mo × 3 units"`). */
+export const formatUnitPriceBreakdown = (
+  productId: string | undefined,
+  products: ConnectedProduct[],
+  units: number,
+): { total: string; calculation: string } | null => {
+  if (!productId || !products.length) return null;
+  const product = products.find((p) => p.id === productId);
+  if (!product) return null;
+  if (product.price == null || !product.currency) return null;
+  const suffix = product.billingPeriod
+    ? (INTERVAL_LABELS[product.billingPeriod] ?? "")
+    : "";
+  const unit = `${formatPrice(product.price, product.currency)}${suffix}`;
+  const total = `${formatPrice(product.price * units, product.currency)}${suffix}`;
+  return {
+    total,
+    calculation: `${unit} × ${units} unit${units === 1 ? "" : "s"}`,
+  };
+};
+
 /** Format a product's price with its billing interval suffix (e.g. `"$10/mo"`). Returns `null` if product not found. */
 export const formatPriceWithInterval = (
   productId: string | undefined,

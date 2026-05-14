@@ -16,9 +16,12 @@ const svelteSelectorSource = [
 const svelteItemSlotSource = [
   readSource("./SubscriptionItemTitle.svelte"),
   readSource("./SubscriptionItemPrice.svelte"),
+  readSource("./SubscriptionItemPriceCaption.svelte"),
   readSource("./SubscriptionItemDescription.svelte"),
   readSource("./SubscriptionItemBadge.svelte"),
   readSource("./SubscriptionItemCTA.svelte"),
+  readSource("./SubscriptionUnitPicker.svelte"),
+  readSource("./SubscriptionCancel.svelte"),
 ].join("\n");
 
 const reactRootSource = readSource("../../react/widgets/SubscriptionRoot.tsx");
@@ -70,10 +73,22 @@ describe("Subscription unstyled mode", () => {
     expect(svelteItemSlotSource).toContain(
       "ctx.unstyled ? className : `creem-base:button-filled creem-base:w-full ${className}`",
     );
+    expect(svelteItemSlotSource).toContain(
+      "ctx.unstyled\n      ? className\n      : `creem-base:flex",
+    );
+    expect(svelteItemSlotSource).toContain(
+      ": `creem-base:button-outline creem-base:w-full ${className}`",
+    );
 
     expect(reactItemSlotSource).toContain("unstyled ? className");
     expect(reactItemSlotSource).toMatch(
       /unstyled\s+\?\s+className\s+:\s+`creem-base:button-filled creem-base:w-full \$\{className\}`/,
+    );
+    expect(reactItemSlotSource).toContain(
+      "ctx.unstyled\n    ? resolvedClassName\n    : `creem-base:flex",
+    );
+    expect(reactItemSlotSource).toContain(
+      ": `creem-base:button-outline creem-base:w-full ${className}`",
     );
   });
 });

@@ -6,9 +6,12 @@ import SubscriptionGroupSelectorComponent from "./SubscriptionGroupSelector.svel
 import SubscriptionIntervalSelectorComponent from "./SubscriptionIntervalSelector.svelte";
 import SubscriptionItemTitleComponent from "./SubscriptionItemTitle.svelte";
 import SubscriptionItemPriceComponent from "./SubscriptionItemPrice.svelte";
+import SubscriptionItemPriceCaptionComponent from "./SubscriptionItemPriceCaption.svelte";
 import SubscriptionItemDescriptionComponent from "./SubscriptionItemDescription.svelte";
 import SubscriptionItemCTAComponent from "./SubscriptionItemCTA.svelte";
 import SubscriptionItemBadgeComponent from "./SubscriptionItemBadge.svelte";
+import SubscriptionUnitPickerComponent from "./SubscriptionUnitPicker.svelte";
+import SubscriptionCancelComponent from "./SubscriptionCancel.svelte";
 import ProductItemComponent from "./Product.svelte";
 import ProductRootComponent from "./ProductRoot.svelte";
 import CreditsRootComponent from "./Credits.svelte";
@@ -32,9 +35,12 @@ export const Subscription: typeof SubscriptionItemComponent & {
   IntervalSelector: typeof SubscriptionIntervalSelectorComponent;
   ItemTitle: typeof SubscriptionItemTitleComponent;
   ItemPrice: typeof SubscriptionItemPriceComponent;
+  ItemPriceCaption: typeof SubscriptionItemPriceCaptionComponent;
   ItemDescription: typeof SubscriptionItemDescriptionComponent;
   ItemCTA: typeof SubscriptionItemCTAComponent;
   ItemBadge: typeof SubscriptionItemBadgeComponent;
+  UnitPicker: typeof SubscriptionUnitPickerComponent;
+  Cancel: typeof SubscriptionCancelComponent;
 } = Object.assign(SubscriptionItemComponent, {
   Root: SubscriptionRootComponent,
   Item: SubscriptionItemComponent,
@@ -44,9 +50,12 @@ export const Subscription: typeof SubscriptionItemComponent & {
   IntervalSelector: SubscriptionIntervalSelectorComponent,
   ItemTitle: SubscriptionItemTitleComponent,
   ItemPrice: SubscriptionItemPriceComponent,
+  ItemPriceCaption: SubscriptionItemPriceCaptionComponent,
   ItemDescription: SubscriptionItemDescriptionComponent,
   ItemCTA: SubscriptionItemCTAComponent,
   ItemBadge: SubscriptionItemBadgeComponent,
+  UnitPicker: SubscriptionUnitPickerComponent,
+  Cancel: SubscriptionCancelComponent,
 });
 
 export const Product: typeof ProductItemComponent & {

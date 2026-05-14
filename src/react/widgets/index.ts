@@ -7,9 +7,12 @@ import { SubscriptionIntervalSelector } from "./SubscriptionIntervalSelector.js"
 import {
   SubscriptionItemTitle,
   SubscriptionItemPrice,
+  SubscriptionItemPriceCaption,
   SubscriptionItemDescription,
   SubscriptionItemCTA,
   SubscriptionItemBadge,
+  SubscriptionUnitPicker,
+  SubscriptionCancel,
 } from "./SubscriptionItemSlots.js";
 import { ProductItem } from "./ProductItem.js";
 import { ProductRoot } from "./ProductRoot.js";
@@ -36,9 +39,12 @@ export const Subscription: typeof SubscriptionItem & {
   IntervalSelector: typeof SubscriptionIntervalSelector;
   ItemTitle: typeof SubscriptionItemTitle;
   ItemPrice: typeof SubscriptionItemPrice;
+  ItemPriceCaption: typeof SubscriptionItemPriceCaption;
   ItemDescription: typeof SubscriptionItemDescription;
   ItemCTA: typeof SubscriptionItemCTA;
   ItemBadge: typeof SubscriptionItemBadge;
+  UnitPicker: typeof SubscriptionUnitPicker;
+  Cancel: typeof SubscriptionCancel;
 } = Object.assign(SubscriptionItem, {
   Root: SubscriptionRoot,
   Item: SubscriptionItem,
@@ -48,9 +54,12 @@ export const Subscription: typeof SubscriptionItem & {
   IntervalSelector: SubscriptionIntervalSelector,
   ItemTitle: SubscriptionItemTitle,
   ItemPrice: SubscriptionItemPrice,
+  ItemPriceCaption: SubscriptionItemPriceCaption,
   ItemDescription: SubscriptionItemDescription,
   ItemCTA: SubscriptionItemCTA,
   ItemBadge: SubscriptionItemBadge,
+  UnitPicker: SubscriptionUnitPicker,
+  Cancel: SubscriptionCancel,
 });
 
 export const Product: typeof ProductItem & {

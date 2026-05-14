@@ -5,13 +5,21 @@ import type { UIPlanEntry, RecurringCycle } from "../../core/types.js";
 export type SubscriptionItemContextValue = {
   plan: UIPlanEntry;
   isActive: boolean;
+  isSwitchPlan: boolean;
   isRecommended: boolean;
   selectedCycle: RecurringCycle;
   currentProductId: string | undefined;
   price: string | null;
+  priceCaption: string | null;
+  checkoutUnits: number;
+  subscribedUnits: number | null;
+  disableUnits: boolean;
   unstyled: boolean;
+  setCheckoutUnits: (units: number) => void;
   onCheckout?: () => void;
   onSwitch?: () => void;
+  onUpdateUnits?: (units: number) => void;
+  onCancelSubscription?: () => void;
 };
 
 export const SubscriptionItemContext = createContext<

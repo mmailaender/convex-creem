@@ -1243,17 +1243,17 @@ docs-only.
 
 - [ ] Move toward a normalized snapshot with `subscriptions[]` and `orders[]`
       instead of a single primary subscription field.
-- [ ] Include `planId`, `productId`, `subscriptionId`, `status`,
+- [x] Include `planId`, `productId`, `subscriptionId`, `status`,
       `recurringCycle`, and optional `kind` on subscription rows.
-- [ ] Include `planId`, `orderId`, `productId`, and `status` on order rows when
+- [x] Include `planId`, `orderId`, `productId`, and `status` on order rows when
       products map to catalog entries.
-- [ ] Derive `paymentRecoveryState` from subscription status.
+- [x] Derive `paymentRecoveryState` from subscription status.
 - [ ] Add selectors that keep UI convenience fields out of the base snapshot.
 
 ### Provider Contract
 
-- [ ] Define `BillingContextValue` in the shared core package.
-- [ ] Include reactive model state, loading/error state, checkout creation,
+- [x] Define `BillingContextValue` in the shared core package.
+- [x] Include reactive model state, loading/error state, checkout creation,
       subscription update, cancel/resume, portal URL, invalidation, and optional
       credits capability.
 - [x] Add transaction-history capability for `BillingHistory` v1 using paginated
@@ -1269,11 +1269,11 @@ docs-only.
       and primitive structure.
 - [ ] Move shared styling into UI package styles that consume core design
       tokens.
-- [ ] Implement `Subscription.Root`, `Subscription.Group`,
+- [x] Implement `Subscription.Root`, `Subscription.Group`,
       `Subscription.GroupSelector`, `Subscription.IntervalSelector`,
       `Subscription.Grid`, `Subscription.Item`, `Subscription.UnitPicker`, and
       item slots.
-- [ ] Support the four progressive-disclosure levels: shortcut, default
+- [x] Support the four progressive-disclosure levels: shortcut, default
       composition, styled composition, and headless escape hatch.
 - [x] Ensure group selection filters plans before available intervals are
       computed.
@@ -1290,8 +1290,8 @@ docs-only.
 - [x] Implement `Credits` as a balance/refresh widget with composable `Title`,
       `Amount`, `Refresh`, `Error`, and `Status` slots, without a built-in
       consume button.
-- [ ] Implement `BillingGate` as a billing-state conditional renderer.
-- [ ] Keep `PaymentMethods` and `Preferences` out of the package until Creem
+- [x] Implement `BillingGate` as a billing-state conditional renderer.
+- [x] Keep `PaymentMethods` and `Preferences` out of the package until Creem
       exposes direct APIs.
 - [x] Keep invoice/receipt links or PDFs out of `BillingHistory` v1.
 - [x] Preserve React and Svelte prop parity, allowing only framework-native
@@ -1303,7 +1303,7 @@ docs-only.
       into the Convex integration package boundary.
 - [ ] Replace direct widget usage of Convex `FunctionReference`, `useQuery`,
       `useMutation`, and Svelte Convex hooks with provider usage.
-- [ ] Preserve existing checkout, portal, subscription update, cancel, resume,
+- [x] Preserve existing checkout, portal, subscription update, cancel, resume,
       pause, product sync, order sync, and webhook behavior.
 - [x] Add transaction query/action support needed by `BillingHistory` v1.
 - [ ] Add migration docs for old connected widgets to provider + UI package
@@ -1313,16 +1313,16 @@ docs-only.
 
 - [ ] Update `example-react` for the new provider and UI packages.
 - [ ] Update `example-svelte` for the new provider and UI packages.
-- [ ] Add a one-plan default subscription example.
+- [x] Add a one-plan default subscription example.
 - [x] Add an Individual vs Teams grouped pricing example with unit-based team
       plans.
-- [ ] Add a fully customized card example using item slots.
+- [x] Add a fully customized card example using item slots.
 - [x] Add `BillingHistory` v1 examples with pagination.
 - [x] Add backend-owned Customer Credits consumption demos in React and Svelte,
       with feature action buttons calling Convex actions.
-- [ ] Add payment recovery examples.
-- [ ] Add usage-limit composition examples.
-- [ ] Add policy-gate examples for checkout and plan changes.
+- [x] Add payment recovery examples.
+- [x] Add usage-limit composition examples.
+- [x] Add policy-gate examples for checkout and plan changes.
 - [x] Document that `PaymentMethods` and `Preferences` are blocked future
       widgets, not portal wrappers.
 - [ ] Document app-side i18n via slots and Creem-native product-name/description

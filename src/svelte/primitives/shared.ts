@@ -100,6 +100,26 @@ export const formatUnitPrice = (
   return `${resolved.formatted}${suffix} × ${units} units`;
 };
 
+export const formatUnitPriceBreakdown = (
+  productId: string | undefined,
+  products: ConnectedProduct[],
+  units: number,
+): { total: string; calculation: string } | null => {
+  if (!productId || !products.length) return null;
+  const product = products.find((p) => p.id === productId);
+  if (!product) return null;
+  if (product.price == null || !product.currency) return null;
+  const suffix = product.billingPeriod
+    ? (INTERVAL_LABELS[product.billingPeriod] ?? "")
+    : "";
+  const unit = `${formatPrice(product.price, product.currency)}${suffix}`;
+  const total = `${formatPrice(product.price * units, product.currency)}${suffix}`;
+  return {
+    total,
+    calculation: `${unit} × ${units} unit${units === 1 ? "" : "s"}`,
+  };
+};
+
 export const formatPriceWithInterval = (
   productId: string | undefined,
   products: ConnectedProduct[],

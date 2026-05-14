@@ -27,7 +27,11 @@ import type {
 } from "../../core/types.js";
 import { findPlanById, normalizePlanCatalog } from "../../core/catalog.js";
 import { buildUpdateSummary } from "../../core/subscriptionUpdate.js";
-import { formatPriceWithInterval, formatUnitPrice } from "../shared.js";
+import {
+  formatPriceWithInterval,
+  formatUnitPrice,
+  formatUnitPriceBreakdown,
+} from "../shared.js";
 import {
   requireCreemConvexApi,
   useCreemConvex,
@@ -645,14 +649,34 @@ export const SubscriptionRoot = ({
         );
       });
       const currentTitle = currentPlan?.title ?? "Current plan";
-      const currentPrice = formatPriceWithInterval(
-        localSubscriptionProductId ?? undefined,
-        allProducts,
-      );
-      const newPrice = formatPriceWithInterval(
-        pendingUpdate.productId,
-        allProducts,
-      );
+      const switchUnits =
+        pendingUpdate.units ?? localSubscribedUnits ?? units ?? 1;
+      const useUnitBreakdown =
+        currentPlan?.pricingModel === "unit" ||
+        pendingUpdate.plan.pricingModel === "unit";
+      const currentBreakdown = useUnitBreakdown
+        ? formatUnitPriceBreakdown(
+            localSubscriptionProductId ?? undefined,
+            allProducts,
+            switchUnits,
+          )
+        : null;
+      const newBreakdown = useUnitBreakdown
+        ? formatUnitPriceBreakdown(
+            pendingUpdate.productId,
+            allProducts,
+            switchUnits,
+          )
+        : null;
+      const currentPrice =
+        currentBreakdown?.total ??
+        formatPriceWithInterval(
+          localSubscriptionProductId ?? undefined,
+          allProducts,
+        );
+      const newPrice =
+        newBreakdown?.total ??
+        formatPriceWithInterval(pendingUpdate.productId, allProducts);
 
       return buildUpdateSummary({
         kind: "plan-switch",
@@ -663,6 +687,8 @@ export const SubscriptionRoot = ({
         newLabel: newPrice
           ? `${pendingUpdate.plan.title ?? "New plan"} \u00b7 ${newPrice}`
           : (pendingUpdate.plan.title ?? "New plan"),
+        currentCaption: currentBreakdown?.calculation ?? null,
+        newCaption: newBreakdown?.calculation ?? null,
         currentPeriodEnd: matchedSubscription?.currentPeriodEnd,
         isTrialing: matchedSubscription?.status === "trialing",
         trialEnd: matchedSubscription?.trialEnd,
@@ -699,6 +725,7 @@ export const SubscriptionRoot = ({
     localSubscriptionProductId,
     allProducts,
     localSubscribedUnits,
+    units,
     updateBehavior,
     matchedSubscription,
   ]);
@@ -1061,12 +1088,22 @@ export const SubscriptionRoot = ({
                           <span className="label-m text-foreground-muted">
                             {updateSummary.currentLabel}
                           </span>
+                          {updateSummary.currentCaption && (
+                            <span className="body-s text-foreground-placeholder">
+                              {updateSummary.currentCaption}
+                            </span>
+                          )}
                           <span className="body-s text-foreground-placeholder">
                             {"\u2192"}
                           </span>
                           <span className="label-m text-foreground-default">
                             {updateSummary.newLabel}
                           </span>
+                          {updateSummary.newCaption && (
+                            <span className="body-s text-foreground-placeholder">
+                              {updateSummary.newCaption}
+                            </span>
+                          )}
                         </div>
                         <Dialog.Description className="dialog-description">
                           {updateSummary.description}
