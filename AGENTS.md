@@ -2,7 +2,7 @@
 
 Ensure new code is covered by meaningful tests.
 
-Before finishing, run:
+Before finishing, evaluate if your changes require running:
 
 ```bash
 pnpm test
