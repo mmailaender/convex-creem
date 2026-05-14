@@ -539,9 +539,8 @@ Your handlers run **after** the component's built-in processing
 (customer/subscription/order upserts). The `ctx` is a Convex mutation context —
 you can read/write to your own tables.
 
-**Supported events:** `checkout.completed`, `subscription.active`,
-`subscription.updated`, `subscription.canceled`, `subscription.paused`,
-`subscription.resumed`, `product.created`, `product.updated`.
+**Supported events:** `checkout.completed`, `subscription.active`, `subscription.paid`, `subscription.updated`, `subscription.canceled`, `subscription.paused`, `subscription.resumed`, `product.created`,
+`product.updated`.
 
 ### Security & Access Control
 
