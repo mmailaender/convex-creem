@@ -146,7 +146,7 @@ export default http;
 
 Use your **Convex site URL** + `/creem/events` as the webhook endpoint in your
 Creem dashboard. The component automatically handles `checkout.completed`,
-`subscription.*`, and `product.*` events.
+Creem subscription lifecycle events, `refund.created`, and `dispute.created`.
 
 > For custom event handlers (e.g. sending emails on checkout), see
 > [Webhook event middleware](#webhook-event-middleware).
@@ -700,7 +700,7 @@ creem.registerRoutes(http, {
       // event has { type, data } from Creem
       // Example: send confirmation email, grant entitlements, log analytics
     },
-    "subscription.updated": async (ctx, event) => {
+    "subscription.update": async (ctx, event) => {
       const data = event.data as { customerCancellationReason?: string };
       if (data?.customerCancellationReason) {
         console.log("Cancellation reason:", data.customerCancellationReason);
@@ -714,9 +714,33 @@ Your handlers run **after** the component's built-in processing
 (customer/subscription/order upserts). The `ctx` is a Convex mutation context —
 you can read/write to your own tables.
 
-**Supported events:** `checkout.completed`, `subscription.active`,
-`subscription.updated`, `subscription.canceled`, `subscription.paused`,
-`subscription.resumed`, `product.created`, `product.updated`.
+**Supported events:**
+
+`registerRoutes` verifies and dispatches these event names to custom `events`
+handlers. Built-in Convex sync runs for checkout, subscription, and refund
+events where applicable; dispute events are available to custom handlers.
+
+**Checkout**
+
+- `checkout.completed`
+
+**Subscriptions**
+
+- `subscription.active`
+- `subscription.paid`
+- `subscription.canceled`
+- `subscription.scheduled_cancel`
+- `subscription.past_due`
+- `subscription.expired`
+- `subscription.trialing`
+- `subscription.paused`
+- `subscription.unpaid`
+- `subscription.update`
+
+**Refunds and disputes**
+
+- `refund.created`
+- `dispute.created`
 
 ### Security & Access Control
 
