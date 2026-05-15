@@ -1027,6 +1027,10 @@ Impact on `convex-creem`:
 
 ### Scheduled subscription updates
 
+Feature request:
+
+- [Scheduled subscription plan switches (end of cycle)](https://creem.featurebase.app/p/scheduled-subscription-plan-switches-end-of-cycle)
+
 Current behavior:
 
 - Creem supports scheduled cancellation through `subscription.scheduled_cancel`,
@@ -1068,6 +1072,10 @@ Impact on `convex-creem`:
 
 ### Product lifecycle webhooks
 
+Feature Request:
+
+- [Product lifecycle webhooks](https://creem.featurebase.app/en/p/product-lifecycle-webhooks)
+
 Current behavior:
 
 - `convex-creem` can sync products by pulling the Creem product list.
@@ -1097,6 +1105,10 @@ Impact on `convex-creem`:
   feature grants, credit grants, and free-product detection.
 
 ### Stable product identity and developer slugs across environments
+
+Feature request:
+
+- [Stable product identity and developer slugs across environments](https://creem.featurebase.app/en/p/stable-product-identity-and-developer-slugs-across-environments)
 
 Desired platform behavior:
 
@@ -1164,6 +1176,9 @@ Until Creem exposes this, `convex-creem` should keep using app-owned stable
 
 ### One product with multiple billing cycles
 
+Feature Request:
+- [Yearly or monthly billing period for the same product](https://creem.featurebase.app/en/p/yearly-or-monthly-billing-period-for-the-same-product)
+
 Desired platform behavior:
 
 - Support one product with multiple billing cycles instead of requiring a
@@ -1196,6 +1211,10 @@ Impact on `convex-creem`:
   first-class product model.
 
 ### Payment method, customer preference, and invoice/receipt APIs
+
+Feature Request:
+
+- [Payment method, billing preference, and invoice APIs](https://creem.featurebase.app/en/p/payment-method-billing-preference-and-invoice-apis)
 
 Current behavior:
 
@@ -1237,6 +1256,10 @@ Impact on `convex-creem`:
 
 ### Customer Credits webhooks
 
+Feature request:
+
+- [Customer Credits webhooks](https://creem.featurebase.app/en/p/customer-credits-webhooks)
+
 Current behavior:
 
 - Creem exposes the Customer Credits API, but does not currently emit webhooks
@@ -1267,6 +1290,10 @@ Impact on `convex-creem`:
   reads from Creem for the common display path.
 
 ### Customer Credits product and affiliate grants
+
+Feature Requests:
+
+- [Customer Credits product and affiliate grants](https://creem.featurebase.app/en/p/customer-credits-product-and-affiliate-grants)
 
 Current behavior:
 
@@ -1302,6 +1329,13 @@ Impact on `convex-creem`:
   of app-side fulfillment code.
 
 ### Product localization / i18n
+
+Feature requests:
+- [Product Localization (i18n)](https://creem.featurebase.app/en/p/product-localization-i18n)
+- [Customer Portal Localization](https://creem.featurebase.app/en/p/customer-portal-localization)
+- [Dashboard Localization](https://creem.featurebase.app/en/p/dashboard-localization)
+- [Translate Transactional Emails and Receipts](https://creem.featurebase.app/en/p/translate-transactional-emails-and-receipts)
+- [Multi-language support for cart recovery emails](https://creem.featurebase.app/en/p/multi-language-support-for-cart-recovery-emails-2)
 
 Current behavior:
 
