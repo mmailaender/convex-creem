@@ -11,7 +11,9 @@ export const CreditsTitle = ({
   children?: ReactNode;
 }) => {
   const credits = useCredits();
-  return <h3 className={className}>{children ?? credits.labels.credits.title}</h3>;
+  return (
+    <h3 className={className}>{children ?? credits.labels.credits.title}</h3>
+  );
 };
 
 export const CreditsAmount = ({

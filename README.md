@@ -979,15 +979,16 @@ functions, or let `creem.api({ resolve })` generate ready-to-export wrappers.
 
 **`creem.subscriptions.*`**
 
-| Method                                                                             | Data source | Description                                                                                                                                                       |
-| ---------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.getCurrent(ctx, { entityId })`                                                   | Convex DB   | Current active subscription with product join                                                                                                                     |
-| `.list(ctx, { entityId })`                                                         | Convex DB   | Active subscriptions (excludes ended + expired trials)                                                                                                            |
-| `.listAll(ctx, { entityId })`                                                      | Convex DB   | All subscriptions including ended                                                                                                                                 |
-| `.update(ctx, { entityId, subscriptionId?, productId?, units?, updateBehavior? })` | Creem API   | Unified plan switch (`productId`) or unit update (`units`). Pass `subscriptionId` when the entity has multiple active subscriptions. Optional proration override. |
-| `.cancel(ctx, { entityId, revokeImmediately? })`                                   | Creem API   | Cancel subscription                                                                                                                                               |
-| `.pause(ctx, { entityId })`                                                        | Creem API   | Pause an active subscription                                                                                                                                      |
-| `.resume(ctx, { entityId })`                                                       | Creem API   | Resume a paused or scheduled-cancel subscription                                                                                                                  |
+| Method                                                                                          | Data source                  | Description                                                                                                                                                                                                         |
+| ----------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.getCurrent(ctx, { entityId })`                                                                | Convex DB                    | Current active subscription with product join                                                                                                                                                                       |
+| `.list(ctx, { entityId })`                                                                      | Convex DB                    | Active subscriptions (excludes ended + expired trials)                                                                                                                                                              |
+| `.listAll(ctx, { entityId })`                                                                   | Convex DB                    | All subscriptions including ended                                                                                                                                                                                   |
+| `.update(ctx, { entityId, subscriptionId?, productId?, freePlanId?, units?, updateBehavior? })` | Creem API / Convex scheduler | Unified plan switch (`productId`), paid-to-free switch (`freePlanId`), or unit update (`units`). Pass `subscriptionId` for multiple active subscriptions. `updateBehavior: "period-end"` stores a scheduled update. |
+| `.cancelScheduledUpdate(ctx, { entityId, subscriptionId? })`                                    | Convex DB / Creem API        | Undo a pending app-side period-end update. If the pending update was a paid-to-free switch, the Creem scheduled cancellation is resumed.                                                                            |
+| `.cancel(ctx, { entityId, revokeImmediately? })`                                                | Creem API                    | Cancel subscription                                                                                                                                                                                                 |
+| `.pause(ctx, { entityId })`                                                                     | Creem API                    | Pause an active subscription                                                                                                                                                                                        |
+| `.resume(ctx, { entityId })`                                                                    | Creem API                    | Resume a paused or scheduled-cancel subscription                                                                                                                                                                    |
 
 Set `new Creem(components.creem, { cancelMode: "scheduled" })` to make normal
 cancel actions end at the paid period boundary and surface
@@ -1121,23 +1122,23 @@ These query Convex directly and manage billing state end-to-end.
 Container for subscription plan cards. Handles billing cycle toggle, checkout,
 plan switching, cancellation, and unit management.
 
-| Prop                         | Type                                                              | Default                                      | Description                                                                                                                                               |
-| ---------------------------- | ----------------------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api`                        | `ConnectedBillingApi`                                             | —                                            | **Required.** Backend function references                                                                                                                 |
-| `permissions`                | `BillingPermissions`                                              | all enabled                                  | Disable actions based on user role                                                                                                                        |
-| `class`/`className`          | `string`                                                          | `""`                                         | Wrapper CSS class                                                                                                                                         |
-| `successUrl`                 | `string`                                                          | product's `defaultSuccessUrl` → current page | Override redirect after checkout. When omitted, uses the product's `defaultSuccessUrl` from Creem; if that is also unset, falls back to the current page. |
-| `units`                      | `number`                                                          | —                                            | Auto-derived unit count for unit-based plans                                                                                                              |
-| `showUnitPicker`             | `boolean`                                                         | `false`                                      | Show quantity picker on unit-based cards                                                                                                                  |
-| `twoColumnLayout`            | `boolean`                                                         | `false`                                      | Use two-column card layout                                                                                                                                |
-| `updateBehavior`             | `UpdateBehavior`                                                  | `"proration-charge-immediately"`             | How plan switches and unit updates are billed. See below.                                                                                                 |
-| `unstyled`                   | `boolean`                                                         | `false`                                      | Remove built-in visual classes from compound subscription pieces so custom children own their styling.                                                    |
-| `labels`                     | `BillingLabelOverrides`                                           | provider labels                              | Override subscription labels locally for this root.                                                                                                       |
-| `i18n`                       | `BillingI18n`                                                     | provider i18n                                | Override locale, labels, or formatters locally for this root.                                                                                             |
-| `onBeforeCheckout`           | `(intent: CheckoutIntent) => Promise<boolean> \| boolean`         | —                                            | Gate checkout (auth, terms, etc.). Return `false` to abort.                                                                                               |
-| `onBeforePlanChange`         | `(intent: PlanChangeIntent) => Promise<boolean> \| boolean`       | —                                            | Gate paid plan switches. Return `false` to abort.                                                                                                         |
-| `onBeforeFreePlanActivation` | `(intent: { freePlanId: string }) => Promise<boolean> \| boolean` | —                                            | Gate free-plan activation. Return `false` to abort.                                                                                                       |
-| `children`                   | `Snippet` / `ReactNode`                                           | —                                            | `<Subscription.Item>` children                                                                                                                            |
+| Prop                         | Type                                                                   | Default                                      | Description                                                                                                                                                |
+| ---------------------------- | ---------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api`                        | `ConnectedBillingApi`                                                  | —                                            | **Required.** Backend function references                                                                                                                  |
+| `permissions`                | `BillingPermissions`                                                   | all enabled                                  | Disable actions based on user role                                                                                                                         |
+| `class`/`className`          | `string`                                                               | `""`                                         | Wrapper CSS class                                                                                                                                          |
+| `successUrl`                 | `string`                                                               | product's `defaultSuccessUrl` → current page | Override redirect after checkout. When omitted, uses the product's `defaultSuccessUrl` from Creem; if that is also unset, falls back to the current page.  |
+| `units`                      | `number`                                                               | —                                            | Auto-derived unit count for unit-based plans                                                                                                               |
+| `showUnitPicker`             | `boolean`                                                              | `false`                                      | Show quantity picker on unit-based cards                                                                                                                   |
+| `twoColumnLayout`            | `boolean`                                                              | `false`                                      | Use two-column card layout                                                                                                                                 |
+| `updateBehavior`             | `UpdateBehavior \| ((intent: UpdateBehaviorIntent) => UpdateBehavior)` | `"proration-charge-immediately"`             | How plan switches and unit updates are billed. Pass a function to choose different behavior for upgrades, downgrades, free-plan switches, or unit changes. |
+| `unstyled`                   | `boolean`                                                              | `false`                                      | Remove built-in visual classes from compound subscription pieces so custom children own their styling.                                                     |
+| `labels`                     | `BillingLabelOverrides`                                                | provider labels                              | Override subscription labels locally for this root.                                                                                                        |
+| `i18n`                       | `BillingI18n`                                                          | provider i18n                                | Override locale, labels, or formatters locally for this root.                                                                                              |
+| `onBeforeCheckout`           | `(intent: CheckoutIntent) => Promise<boolean> \| boolean`              | —                                            | Gate checkout (auth, terms, etc.). Return `false` to abort.                                                                                                |
+| `onBeforePlanChange`         | `(intent: PlanChangeIntent) => Promise<boolean> \| boolean`            | —                                            | Gate paid plan switches. Return `false` to abort.                                                                                                          |
+| `onBeforeFreePlanActivation` | `(intent: { freePlanId: string }) => Promise<boolean> \| boolean`      | —                                            | Gate free-plan activation. Return `false` to abort.                                                                                                        |
+| `children`                   | `Snippet` / `ReactNode`                                                | —                                            | `<Subscription.Item>` children                                                                                                                             |
 
 Use `unstyled` when composing your own pricing cards with `Subscription.Grid`,
 `Subscription.ItemTitle`, `Subscription.ItemPrice`,
@@ -1152,13 +1153,40 @@ places library defaults in the base cascade layer. Consumer `class`/`className`
 utilities like `font-bold`, `text-xl`, or `bg-emerald-600` therefore override
 the built-in defaults without `tailwind-merge`.
 
-**`UpdateBehavior`** controls how the Creem API handles plan switches and unit
-changes:
+**`UpdateBehavior`** controls how plan switches and unit changes are applied:
 
 - `"proration-charge-immediately"` — prorate and charge the difference now
   (default)
 - `"proration-charge"` — prorate, charge on next invoice
 - `"proration-none"` — no proration, change takes effect on next billing cycle
+- `"period-end"` — keep the current subscription active until
+  `currentPeriodEnd`, then apply the target plan or unit count from a scheduled
+  Convex job
+
+The first three values map directly to Creem's subscription update behavior.
+`"period-end"` is currently implemented by `convex-creem`: it stores a pending
+scheduled update and applies it at the current billing period boundary with
+Creem's no-proration update path. Until Creem supports native scheduled
+subscription updates, the Creem customer portal will still show the current
+subscription as active and will not know about the pending app-side downgrade.
+
+Use a resolver function when upgrades and downgrades should behave differently:
+
+```tsx
+<Subscription.Root
+  updateBehavior={(intent) => {
+    if (intent.toPlan?.category === "free") return "period-end";
+    if (
+      intent.fromPrice != null &&
+      intent.toPrice != null &&
+      intent.toPrice < intent.fromPrice
+    ) {
+      return "period-end";
+    }
+    return "proration-charge";
+  }}
+/>
+```
 
 #### `<Subscription.Item>`
 
@@ -1398,14 +1426,17 @@ Shows a trial expiration notice.
 
 #### `<ScheduledChangeBanner>`
 
-Shows a cancellation-scheduled notice with optional "Undo" button.
+Shows a scheduled cancellation or app-side period-end update notice. Scheduled
+updates can include the target plan/unit label and can expose an undo action.
 
-| Prop        | Type                      | Description                                       |
-| ----------- | ------------------------- | ------------------------------------------------- |
-| `snapshot`  | `BillingSnapshot \| null` | Current billing state                             |
-| `isLoading` | `boolean`                 | Loading state for resume button                   |
-| `onResume`  | `() => void`              | Resume handler (shows "Undo cancellation" button) |
-| `className` | `string`                  | CSS class                                         |
+| Prop                   | Type                      | Description                                         |
+| ---------------------- | ------------------------- | --------------------------------------------------- |
+| `snapshot`             | `BillingSnapshot \| null` | Current billing state                               |
+| `isLoading`            | `boolean`                 | Loading state for resume/undo buttons               |
+| `onResume`             | `() => void`              | Resume handler (shows "Undo cancellation" button)   |
+| `onUndoUpdate`         | `() => void`              | Undo handler for app-side scheduled updates         |
+| `scheduledUpdateLabel` | `string \| null`          | Human-readable target plan, price, or unit quantity |
+| `className`            | `string`                  | CSS class                                           |
 
 #### `<PaymentWarningBanner>`
 

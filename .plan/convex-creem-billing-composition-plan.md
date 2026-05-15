@@ -905,6 +905,10 @@ features that would make the component simpler and reduce app-side mapping.
 
 ### Embedded checkout / iframe payment flow
 
+Feature request:
+
+- [Request for iframe payment integration support](https://creem.featurebase.app/en/p/request-for-iframe-payment-integration-support)
+
 Current behavior:
 
 - Creem checkout is hosted on a separate Creem page.
@@ -929,10 +933,6 @@ Desired platform behavior:
 - Document the embedded flow across the API, SDK, dashboard settings, test mode,
   and production security requirements.
 
-Related Creem feature request:
-
-- [Request for iframe payment integration support](https://creem.featurebase.app/en/p/request-for-iframe-payment-integration-support)
-
 Impact on `convex-creem`:
 
 - Add an embedded checkout mode to checkout helpers and widgets once Creem
@@ -946,12 +946,53 @@ Impact on `convex-creem`:
 
 ### Native free plans
 
-When Creem supports native free plans, the desired end state is:
+Feature request:
+
+- [Request for native free plan support](https://creem.featurebase.app/p/free-subscription-tiers)
+
+Current behavior:
+
+- Historically, `free` is app-owned state in `convex-creem`; Creem only backs
+  paid recurring subscriptions and paid one-time products.
+- `cancelToFreePlan(...)` is therefore a temporary bridge: schedule the paid
+  subscription cancellation, then let the app activate its own free plan when
+  the final cancellation webhook arrives.
+- As of 2026-05-14, the Creem dashboard appears to support a "Free" billing
+  option. Synced products currently arrive as zero-price products with
+  `billingType: "onetime"` and `price: 0`; public API documentation allows
+  `price: 0` but still describes product billing types as `onetime`/`recurring`
+  and does not yet document paid-to-free subscription transition semantics.
+  Treat this as an emerging platform capability until the API, SDK, webhooks,
+  dashboard, and docs all describe the behavior consistently.
+
+Why native free plans matter:
+
+- A free plan can be represented by a stable Creem product ID instead of only by
+  app-side auth state.
+- Product sync, checkout completion, webhooks, snapshots, analytics, and
+  customer history can all point at the same free-plan product.
+- Apps can distinguish "downgrade to free" from "cancel completely" without
+  inventing a parallel billing transition model.
+- Pricing widgets can use the same catalog/product mapping path for free and
+  paid plans, while still letting apps add policy gates such as data-use
+  consent.
+- The temporary `cancelToFreePlan(...)` workaround can eventually become
+  compatibility code rather than the main architecture.
+
+Desired platform behavior:
 
 - `free` is represented directly by Creem, not only by app-side auth state.
 - Downgrading from paid Private to Free becomes a Creem-backed plan transition.
 - Canceling completely remains distinct from downgrading to free.
 - `convex-creem` still exposes stable plan IDs, so app code does not change.
+- Free products can be created, listed, retrieved, used in checkout or
+  activation flows, and emitted in webhooks with documented semantics.
+- The API clearly distinguishes zero-price one-time products, free-plan
+  entitlements, and future free recurring plans if those are different platform
+  concepts.
+- Upgrade/downgrade APIs document whether paid subscriptions can move directly
+  to a free product, whether that transition can be scheduled for period end,
+  and which webhook confirms the final state.
 
 The catalog keeps the same shape:
 
@@ -959,6 +1000,7 @@ The catalog keeps the same shape:
 {
   planId: "free",
   type: "free",
+  creemProductIds: { custom: "prod_free" },
 }
 ```
 
@@ -966,6 +1008,93 @@ Only the plan backing changes:
 
 - today: app-owned free plan
 - future: Creem-owned free plan
+
+Impact on `convex-creem`:
+
+- Add first-class detection for synced Creem free products, initially by
+  supporting catalog-backed `category: "free"` plans whose synced product has
+  `price: 0`, even if Creem currently reports `billingType: "onetime"`.
+- Keep app-owned free plans supported for apps that need local policy state or
+  while Creem's free-product semantics are incomplete.
+- Update `Subscription.ItemCTA` / `Subscription.FreePlanCTA` behavior so a free
+  catalog product can use the normal product-backed CTA path when Creem supports
+  it, while falling back to `cancelToFreePlan(...)` or an app callback when it
+  does not.
+- Update normalized snapshots so free products can appear as owned plan state
+  without being confused with paid one-time purchases.
+- Once Creem documents paid-to-free transitions, replace the temporary
+  cancellation-to-free bridge with a native subscription update/downgrade path.
+
+### Scheduled subscription updates
+
+Current behavior:
+
+- Creem supports scheduled cancellation through `subscription.scheduled_cancel`,
+  so a customer can retain access until the end of the already-paid billing
+  period before the subscription ends.
+- Creem supports subscription product/unit changes with `update_behavior`
+  options such as `proration-charge-immediately`, `proration-charge`, and
+  `proration-none`.
+- Those options primarily describe billing/proration behavior. They do not
+  clearly expose a first-class "keep the current higher plan until period end,
+  then downgrade" workflow.
+- This distinction matters most for downgrades. Upgrades usually should grant
+  access immediately; downgrades often should preserve already-paid access until
+  the current period ends.
+
+Desired platform behavior:
+
+- Add a native `subscription.scheduled_update` flow, analogous to
+  `subscription.scheduled_cancel`.
+- Let merchants schedule plan/product/unit downgrades for the current period end
+  while the current subscription remains active until then.
+- Include the target product/items/units, effective date, previous subscription
+  state, and cancellation/replacement semantics in API responses and webhooks.
+- Let scheduled updates be canceled or replaced before they take effect.
+- Define how scheduled updates interact with customer portal changes, trials,
+  paused/past-due subscriptions, free tiers, and payment recovery.
+
+Impact on `convex-creem`:
+
+- Until Creem supports this natively, add an app-side scheduled downgrade intent
+  table and scheduled Convex job that applies the update at `currentPeriodEnd`.
+- Show scheduled downgrade state in snapshots and widgets, for example
+  "Downgrades to Basic on May 17".
+- Document the limitation clearly: because the schedule is app-side, the Creem
+  customer portal will still show the current subscription as active until the
+  scheduled job runs.
+- Once Creem ships native scheduled updates, replace the app-side scheduler with
+  the platform primitive while preserving the public catalog/action shape.
+
+### Product lifecycle webhooks
+
+Current behavior:
+
+- `convex-creem` can sync products by pulling the Creem product list.
+- Creem webhooks currently focus on checkout, subscription, refund, and dispute
+  events. Product create/update/archive events are not documented as webhook
+  events.
+- Without product lifecycle webhooks, product catalog sync is either manual,
+  scheduled, or triggered indirectly by other billing events.
+
+Desired platform behavior:
+
+- Emit product lifecycle webhooks such as `product.create`, `product.update`,
+  and `product.archive` whenever products are created, modified, activated,
+  archived, or otherwise made unavailable.
+- Include the full product object, previous status when useful,
+  environment/mode, and enough metadata to reconcile catalog mappings.
+- Make these events available in API, SDK, dashboard webhook configuration,
+  docs, test tools, and local/dev webhook replay.
+
+Impact on `convex-creem`:
+
+- Keep the local Convex product cache in sync reactively instead of relying only
+  on explicit pull-based sync.
+- Make examples and local development smoother because dashboard product edits
+  can appear automatically in widgets.
+- Reduce stale catalog/product mismatch risk for plan cards, checkout buttons,
+  feature grants, credit grants, and free-product detection.
 
 ### Stable product identity and developer slugs across environments
 
@@ -1196,8 +1325,7 @@ Impact on `convex-creem`:
   `Subscription.ItemTitle`, `Subscription.ItemDescription`, and custom children.
   Creem-native i18n makes the simple default path work better.
 - Runtime UI-label i18n for default widgets, dialogs, tables, status messages,
-  and accessibility labels is tracked separately in
-  `convex-creem-i18n-plan.md`.
+  and accessibility labels is tracked separately in `convex-creem-i18n-plan.md`.
 
 ## Implementation Order
 

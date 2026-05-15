@@ -42,6 +42,14 @@ describe("buildUpdateSummary", () => {
       expect(result.description).toContain("next billing cycle");
     });
 
+    it("describes period-end", () => {
+      const result = buildUpdateSummary({
+        ...base,
+        updateBehavior: "period-end",
+      });
+      expect(result.description).toContain("current plan stays active");
+    });
+
     it("preserves labels", () => {
       const result = buildUpdateSummary(base);
       expect(result.currentLabel).toBe("Basic");
@@ -85,6 +93,16 @@ describe("buildUpdateSummary", () => {
         currentPeriodEnd: "2025-06-15T00:00:00Z",
       });
       expect(result.dateNote).toBeNull();
+    });
+
+    it("includes date note for period-end", () => {
+      const result = buildUpdateSummary({
+        ...base,
+        updateBehavior: "period-end",
+        currentPeriodEnd: "2025-06-15T00:00:00Z",
+      });
+      expect(result.dateNote).toContain("scheduled change");
+      expect(result.dateNote).toContain("2025");
     });
 
     it("returns null dateNote when no currentPeriodEnd", () => {

@@ -1,8 +1,5 @@
 import type { RecurringCycle } from "../../core/types.js";
-import {
-  defaultBillingLabels,
-  type BillingLabels,
-} from "../../core/i18n.js";
+import { defaultBillingLabels, type BillingLabels } from "../../core/i18n.js";
 import { formatRecurringCycle } from "../shared.js";
 import { SegmentGroup } from "./SegmentGroup.js";
 

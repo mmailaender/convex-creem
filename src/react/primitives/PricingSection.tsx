@@ -65,7 +65,8 @@ export const PricingSection = ({
   }) => Promise<void> | void;
   onSwitchPlan?: (payload: {
     plan: UIPlanEntry;
-    productId: string;
+    productId?: string;
+    freePlanId?: string;
     units?: number;
   }) => Promise<void> | void;
   onUpdateUnits?: (payload: { units: number }) => Promise<void> | void;

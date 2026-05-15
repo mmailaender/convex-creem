@@ -1210,6 +1210,111 @@ describe("patchSubscription mutation", () => {
   });
 });
 
+describe("scheduled subscription update mutations", () => {
+  let t: TestConvex<typeof schema>;
+
+  beforeEach(() => {
+    t = convexTest(schema, modules);
+  });
+
+  it("creates and lists pending scheduled updates", async () => {
+    const id = await t.mutation(api.lib.createScheduledSubscriptionUpdate, {
+      entityId: "user_456",
+      subscriptionId: "sub_1",
+      targetProductId: "prod_basic",
+      effectiveAt: "2026-03-01T00:00:00.000Z",
+    });
+
+    const update = await t.query(api.lib.getScheduledSubscriptionUpdate, {
+      scheduledUpdateId: id,
+    });
+    expect(update).toMatchObject({
+      entityId: "user_456",
+      subscriptionId: "sub_1",
+      targetProductId: "prod_basic",
+      effectiveAt: "2026-03-01T00:00:00.000Z",
+      status: "pending",
+    });
+
+    const pending = await t.query(
+      api.lib.listPendingScheduledSubscriptionUpdates,
+      {
+        entityId: "user_456",
+      },
+    );
+    expect(pending).toHaveLength(1);
+    expect(pending[0].subscriptionId).toBe("sub_1");
+  });
+
+  it("supersedes an existing pending update for the same subscription", async () => {
+    await t.mutation(api.lib.createScheduledSubscriptionUpdate, {
+      entityId: "user_456",
+      subscriptionId: "sub_1",
+      targetProductId: "prod_basic",
+      effectiveAt: "2026-03-01T00:00:00.000Z",
+    });
+    await t.mutation(api.lib.createScheduledSubscriptionUpdate, {
+      entityId: "user_456",
+      subscriptionId: "sub_1",
+      targetUnits: 2,
+      effectiveAt: "2026-03-01T00:00:00.000Z",
+    });
+
+    const pending = await t.query(
+      api.lib.listPendingScheduledSubscriptionUpdates,
+      {
+        entityId: "user_456",
+      },
+    );
+    expect(pending).toHaveLength(1);
+    expect(pending[0].targetUnits).toBe(2);
+  });
+
+  it("cancels a pending scheduled update", async () => {
+    await t.mutation(api.lib.createScheduledSubscriptionUpdate, {
+      entityId: "user_456",
+      subscriptionId: "sub_1",
+      targetPlanId: "free",
+      effectiveAt: "2026-03-01T00:00:00.000Z",
+    });
+
+    const canceled = await t.mutation(
+      api.lib.cancelScheduledSubscriptionUpdate,
+      {
+        entityId: "user_456",
+        subscriptionId: "sub_1",
+      },
+    );
+
+    expect(canceled).toMatchObject({
+      entityId: "user_456",
+      subscriptionId: "sub_1",
+      targetPlanId: "free",
+      status: "superseded",
+    });
+
+    const pending = await t.query(
+      api.lib.listPendingScheduledSubscriptionUpdates,
+      {
+        entityId: "user_456",
+      },
+    );
+    expect(pending).toHaveLength(0);
+  });
+
+  it("rejects scheduled updates without a target", async () => {
+    await expect(
+      t.mutation(api.lib.createScheduledSubscriptionUpdate, {
+        entityId: "user_456",
+        subscriptionId: "sub_1",
+        effectiveAt: "2026-03-01T00:00:00.000Z",
+      }),
+    ).rejects.toThrow(
+      "Provide exactly one scheduled target: targetProductId, targetPlanId, or targetUnits",
+    );
+  });
+});
+
 describe("updateSubscription optimistic guard", () => {
   let t: TestConvex<typeof schema>;
 

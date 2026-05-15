@@ -16,8 +16,8 @@ Several strings still belong to the widget/runtime layer:
 - Button labels in default cards and shortcut widgets.
 - Status labels such as current plan, recommended, free trial, scheduled
   cancellation, payment recovery, and one-time payment states.
-- Accessibility labels for controls such as steppers, close buttons, and
-  refresh buttons.
+- Accessibility labels for controls such as steppers, close buttons, and refresh
+  buttons.
 - Dynamic labels such as trial days left, unit counts, price calculations, and
   period-end dates.
 
@@ -48,9 +48,8 @@ The best path is:
 1. Make every label replaceable.
 2. Document custom app i18n with a German example.
 3. Stabilize the label contract.
-4. Optionally add locale packs later, for example
-   `convex-creem/locales/de`, `convex-creem/locales/fr`, or app-provided
-   dictionaries.
+4. Optionally add locale packs later, for example `convex-creem/locales/de`,
+   `convex-creem/locales/fr`, or app-provided dictionaries.
 
 ## API Shape
 
@@ -123,10 +122,7 @@ unitPriceCalculation: (input: {
   units: number;
   total: string;
 }) => string;
-switchPlanTitle: (input: {
-  fromPlan: string;
-  toPlan: string;
-}) => string;
+switchPlanTitle: (input: { fromPlan: string; toPlan: string }) => string;
 ```
 
 Dynamic labels should receive already-formatted money and date strings where
@@ -164,9 +160,8 @@ For now:
 - Drop-in widgets can only display the product text available in the catalog or
   billing model.
 
-Future platform support should allow Creem products to expose localized
-`name` and `description` values through the API, SDK, dashboard, CLI, and
-webhooks.
+Future platform support should allow Creem products to expose localized `name`
+and `description` values through the API, SDK, dashboard, CLI, and webhooks.
 
 ## Built-In Translation Packs
 
@@ -212,8 +207,8 @@ Include examples for:
 
 ## Tests
 
-- Add React tests that override representative labels in default cards,
-  dialogs, billing history, credits, and payment recovery.
+- Add React tests that override representative labels in default cards, dialogs,
+  billing history, credits, and payment recovery.
 - Add Svelte tests for the same label paths.
 - Add type tests that catch missing label parity between React and Svelte.
 - Add a source-level guard that user-facing English strings only live in the

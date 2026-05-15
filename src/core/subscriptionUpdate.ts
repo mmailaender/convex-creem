@@ -111,7 +111,8 @@ export const buildUpdateSummary = (
       kind === "plan-switch"
         ? labels.subscription.dialogs.switchPlanTitle
         : labels.subscription.dialogs.updateUnitsTitle,
-    description: labels.subscription.dialogs.behaviorDescription(updateBehavior),
+    description:
+      labels.subscription.dialogs.behaviorDescription(updateBehavior),
     currentLabel,
     newLabel,
     currentCaption,

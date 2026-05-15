@@ -583,6 +583,180 @@ export const patchSubscription = mutation({
   },
 });
 
+export const listPendingScheduledSubscriptionUpdates = query({
+  args: {
+    entityId: v.string(),
+  },
+  returns: v.array(schema.tables.scheduledSubscriptionUpdates.validator),
+  handler: async (ctx, args) => {
+    const updates = await ctx.db
+      .query("scheduledSubscriptionUpdates")
+      .withIndex("entityId_status", (q) =>
+        q.eq("entityId", args.entityId).eq("status", "pending"),
+      )
+      .collect();
+    return updates.map(omitSystemFields);
+  },
+});
+
+export const getScheduledSubscriptionUpdate = query({
+  args: {
+    scheduledUpdateId: v.id("scheduledSubscriptionUpdates"),
+  },
+  returns: v.union(
+    schema.tables.scheduledSubscriptionUpdates.validator,
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const update = await ctx.db.get(args.scheduledUpdateId);
+    return omitSystemFields(update);
+  },
+});
+
+export const createScheduledSubscriptionUpdate = mutation({
+  args: {
+    entityId: v.string(),
+    subscriptionId: v.string(),
+    targetProductId: v.optional(v.string()),
+    targetPlanId: v.optional(v.string()),
+    targetUnits: v.optional(v.number()),
+    effectiveAt: v.string(),
+  },
+  returns: v.id("scheduledSubscriptionUpdates"),
+  handler: async (ctx, args) => {
+    const targetCount =
+      (args.targetProductId ? 1 : 0) +
+      (args.targetPlanId ? 1 : 0) +
+      (args.targetUnits !== undefined ? 1 : 0);
+    if (targetCount !== 1) {
+      throw new ConvexError(
+        "Provide exactly one scheduled target: targetProductId, targetPlanId, or targetUnits",
+      );
+    }
+
+    const now = new Date().toISOString();
+    const existing = await ctx.db
+      .query("scheduledSubscriptionUpdates")
+      .withIndex("subscriptionId_status", (q) =>
+        q.eq("subscriptionId", args.subscriptionId).eq("status", "pending"),
+      )
+      .collect();
+    await asyncMap(existing, async (update) => {
+      await ctx.db.patch(update._id, {
+        status: "superseded",
+        updatedAt: now,
+      });
+    });
+
+    return await ctx.db.insert("scheduledSubscriptionUpdates", {
+      entityId: args.entityId,
+      subscriptionId: args.subscriptionId,
+      targetProductId: args.targetProductId,
+      targetPlanId: args.targetPlanId,
+      targetUnits: args.targetUnits,
+      effectiveAt: args.effectiveAt,
+      status: "pending",
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
+export const cancelScheduledSubscriptionUpdate = mutation({
+  args: {
+    entityId: v.string(),
+    subscriptionId: v.string(),
+  },
+  returns: v.union(
+    schema.tables.scheduledSubscriptionUpdates.validator,
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("scheduledSubscriptionUpdates")
+      .withIndex("subscriptionId_status", (q) =>
+        q.eq("subscriptionId", args.subscriptionId).eq("status", "pending"),
+      )
+      .filter((q) => q.eq(q.field("entityId"), args.entityId))
+      .first();
+    if (!existing) return null;
+
+    const now = new Date().toISOString();
+    await ctx.db.patch(existing._id, {
+      status: "superseded",
+      updatedAt: now,
+    });
+    return omitSystemFields({
+      ...existing,
+      status: "superseded" as const,
+      updatedAt: now,
+    });
+  },
+});
+
+export const setScheduledSubscriptionUpdateJob = mutation({
+  args: {
+    scheduledUpdateId: v.id("scheduledSubscriptionUpdates"),
+    scheduledFunctionId: v.id("_scheduled_functions"),
+  },
+  handler: async (ctx, args) => {
+    const update = await ctx.db.get(args.scheduledUpdateId);
+    if (!update) {
+      throw new ConvexError("Scheduled subscription update not found");
+    }
+    await ctx.db.patch(args.scheduledUpdateId, {
+      scheduledFunctionId: args.scheduledFunctionId,
+      updatedAt: new Date().toISOString(),
+    });
+  },
+});
+
+export const markScheduledSubscriptionUpdateApplying = mutation({
+  args: {
+    scheduledUpdateId: v.id("scheduledSubscriptionUpdates"),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const update = await ctx.db.get(args.scheduledUpdateId);
+    if (!update || update.status !== "pending") return false;
+    await ctx.db.patch(args.scheduledUpdateId, {
+      status: "applying",
+      updatedAt: new Date().toISOString(),
+    });
+    return true;
+  },
+});
+
+export const markScheduledSubscriptionUpdateApplied = mutation({
+  args: {
+    scheduledUpdateId: v.id("scheduledSubscriptionUpdates"),
+  },
+  handler: async (ctx, args) => {
+    const update = await ctx.db.get(args.scheduledUpdateId);
+    if (!update) return;
+    await ctx.db.patch(args.scheduledUpdateId, {
+      status: "applied",
+      updatedAt: new Date().toISOString(),
+    });
+  },
+});
+
+export const markScheduledSubscriptionUpdateFailed = mutation({
+  args: {
+    scheduledUpdateId: v.id("scheduledSubscriptionUpdates"),
+    error: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const update = await ctx.db.get(args.scheduledUpdateId);
+    if (!update) return;
+    await ctx.db.patch(args.scheduledUpdateId, {
+      status: "failed",
+      error: args.error,
+      updatedAt: new Date().toISOString(),
+    });
+  },
+});
+
 /** Action that calls Creem API and reverts on error. Scheduled by mutations.
  *  Public (not internal) so it's accessible via ComponentApi for scheduling from app-level mutations.
  *  Secured by requiring apiKey argument (same pattern as syncProducts). */
@@ -605,6 +779,11 @@ export const executeSubscriptionUpdate = action({
       ...(args.serverURL ? { serverURL: args.serverURL } : {}),
     });
     try {
+      if (args.updateBehavior === "period-end") {
+        throw new ConvexError(
+          "period-end updates must be scheduled before calling Creem",
+        );
+      }
       if (args.productId) {
         // Plan/interval switch
         await sdk.subscriptions.upgrade(args.subscriptionId, {
@@ -654,6 +833,88 @@ export const executeSubscriptionUpdate = action({
           ? { productId: args.previousProductId }
           : {}),
         clearOptimistic: true,
+      });
+    }
+  },
+});
+
+/** Applies a previously scheduled period-end subscription update. */
+export const applyScheduledSubscriptionUpdate = action({
+  args: {
+    apiKey: v.string(),
+    serverIdx: v.optional(v.number()),
+    serverURL: v.optional(v.string()),
+    scheduledUpdateId: v.id("scheduledSubscriptionUpdates"),
+  },
+  handler: async (ctx, args) => {
+    const scheduledUpdate = await ctx.runQuery(
+      api.lib.getScheduledSubscriptionUpdate,
+      {
+        scheduledUpdateId: args.scheduledUpdateId,
+      },
+    );
+    if (!scheduledUpdate || scheduledUpdate.status !== "pending") return;
+
+    const marked = await ctx.runMutation(
+      api.lib.markScheduledSubscriptionUpdateApplying,
+      {
+        scheduledUpdateId: args.scheduledUpdateId,
+      },
+    );
+    if (!marked) return;
+
+    const sdk = new Creem({
+      apiKey: args.apiKey,
+      ...(args.serverIdx !== undefined ? { serverIdx: args.serverIdx } : {}),
+      ...(args.serverURL ? { serverURL: args.serverURL } : {}),
+    });
+
+    try {
+      if (scheduledUpdate.targetProductId) {
+        await sdk.subscriptions.upgrade(scheduledUpdate.subscriptionId, {
+          productId: scheduledUpdate.targetProductId,
+          updateBehavior: "proration-none",
+        });
+        await ctx.runMutation(api.lib.patchSubscription, {
+          subscriptionId: scheduledUpdate.subscriptionId,
+          productId: scheduledUpdate.targetProductId,
+        });
+      } else if (scheduledUpdate.targetUnits !== undefined) {
+        const live = await sdk.subscriptions.get(
+          scheduledUpdate.subscriptionId,
+        );
+        const item = live.items?.[0];
+        if (!item) throw new ConvexError("Subscription has no items");
+        await sdk.subscriptions.update(scheduledUpdate.subscriptionId, {
+          items: [
+            {
+              id: item.id,
+              productId: item.productId,
+              priceId: item.priceId,
+              units: scheduledUpdate.targetUnits,
+            },
+          ],
+          updateBehavior: "proration-none",
+        });
+        await ctx.runMutation(api.lib.patchSubscription, {
+          subscriptionId: scheduledUpdate.subscriptionId,
+          seats: scheduledUpdate.targetUnits,
+        });
+      } else if (scheduledUpdate.targetPlanId) {
+        // App-owned/free-plan transitions are represented by app state. When the
+        // target is a free plan, Creem cancellation is scheduled when the intent
+        // is created so renewal is prevented before this marker runs.
+      }
+
+      await ctx.runMutation(api.lib.markScheduledSubscriptionUpdateApplied, {
+        scheduledUpdateId: args.scheduledUpdateId,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[creem] scheduled subscription update failed:`, error);
+      await ctx.runMutation(api.lib.markScheduledSubscriptionUpdateFailed, {
+        scheduledUpdateId: args.scheduledUpdateId,
+        error: message,
       });
     }
   },

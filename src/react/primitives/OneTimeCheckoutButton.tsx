@@ -1,9 +1,6 @@
 import type { PropsWithChildren } from "react";
 import { CheckoutButton } from "./CheckoutButton.js";
-import {
-  defaultBillingLabels,
-  type BillingLabels,
-} from "../../core/i18n.js";
+import { defaultBillingLabels, type BillingLabels } from "../../core/i18n.js";
 
 export const OneTimeCheckoutButton = ({
   productId,

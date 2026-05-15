@@ -24,6 +24,37 @@ import type { FunctionReference } from "convex/server";
 export type ComponentApi<Name extends string | undefined = string | undefined> =
   {
     lib: {
+      applyScheduledSubscriptionUpdate: FunctionReference<
+        "action",
+        "internal",
+        {
+          apiKey: string;
+          scheduledUpdateId: string;
+          serverIdx?: number;
+          serverURL?: string;
+        },
+        any,
+        Name
+      >;
+      cancelScheduledSubscriptionUpdate: FunctionReference<
+        "mutation",
+        "internal",
+        { entityId: string; subscriptionId: string },
+        {
+          createdAt: string;
+          effectiveAt: string;
+          entityId: string;
+          error?: string;
+          scheduledFunctionId?: string;
+          status: "pending" | "applying" | "applied" | "superseded" | "failed";
+          subscriptionId: string;
+          targetPlanId?: string;
+          targetProductId?: string;
+          targetUnits?: number;
+          updatedAt: string;
+        } | null,
+        Name
+      >;
       createOrder: FunctionReference<
         "mutation",
         "internal",
@@ -80,6 +111,20 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           };
         },
         any,
+        Name
+      >;
+      createScheduledSubscriptionUpdate: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          effectiveAt: string;
+          entityId: string;
+          subscriptionId: string;
+          targetPlanId?: string;
+          targetProductId?: string;
+          targetUnits?: number;
+        },
+        string,
         Name
       >;
       createSubscription: FunctionReference<
@@ -250,6 +295,25 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         } | null,
         Name
       >;
+      getScheduledSubscriptionUpdate: FunctionReference<
+        "query",
+        "internal",
+        { scheduledUpdateId: string },
+        {
+          createdAt: string;
+          effectiveAt: string;
+          entityId: string;
+          error?: string;
+          scheduledFunctionId?: string;
+          status: "pending" | "applying" | "applied" | "superseded" | "failed";
+          subscriptionId: string;
+          targetPlanId?: string;
+          targetProductId?: string;
+          targetUnits?: number;
+          updatedAt: string;
+        } | null,
+        Name
+      >;
       getSubscription: FunctionReference<
         "query",
         "internal",
@@ -392,6 +456,25 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         }>,
         Name
       >;
+      listPendingScheduledSubscriptionUpdates: FunctionReference<
+        "query",
+        "internal",
+        { entityId: string },
+        Array<{
+          createdAt: string;
+          effectiveAt: string;
+          entityId: string;
+          error?: string;
+          scheduledFunctionId?: string;
+          status: "pending" | "applying" | "applied" | "superseded" | "failed";
+          subscriptionId: string;
+          targetPlanId?: string;
+          targetProductId?: string;
+          targetUnits?: number;
+          updatedAt: string;
+        }>,
+        Name
+      >;
       listProducts: FunctionReference<
         "query",
         "internal",
@@ -501,6 +584,27 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         }>,
         Name
       >;
+      markScheduledSubscriptionUpdateApplied: FunctionReference<
+        "mutation",
+        "internal",
+        { scheduledUpdateId: string },
+        any,
+        Name
+      >;
+      markScheduledSubscriptionUpdateApplying: FunctionReference<
+        "mutation",
+        "internal",
+        { scheduledUpdateId: string },
+        boolean,
+        Name
+      >;
+      markScheduledSubscriptionUpdateFailed: FunctionReference<
+        "mutation",
+        "internal",
+        { error: string; scheduledUpdateId: string },
+        any,
+        Name
+      >;
       patchSubscription: FunctionReference<
         "mutation",
         "internal",
@@ -512,6 +616,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           status?: string;
           subscriptionId: string;
         },
+        any,
+        Name
+      >;
+      setScheduledSubscriptionUpdateJob: FunctionReference<
+        "mutation",
+        "internal",
+        { scheduledFunctionId: string; scheduledUpdateId: string },
         any,
         Name
       >;

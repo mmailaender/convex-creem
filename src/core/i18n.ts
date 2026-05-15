@@ -102,8 +102,12 @@ export type BillingLabels = {
   };
   scheduledChange: {
     cancellationScheduled: string;
+    updateScheduled: string;
     accessUntilPeriodEnd: (formattedDate?: string) => string;
+    updateAtPeriodEnd: (formattedDate?: string) => string;
+    targetUpdate: (target: string) => string;
     undoCancellation: string;
+    undoUpdate: string;
     resuming: string;
   };
   paymentRecovery: {
@@ -175,6 +179,8 @@ const defaultBehaviorDescription = (behavior: UpdateBehavior): string => {
       return "The price difference will be prorated and applied to your next invoice.";
     case "proration-none":
       return "The new price will take effect at your next billing cycle.";
+    case "period-end":
+      return "The current plan stays active until the end of the billing period, then the change is applied.";
   }
 };
 
@@ -258,6 +264,9 @@ export const defaultBillingLabels: BillingLabels = {
         if (behavior === "proration-none") {
           return `Your next billing cycle starts on ${formattedDate}.`;
         }
+        if (behavior === "period-end") {
+          return `The scheduled change will apply on ${formattedDate}.`;
+        }
         return null;
       },
       trialEndNote: (formattedDate) =>
@@ -268,9 +277,14 @@ export const defaultBillingLabels: BillingLabels = {
   },
   scheduledChange: {
     cancellationScheduled: "Cancellation scheduled",
+    updateScheduled: "Plan change scheduled",
     accessUntilPeriodEnd: (formattedDate) =>
       `You will continue to have access until the end of your current billing period${formattedDate ? ` (${formattedDate})` : ""}.`,
+    updateAtPeriodEnd: (formattedDate) =>
+      `Your current plan stays active until the end of this billing period${formattedDate ? ` (${formattedDate})` : ""}. The scheduled change will apply after that.`,
+    targetUpdate: (target) => `Scheduled change: ${target}`,
     undoCancellation: "Undo cancellation",
+    undoUpdate: "Undo change",
     resuming: "Resuming...",
   },
   paymentRecovery: {

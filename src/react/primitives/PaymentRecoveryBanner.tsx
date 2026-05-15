@@ -5,10 +5,7 @@ import type {
   SubscriptionSnapshot,
 } from "../../core/types.js";
 import { derivePaymentRecoveryState } from "../../core/selectors.js";
-import {
-  defaultBillingLabels,
-  type BillingLabels,
-} from "../../core/i18n.js";
+import { defaultBillingLabels, type BillingLabels } from "../../core/i18n.js";
 
 /**
  * Subscription-focused payment recovery banner.
@@ -61,7 +58,9 @@ export const PaymentRecoveryBanner = ({
           : "border-warning-border-subtle bg-warning-surface-subtle text-warning-foreground-default"
       } ${className}`}
     >
-      {isBlocked ? labels.paymentRecovery.blocked : labels.paymentRecovery.warning}
+      {isBlocked
+        ? labels.paymentRecovery.blocked
+        : labels.paymentRecovery.warning}
     </div>
   );
 };

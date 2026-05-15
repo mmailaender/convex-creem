@@ -3,10 +3,7 @@ import {
   parseCheckoutSuccessParams,
 } from "../../core/payments.js";
 import type { CheckoutSuccessParams } from "../../core/types.js";
-import {
-  defaultBillingLabels,
-  type BillingLabels,
-} from "../../core/i18n.js";
+import { defaultBillingLabels, type BillingLabels } from "../../core/i18n.js";
 
 export const CheckoutSuccessSummary = ({
   params,

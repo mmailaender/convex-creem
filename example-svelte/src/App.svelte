@@ -77,6 +77,11 @@
       .VITE_CREEM_SUB_UNIT_BASIC_MONTHLY as string,
     subUnitPremiumMonthly: import.meta.env
       .VITE_CREEM_SUB_UNIT_PREMIUM_MONTHLY as string,
+    // Subscription products — monthly only (period-end scheduled update demo)
+    subPeriodEndBasicMonthly: import.meta.env
+      .VITE_CREEM_SUB_PERIOD_END_BASIC_MONTHLY as string,
+    subPeriodEndPremiumMonthly: import.meta.env
+      .VITE_CREEM_SUB_PERIOD_END_PREMIUM_MONTHLY as string,
     // One-time product IDs
     onetimeSingle: import.meta.env.VITE_CREEM_ONETIME_SINGLE as string,
     onetimeBasic: import.meta.env.VITE_CREEM_ONETIME_BASIC as string,
@@ -99,6 +104,7 @@
       update: api.billing.subscriptionsUpdate,
       cancel: api.billing.subscriptionsCancel,
       resume: api.billing.subscriptionsResume,
+      cancelScheduledUpdate: api.billing.subscriptionsCancelScheduledUpdate,
     },
     customers: {
       portalUrl: api.billing.customersPortalUrl,
@@ -306,6 +312,33 @@
         creemProductIds: {
           "every-month": env.subUnitPremiumMonthly,
           "every-year": env.subUnitPremiumMonthly,
+        },
+      },
+      {
+        planId: "period-end-free",
+        category: "free",
+        title: "Free",
+        description: "App-owned free plan for period-end downgrade testing",
+      },
+      {
+        planId: "period-end-basic",
+        category: "paid",
+        billingType: "recurring",
+        title: "Period Basic",
+        description: "Dedicated basic plan for scheduled update testing",
+        creemProductIds: {
+          "every-month": env.subPeriodEndBasicMonthly,
+        },
+      },
+      {
+        planId: "period-end-premium",
+        category: "paid",
+        billingType: "recurring",
+        title: "Period Premium",
+        description: "Dedicated premium plan for scheduled update testing",
+        recommended: true,
+        creemProductIds: {
+          "every-month": env.subPeriodEndPremiumMonthly,
         },
       },
       {
@@ -540,6 +573,15 @@
                   >Typed Binding API</a
                 >
               </div>
+              <div class="flex items-center gap-3">
+                <span
+                  class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
+                  >10</span
+                >
+                <a href="#sub-period-end" class="link-inline"
+                  >Period-End Change</a
+                >
+              </div>
             </div>
           </div>
           <div class="space-y-4">
@@ -548,14 +590,14 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >10</span
+                  >11</span
                 >
                 <a href="#onetime-single" class="link-inline">Single Product</a>
               </div>
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >11</span
+                  >12</span
                 >
                 <a href="#onetime-group" class="link-inline"
                   >Product Group + Upgrade</a
@@ -564,7 +606,7 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >12</span
+                  >13</span
                 >
                 <a href="#onetime-repeat" class="link-inline"
                   >Consumable (Repeating)</a
@@ -578,7 +620,7 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >13</span
+                  >14</span
                 >
                 <a href="#payment-recovery" class="link-inline"
                   >Payment Recovery</a
@@ -587,7 +629,7 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >14</span
+                  >15</span
                 >
                 <a href="#billing-history" class="link-inline"
                   >Billing History</a
@@ -596,7 +638,7 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >15</span
+                  >16</span
                 >
                 <a href="#feature-usage-gate" class="link-inline"
                   >Feature / Usage Gate</a
@@ -1214,7 +1256,59 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 10: One-Time Purchase — single product
+       VARIANT 10: Subscription — period-end scheduled update
+       ═══════════════════════════════════════════════════════════════════════════ -->
+      <section
+        id="sub-period-end"
+        class="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
+      >
+        <div class="mx-auto w-full max-w-[1280px] px-4 lg:px-16 pt-[6.5rem]">
+          <div class="mx-auto grid grid-cols-12">
+            <h2
+              class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
+            >
+              <span class="text-foreground-placeholder">10 — Subscription</span
+              ><br />
+              Period-End Plan Change
+            </h2>
+            <p
+              class="body-l col-span-12 mt-6 text-center text-foreground-muted lg:col-start-4 lg:col-span-6"
+            >
+              Uses dedicated products and an <code>updateBehavior</code> resolver.
+              Downgrades stay active until period end, while upgrades use Creem
+              proration on the next invoice.
+            </p>
+          </div>
+
+          <div class="mt-[6.5rem]">
+            <Subscription.Root
+              updateBehavior={(intent) => {
+                if (intent.toPlan?.category === "free") return "period-end";
+                if (
+                  intent.fromPrice != null &&
+                  intent.toPrice != null &&
+                  intent.toPrice < intent.fromPrice
+                ) {
+                  return "period-end";
+                }
+                return "proration-charge";
+              }}
+              plans={plansOf(billingCatalog, [
+                "period-end-free",
+                "period-end-basic",
+                "period-end-premium",
+              ])}
+            />
+          </div>
+
+          <div class="flex justify-center pt-16">
+            <BillingPortal class="button-faded" />
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════════════════════
+       VARIANT 11: One-Time Purchase — single product
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="onetime-single"
@@ -1226,7 +1320,7 @@
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
               <span class="text-foreground-placeholder"
-                >10 — One Time Purchase</span
+                >11 — One Time Purchase</span
               ><br />
               Single Product
             </h2>
@@ -1257,7 +1351,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 11: One-Time Purchase — mutually exclusive group with upgrade
+       VARIANT 12: One-Time Purchase — mutually exclusive group with upgrade
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="onetime-group"
@@ -1269,7 +1363,7 @@
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
               <span class="text-foreground-placeholder"
-                >11 — One Time Purchase</span
+                >12 — One Time Purchase</span
               ><br />
               Product Group + Upgrade
             </h2>
@@ -1311,7 +1405,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 12: One-Time Purchase — repeating (consumable)
+       VARIANT 13: One-Time Purchase — repeating (consumable)
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="onetime-repeat"
@@ -1323,7 +1417,7 @@
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
               <span class="text-foreground-placeholder"
-                >12 — One Time Purchase</span
+                >13 — One Time Purchase</span
               ><br />
               Consumable (Repeating)
             </h2>
@@ -1395,7 +1489,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 13: Payment Recovery — banner + button
+       VARIANT 14: Payment Recovery — banner + button
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="payment-recovery"
@@ -1406,7 +1500,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">13 — Account</span><br
+              <span class="text-foreground-placeholder">14 — Account</span><br
               />
               Payment Recovery
             </h2>
@@ -1434,7 +1528,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 14: Billing History
+       VARIANT 15: Billing History
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="billing-history"
@@ -1445,7 +1539,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">14 — Account</span><br
+              <span class="text-foreground-placeholder">15 — Account</span><br
               />
               Billing History
             </h2>
@@ -1464,7 +1558,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 15: Feature / Usage Gate
+       VARIANT 16: Feature / Usage Gate
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="feature-usage-gate"
@@ -1475,7 +1569,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">15 — Account</span><br
+              <span class="text-foreground-placeholder">16 — Account</span><br
               />
               Feature / Usage Gate
             </h2>

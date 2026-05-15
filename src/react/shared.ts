@@ -89,7 +89,11 @@ export const resolveProductPrice = (
   const product = products.find((p) => p.id === productId);
   if (!product) return null;
   if (product.price == null || !product.currency) return null;
-  const formatted = formatPrice(product.price, product.currency, formatCurrency);
+  const formatted = formatPrice(
+    product.price,
+    product.currency,
+    formatCurrency,
+  );
   return { formatted, interval: product.billingPeriod ?? undefined };
 };
 

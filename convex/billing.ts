@@ -87,6 +87,8 @@ export const checkoutsCreate = checkouts.create;
 export const subscriptionsUpdate = subscriptions.update;
 export const subscriptionsCancel = subscriptions.cancel;
 export const subscriptionsResume = subscriptions.resume;
+export const subscriptionsCancelScheduledUpdate =
+  subscriptions.cancelScheduledUpdate;
 export const subscriptionsPause = subscriptions.pause;
 export const subscriptionsList = subscriptions.list;
 export const subscriptionsListAll = subscriptions.listAll;

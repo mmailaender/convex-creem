@@ -74,7 +74,10 @@ export const ProductRoot = ({
   const resolvedPermissions = permissions ?? provider?.permissions;
   const resolvedOnBeforeCheckout =
     onBeforeCheckout ?? provider?.onBeforeCheckout;
-  const i18n = useMemo(() => resolveBillingI18n(provider?.i18n), [provider?.i18n]);
+  const i18n = useMemo(
+    () => resolveBillingI18n(provider?.i18n),
+    [provider?.i18n],
+  );
 
   const client = useConvex();
 

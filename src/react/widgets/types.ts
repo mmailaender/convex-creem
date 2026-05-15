@@ -1,5 +1,9 @@
 import type { FunctionReference } from "convex/server";
-import type { BillingSnapshot, RecurringCycle } from "../../core/types.js";
+import type {
+  BillingSnapshot,
+  RecurringCycle,
+  ScheduledSubscriptionUpdate,
+} from "../../core/types.js";
 
 export type { CheckoutIntent, PlanChangeIntent } from "../../core/types.js";
 
@@ -42,6 +46,7 @@ export type BillingPermissions = {
  *     update: api.billing.subscriptionsUpdate,
  *     cancel: api.billing.subscriptionsCancel,
  *     resume: api.billing.subscriptionsResume,
+ *     cancelScheduledUpdate: api.billing.subscriptionsCancelScheduledUpdate,
  *   },
  *   customers: { portalUrl: api.billing.customersPortalUrl },
  * };
@@ -63,6 +68,8 @@ export type ConnectedBillingApi = {
     cancel?: FunctionReference<"mutation">;
     /** Resume paused/scheduled-cancel subscription mutation. */
     resume?: FunctionReference<"mutation">;
+    /** Cancel an app-side period-end subscription update. */
+    cancelScheduledUpdate?: FunctionReference<"mutation">;
   };
   /** Customer actions. */
   customers?: {
@@ -138,6 +145,8 @@ export type ConnectedBillingModel = {
     recurringInterval: string | null;
     trialEnd?: string | null;
   }>;
+  /** App-side period-end subscription updates that have not applied yet. */
+  scheduledSubscriptionUpdates?: ScheduledSubscriptionUpdate[];
   /** Whether this entity has a Creem customer record (needed for billing portal). */
   hasCreemCustomer?: boolean;
   /** Reserved for future billing policy data. */

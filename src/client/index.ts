@@ -106,12 +106,14 @@ export const checkoutCreateArgs = {
 export const subscriptionUpdateArgs = {
   subscriptionId: v.optional(v.string()),
   productId: v.optional(v.string()),
+  freePlanId: v.optional(v.string()),
   units: v.optional(v.number()),
   updateBehavior: v.optional(
     v.union(
       v.literal("proration-charge-immediately"),
       v.literal("proration-charge"),
       v.literal("proration-none"),
+      v.literal("period-end"),
     ),
   ),
 };
@@ -130,6 +132,10 @@ export const subscriptionCancelArgs = {
  * Matches the args sent by `<Subscription.Root>` resume button.
  */
 export const subscriptionResumeArgs = {
+  subscriptionId: v.optional(v.string()),
+};
+
+export const subscriptionCancelScheduledUpdateArgs = {
   subscriptionId: v.optional(v.string()),
 };
 
@@ -805,6 +811,84 @@ export class Creem {
     });
   }
 
+  private async schedulePeriodEndSubscriptionUpdate(
+    ctx: RunSchedulerMutationCtx,
+    args: {
+      entityId: string;
+      subscription: {
+        id: string;
+        currentPeriodEnd: string | null;
+        status?: string;
+        cancelAtPeriodEnd?: boolean;
+      };
+      productId?: string;
+      freePlanId?: string;
+      units?: number;
+    },
+  ) {
+    if (!args.subscription.currentPeriodEnd) {
+      throw new ConvexError(
+        "Cannot schedule period-end update without currentPeriodEnd",
+      );
+    }
+    const effectiveAt = new Date(args.subscription.currentPeriodEnd);
+    if (Number.isNaN(effectiveAt.getTime())) {
+      throw new ConvexError("Subscription currentPeriodEnd is invalid");
+    }
+
+    const scheduledUpdateId = await ctx.runMutation(
+      this.component.lib.createScheduledSubscriptionUpdate,
+      {
+        entityId: args.entityId,
+        subscriptionId: args.subscription.id,
+        ...(args.productId ? { targetProductId: args.productId } : {}),
+        ...(args.freePlanId ? { targetPlanId: args.freePlanId } : {}),
+        ...(args.units !== undefined ? { targetUnits: args.units } : {}),
+        effectiveAt: args.subscription.currentPeriodEnd,
+      },
+    );
+
+    const scheduledFunctionId = await ctx.scheduler.runAt(
+      effectiveAt,
+      this.component.lib.applyScheduledSubscriptionUpdate,
+      {
+        apiKey: this.apiKey,
+        serverIdx: this.serverIdx,
+        serverURL: this.serverURL,
+        scheduledUpdateId,
+      },
+    );
+
+    await ctx.runMutation(
+      this.component.lib.setScheduledSubscriptionUpdateJob,
+      {
+        scheduledUpdateId,
+        scheduledFunctionId,
+      },
+    );
+
+    if (args.freePlanId) {
+      await ctx.runMutation(this.component.lib.patchSubscription, {
+        subscriptionId: args.subscription.id,
+        cancelAtPeriodEnd: true,
+      });
+      await ctx.scheduler.runAfter(
+        0,
+        this.component.lib.executeSubscriptionLifecycle,
+        {
+          apiKey: this.apiKey,
+          serverIdx: this.serverIdx,
+          serverURL: this.serverURL,
+          subscriptionId: args.subscription.id,
+          operation: "cancel",
+          cancelMode: "scheduled",
+          previousStatus: args.subscription.status,
+          previousCancelAtPeriodEnd: args.subscription.cancelAtPeriodEnd,
+        },
+      );
+    }
+  }
+
   // ── Namespace getters (public API) ─────────────────────────
 
   /**
@@ -825,7 +909,8 @@ export class Creem {
     type UpdateBehavior =
       | "proration-charge-immediately"
       | "proration-charge"
-      | "proration-none";
+      | "proration-none"
+      | "period-end";
     return {
       getCurrent: (ctx: RunQueryCtx, { entityId }: { entityId: string }) =>
         this.getCurrentSubscription(ctx, { entityId }),
@@ -839,14 +924,25 @@ export class Creem {
           entityId: string;
           subscriptionId?: string;
           productId?: string;
+          freePlanId?: string;
           units?: number;
           updateBehavior?: UpdateBehavior;
         },
       ) => {
-        if (args.productId && args.units)
-          throw new ConvexError("Provide productId OR units, not both");
-        if (!args.productId && !args.units)
-          throw new ConvexError("Provide productId or units");
+        const targetCount =
+          (args.productId ? 1 : 0) +
+          (args.freePlanId ? 1 : 0) +
+          (args.units !== undefined ? 1 : 0);
+        if (targetCount !== 1) {
+          throw new ConvexError(
+            "Provide exactly one update target: productId, freePlanId, or units",
+          );
+        }
+        if (args.freePlanId && args.updateBehavior !== "period-end") {
+          throw new ConvexError(
+            'freePlanId updates currently require updateBehavior: "period-end"',
+          );
+        }
 
         // Resolve current subscription
         const subscription = args.subscriptionId
@@ -857,6 +953,17 @@ export class Creem {
               entityId: args.entityId,
             });
         if (!subscription) throw new ConvexError("Subscription not found");
+
+        if (args.updateBehavior === "period-end") {
+          await this.schedulePeriodEndSubscriptionUpdate(ctx, {
+            entityId: args.entityId,
+            subscription,
+            productId: args.productId,
+            freePlanId: args.freePlanId,
+            units: args.units,
+          });
+          return;
+        }
 
         // Write optimistic state
         await ctx.runMutation(this.component.lib.patchSubscription, {
@@ -1024,6 +1131,54 @@ export class Creem {
             previousCancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
           },
         );
+      },
+      cancelScheduledUpdate: async (
+        ctx: RunSchedulerMutationCtx,
+        args: { entityId: string; subscriptionId?: string },
+      ): Promise<{ canceled: boolean }> => {
+        const subscription = args.subscriptionId
+          ? await ctx.runQuery(this.component.lib.getSubscription, {
+              id: args.subscriptionId,
+            })
+          : await ctx.runQuery(this.component.lib.getCurrentSubscription, {
+              entityId: args.entityId,
+            });
+        if (!subscription) throw new ConvexError("Subscription not found");
+
+        const canceledUpdate = await ctx.runMutation(
+          this.component.lib.cancelScheduledSubscriptionUpdate,
+          {
+            entityId: args.entityId,
+            subscriptionId: subscription.id,
+          },
+        );
+        if (!canceledUpdate) return { canceled: false };
+
+        if (canceledUpdate.targetPlanId) {
+          await ctx.runMutation(this.component.lib.patchSubscription, {
+            subscriptionId: subscription.id,
+            status:
+              subscription.status === "scheduled_cancel"
+                ? "active"
+                : subscription.status,
+            cancelAtPeriodEnd: false,
+          });
+          await ctx.scheduler.runAfter(
+            0,
+            this.component.lib.executeSubscriptionLifecycle,
+            {
+              apiKey: this.apiKey,
+              serverIdx: this.serverIdx,
+              serverURL: this.serverURL,
+              subscriptionId: subscription.id,
+              operation: "resume",
+              previousStatus: subscription.status,
+              previousCancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+            },
+          );
+        }
+
+        return { canceled: true };
       },
       /**
        * Cancel to free plan — temporary workaround until Creem supports native free plans.
@@ -1294,6 +1449,9 @@ export class Creem {
           recurringInterval: string | null;
           trialEnd: string | null;
         }>,
+        scheduledSubscriptionUpdates: [] as Array<
+          Infer<typeof schema.tables.scheduledSubscriptionUpdates.validator>
+        >,
         hasCreemCustomer: false,
       };
     }
@@ -1303,12 +1461,16 @@ export class Creem {
       activeSubscriptions,
       customer,
       orders,
+      scheduledSubscriptionUpdates,
     ] = await Promise.all([
       this.getBillingSnapshot(ctx, { entityId }),
       this.getCurrentSubscription(ctx, { entityId }),
       this.listUserSubscriptions(ctx, { entityId }),
       this.getCustomerByEntityId(ctx, entityId),
       this.listUserOrders(ctx, { entityId }),
+      ctx.runQuery(this.component.lib.listPendingScheduledSubscriptionUpdates, {
+        entityId,
+      }),
     ]);
     const ownedProductIds = [...new Set(orders.map((o) => o.productId))];
     return {
@@ -1328,6 +1490,7 @@ export class Creem {
         recurringInterval: s.recurringInterval,
         trialEnd: s.trialEnd ?? null,
       })),
+      scheduledSubscriptionUpdates: scheduledSubscriptionUpdates ?? [],
       hasCreemCustomer: customer != null,
     };
   }
@@ -1414,10 +1577,20 @@ export class Creem {
           args: subscriptionUpdateArgs,
           handler: async (ctx, args) => {
             const { entityId } = await resolve(ctx);
-            if (args.productId && args.units)
-              throw new ConvexError("Provide productId OR units, not both");
-            if (!args.productId && !args.units)
-              throw new ConvexError("Provide productId or units");
+            const targetCount =
+              (args.productId ? 1 : 0) +
+              (args.freePlanId ? 1 : 0) +
+              (args.units !== undefined ? 1 : 0);
+            if (targetCount !== 1) {
+              throw new ConvexError(
+                "Provide exactly one update target: productId, freePlanId, or units",
+              );
+            }
+            if (args.freePlanId && args.updateBehavior !== "period-end") {
+              throw new ConvexError(
+                'freePlanId updates currently require updateBehavior: "period-end"',
+              );
+            }
 
             // Resolve current subscription
             const subscription = args.subscriptionId
@@ -1428,6 +1601,17 @@ export class Creem {
                   entityId,
                 });
             if (!subscription) throw new ConvexError("Subscription not found");
+
+            if (args.updateBehavior === "period-end") {
+              await this.schedulePeriodEndSubscriptionUpdate(ctx, {
+                entityId,
+                subscription,
+                productId: args.productId,
+                freePlanId: args.freePlanId,
+                units: args.units,
+              });
+              return;
+            }
 
             // Write optimistic state
             // For plan switches, also protect current units from stale webhook data
@@ -1555,6 +1739,56 @@ export class Creem {
                 previousCancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
               },
             );
+          },
+        }),
+        cancelScheduledUpdate: mutationGeneric({
+          args: subscriptionCancelScheduledUpdateArgs,
+          returns: v.object({ canceled: v.boolean() }),
+          handler: async (ctx, args) => {
+            const { entityId } = await resolve(ctx);
+            const subscription = args.subscriptionId
+              ? await ctx.runQuery(this.component.lib.getSubscription, {
+                  id: args.subscriptionId,
+                })
+              : await ctx.runQuery(this.component.lib.getCurrentSubscription, {
+                  entityId,
+                });
+            if (!subscription) throw new ConvexError("Subscription not found");
+
+            const canceledUpdate = await ctx.runMutation(
+              this.component.lib.cancelScheduledSubscriptionUpdate,
+              {
+                entityId,
+                subscriptionId: subscription.id,
+              },
+            );
+            if (!canceledUpdate) return { canceled: false };
+
+            if (canceledUpdate.targetPlanId) {
+              await ctx.runMutation(this.component.lib.patchSubscription, {
+                subscriptionId: subscription.id,
+                status:
+                  subscription.status === "scheduled_cancel"
+                    ? "active"
+                    : subscription.status,
+                cancelAtPeriodEnd: false,
+              });
+              await ctx.scheduler.runAfter(
+                0,
+                this.component.lib.executeSubscriptionLifecycle,
+                {
+                  apiKey: this.apiKey,
+                  serverIdx: this.serverIdx,
+                  serverURL: this.serverURL,
+                  subscriptionId: subscription.id,
+                  operation: "resume",
+                  previousStatus: subscription.status,
+                  previousCancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+                },
+              );
+            }
+
+            return { canceled: true };
           },
         }),
         pause: mutationGeneric({

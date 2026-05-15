@@ -1,9 +1,6 @@
 import { useMemo } from "react";
 import type { BillingSnapshot, PaymentSnapshot } from "../../core/types.js";
-import {
-  defaultBillingLabels,
-  type BillingLabels,
-} from "../../core/i18n.js";
+import { defaultBillingLabels, type BillingLabels } from "../../core/i18n.js";
 
 export const PaymentWarningBanner = ({
   snapshot,

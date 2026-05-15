@@ -1,8 +1,5 @@
 import { useState, type PropsWithChildren } from "react";
-import {
-  defaultBillingLabels,
-  type BillingLabels,
-} from "../../core/i18n.js";
+import { defaultBillingLabels, type BillingLabels } from "../../core/i18n.js";
 
 export const CustomerPortalButton = ({
   href,

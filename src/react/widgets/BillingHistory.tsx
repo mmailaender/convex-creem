@@ -56,7 +56,10 @@ export const BillingHistory = ({
   className?: string;
 }) => {
   const provider = useCreemConvex();
-  const i18n = useMemo(() => resolveBillingI18n(provider?.i18n), [provider?.i18n]);
+  const i18n = useMemo(
+    () => resolveBillingI18n(provider?.i18n),
+    [provider?.i18n],
+  );
   const resolvedApi = requireCreemConvexApi("BillingHistory", provider);
   const client = useConvex();
   const searchRef = resolvedApi.transactions?.search;

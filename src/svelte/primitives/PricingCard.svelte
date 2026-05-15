@@ -38,7 +38,8 @@
     }) => Promise<void> | void;
     onSwitchPlan?: (payload: {
       plan: UIPlanEntry;
-      productId: string;
+      productId?: string;
+      freePlanId?: string;
       units?: number;
     }) => Promise<void> | void;
     onUpdateUnits?: (payload: { units: number }) => Promise<void> | void;
@@ -112,6 +113,9 @@
   const isSiblingPlan = $derived(
     !isActiveProduct && !isActivePlanOtherCycle && isGroupSubscribed && productId != null && plan.category !== "free" && plan.category !== "enterprise",
   );
+  const isFreeDowngrade = $derived(
+    !isActiveFreePlan && plan.category === "free" && isGroupSubscribed,
+  );
   const showUnitCheckoutControls = $derived(
     isUnitPlan && showUnitPicker && !isActiveProduct && !isSiblingPlan,
   );
@@ -142,7 +146,7 @@
   const checkoutLabel = $derived(
     isActivePlanOtherCycle
       ? labels.subscription.switchInterval
-      : isSiblingPlan
+      : isSiblingPlan || isFreeDowngrade
         ? labels.subscription.switchPlan
         : plan.billingType === "onetime"
           ? labels.subscription.buyNow
@@ -154,6 +158,9 @@
     } else {
       onCheckout?.({ plan, productId: payload.productId, units: effectiveUnits });
     }
+  };
+  const handleFreeDowngrade = () => {
+    onSwitchPlan?.({ plan, freePlanId: plan.planId });
   };
 
   const splitPriceLabel = (value: string | null): { main: string; suffix: string | null; tail: string } | null => {
@@ -302,6 +309,15 @@
       >
         {checkoutLabel}
       </CheckoutButton>
+    {:else if isFreeDowngrade}
+      <button
+        type="button"
+        disabled={disableSwitch}
+        class="button-faded w-full disabled:cursor-not-allowed disabled:opacity-50"
+        onclick={handleFreeDowngrade}
+      >
+        {checkoutLabel}
+      </button>
     {:else if plan.category === "enterprise"}
       {#if plan.contactUrl}
         <a

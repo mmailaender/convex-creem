@@ -68,7 +68,8 @@ export const PricingCard = ({
   }) => Promise<void> | void;
   onSwitchPlan?: (payload: {
     plan: UIPlanEntry;
-    productId: string;
+    productId?: string;
+    freePlanId?: string;
     units?: number;
   }) => Promise<void> | void;
   onUpdateUnits?: (payload: { units: number }) => Promise<void> | void;
@@ -138,6 +139,8 @@ export const PricingCard = ({
     productId != null &&
     plan.category !== "free" &&
     plan.category !== "enterprise";
+  const isFreeDowngrade =
+    !isActiveFreePlan && plan.category === "free" && isGroupSubscribed;
 
   const showUnitCheckoutControls =
     isUnitPlan && showUnitPicker && !isActiveProduct && !isSiblingPlan;
@@ -168,7 +171,7 @@ export const PricingCard = ({
 
   const checkoutLabel = isActivePlanOtherCycle
     ? labels.subscription.switchInterval
-    : isSiblingPlan
+    : isSiblingPlan || isFreeDowngrade
       ? labels.subscription.switchPlan
       : plan.billingType === "onetime"
         ? labels.subscription.buyNow
@@ -190,6 +193,13 @@ export const PricingCard = ({
         units: effectiveUnits,
       });
     }
+  };
+
+  const handleFreeDowngrade = () => {
+    onSwitchPlan?.({
+      plan,
+      freePlanId: plan.planId,
+    });
   };
 
   const splitPrice = splitPriceLabel(unitPriceBreakdown?.total ?? priceLabel);
@@ -216,7 +226,8 @@ export const PricingCard = ({
                 {labels.subscription.freeTrial}
                 {trialDaysLeft != null && (
                   <>
-                    &ensp;·&ensp;{labels.subscription.trialDaysLeft(trialDaysLeft)}
+                    &ensp;·&ensp;
+                    {labels.subscription.trialDaysLeft(trialDaysLeft)}
                   </>
                 )}
               </>
@@ -376,6 +387,15 @@ export const PricingCard = ({
             >
               {checkoutLabel}
             </CheckoutButton>
+          ) : isFreeDowngrade ? (
+            <button
+              type="button"
+              disabled={disableSwitch}
+              onClick={handleFreeDowngrade}
+              className="button-faded w-full disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {checkoutLabel}
+            </button>
           ) : plan.category === "enterprise" ? (
             plan.contactUrl ? (
               <a href={plan.contactUrl} className="button-outline w-full">

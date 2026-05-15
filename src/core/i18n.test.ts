@@ -44,7 +44,8 @@ describe("billing i18n", () => {
     expect(i18n.formatCurrency({ amount: 1200, currency: "EUR" })).toBe(
       "1200:EUR",
     );
-    expect(i18n.formatDate({ date: new Date("2026-05-14T00:00:00.000Z") }))
-      .toBe("date:2026");
+    expect(
+      i18n.formatDate({ date: new Date("2026-05-14T00:00:00.000Z") }),
+    ).toBe("date:2026");
   });
 });

@@ -1,10 +1,7 @@
 import { useState, useCallback, type PropsWithChildren } from "react";
 import type { FunctionReference } from "convex/server";
 import { useConvex } from "convex/react";
-import {
-  defaultBillingLabels,
-  type BillingLabels,
-} from "../../core/i18n.js";
+import { defaultBillingLabels, type BillingLabels } from "../../core/i18n.js";
 
 /**
  * Button that opens the Creem customer portal for payment recovery.
@@ -40,9 +37,7 @@ export const PaymentRecoveryButton = ({
       const result = (await client.action(portalUrl, {})) as { url: string };
       window.location.href = result.url;
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : labels.portal.failedToOpen,
-      );
+      setError(err instanceof Error ? err.message : labels.portal.failedToOpen);
       setIsLoading(false);
     }
   }, [client, labels.portal.failedToOpen, portalUrl]);

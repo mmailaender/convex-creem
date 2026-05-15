@@ -105,6 +105,27 @@ export default defineSchema(
       .index("id", ["id"])
       .index("customerId", ["customerId"])
       .index("customerId_productId", ["customerId", "productId"]),
+    scheduledSubscriptionUpdates: defineTable({
+      entityId: v.string(),
+      subscriptionId: v.string(),
+      targetProductId: v.optional(v.string()),
+      targetPlanId: v.optional(v.string()),
+      targetUnits: v.optional(v.number()),
+      effectiveAt: v.string(),
+      status: v.union(
+        v.literal("pending"),
+        v.literal("applying"),
+        v.literal("applied"),
+        v.literal("superseded"),
+        v.literal("failed"),
+      ),
+      scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
+      error: v.optional(v.string()),
+      createdAt: v.string(),
+      updatedAt: v.string(),
+    })
+      .index("entityId_status", ["entityId", "status"])
+      .index("subscriptionId_status", ["subscriptionId", "status"]),
   },
   {
     schemaValidation: true,

@@ -1,8 +1,5 @@
 import type { OneTimePaymentStatus } from "../../core/types.js";
-import {
-  defaultBillingLabels,
-  type BillingLabels,
-} from "../../core/i18n.js";
+import { defaultBillingLabels, type BillingLabels } from "../../core/i18n.js";
 
 export const OneTimePaymentStatusBadge = ({
   status,

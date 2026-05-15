@@ -30,6 +30,7 @@ const connectedApi: ConnectedBillingApi = {
     update: api.billing.subscriptionsUpdate,
     cancel: api.billing.subscriptionsCancel,
     resume: api.billing.subscriptionsResume,
+    cancelScheduledUpdate: api.billing.subscriptionsCancelScheduledUpdate,
   },
   customers: {
     portalUrl: api.billing.customersPortalUrl,
@@ -123,6 +124,35 @@ const billingCatalog = defineBillingCatalog({
         "every-month":
           import.meta.env.VITE_CREEM_PREMIUM_UNIT_AUTO_MONTHLY_PRODUCT_ID ??
           "prod_3861b06bJDnvpEBcs2uxYv",
+      },
+    },
+    {
+      planId: "period-end-free",
+      category: "free",
+      title: "Free",
+      description: "App-owned free plan for period-end downgrade testing",
+    },
+    {
+      planId: "period-end-basic",
+      category: "paid",
+      billingType: "recurring",
+      title: "Period Basic",
+      description: "Dedicated basic plan for scheduled update testing",
+      products: {
+        "every-month":
+          import.meta.env.VITE_CREEM_SUB_PERIOD_END_BASIC_MONTHLY ?? "",
+      },
+    },
+    {
+      planId: "period-end-premium",
+      category: "paid",
+      billingType: "recurring",
+      title: "Period Premium",
+      description: "Dedicated premium plan for scheduled update testing",
+      recommended: true,
+      products: {
+        "every-month":
+          import.meta.env.VITE_CREEM_SUB_PERIOD_END_PREMIUM_MONTHLY ?? "",
       },
     },
     {
@@ -278,6 +308,14 @@ export default function App() {
                       Custom Composition
                     </a>
                   </div>
+                  <div className="flex items-center gap-3">
+                    <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
+                      06
+                    </span>
+                    <a href="#subscription-period-end" className="link-inline">
+                      Period-End Change
+                    </a>
+                  </div>
                 </div>
               </div>
               <div className="space-y-4">
@@ -287,7 +325,7 @@ export default function App() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      06
+                      07
                     </span>
                     <a href="#onetime-single" className="link-inline">
                       Single One-Time Product
@@ -295,7 +333,7 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      07
+                      08
                     </span>
                     <a href="#onetime-group" className="link-inline">
                       Mutually Exclusive Product Group
@@ -303,7 +341,7 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      08
+                      09
                     </span>
                     <a href="#onetime-repeat" className="link-inline">
                       Repeating Product (Consumable)
@@ -318,7 +356,7 @@ export default function App() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      09
+                      10
                     </span>
                     <a href="#billing-history" className="link-inline">
                       Billing History
@@ -326,7 +364,7 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      10
+                      11
                     </span>
                     <a href="#feature-usage-gate" className="link-inline">
                       Feature / Usage Gate
@@ -737,7 +775,55 @@ export default function App() {
             </div>
           </section>
 
-          {/* ─── Section 5: Standalone one-time product ─── */}
+          {/* ─── Section 6: Period-end scheduled subscription update ─── */}
+          <section
+            id="subscription-period-end"
+            className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
+          >
+            <div className="mx-auto w-full max-w-[1280px] px-4 lg:px-16 pt-[6.5rem]">
+              <div className="mx-auto grid grid-cols-12">
+                <h2 className="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6">
+                  <span className="text-foreground-placeholder">
+                    Subscription
+                  </span>
+                  <br />
+                  Period-End Plan Change
+                </h2>
+                <p className="body-l col-span-12 mt-6 text-center text-foreground-muted lg:col-start-4 lg:col-span-6">
+                  Uses dedicated products and an <code>updateBehavior</code>{" "}
+                  resolver. Downgrades stay active until period end, while
+                  upgrades use Creem proration on the next invoice.
+                </p>
+              </div>
+
+              <div className="mt-[6.5rem]">
+                <Subscription.Root
+                  updateBehavior={(intent) => {
+                    if (intent.toPlan?.category === "free") return "period-end";
+                    if (
+                      intent.fromPrice != null &&
+                      intent.toPrice != null &&
+                      intent.toPrice < intent.fromPrice
+                    ) {
+                      return "period-end";
+                    }
+                    return "proration-charge";
+                  }}
+                  plans={plansOf(billingCatalog, [
+                    "period-end-free",
+                    "period-end-basic",
+                    "period-end-premium",
+                  ])}
+                />
+              </div>
+
+              <div className="flex justify-center pt-16">
+                <BillingPortal className="button-faded" />
+              </div>
+            </div>
+          </section>
+
+          {/* ─── Section 7: Standalone one-time product ─── */}
           <section
             id="onetime-single"
             className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
@@ -770,7 +856,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* ─── Section 5: Mutually exclusive product group with upgrade ─── */}
+          {/* ─── Section 8: Mutually exclusive product group with upgrade ─── */}
           <section
             id="onetime-group"
             className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
@@ -816,7 +902,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* ─── Section 6: Repeating (consumable) product ─── */}
+          {/* ─── Section 9: Repeating (consumable) product ─── */}
           <section
             id="onetime-repeat"
             className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
@@ -891,7 +977,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* ─── Section 7: Billing history ─── */}
+          {/* ─── Section 10: Billing history ─── */}
           <section
             id="billing-history"
             className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
@@ -916,7 +1002,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* ─── Section 8: Feature and usage gate ─── */}
+          {/* ─── Section 11: Feature and usage gate ─── */}
           <section
             id="feature-usage-gate"
             className="relative left-1/2 -translate-x-1/2 w-screen pb-[6.5rem]"

@@ -30,7 +30,10 @@ export const CreditsRoot = ({
   children?: ReactNode | ((credits: CreditsContextValue) => ReactNode);
 }) => {
   const provider = useCreemConvex();
-  const i18n = useMemo(() => resolveBillingI18n(provider?.i18n), [provider?.i18n]);
+  const i18n = useMemo(
+    () => resolveBillingI18n(provider?.i18n),
+    [provider?.i18n],
+  );
   const resolvedApi = requireCreemConvexApi("Credits.Root", provider);
   const client = useConvex();
   const getBalanceRef = resolvedApi.credits?.getBalance;
@@ -66,7 +69,14 @@ export const CreditsRoot = ({
   }, [refresh]);
 
   const contextValue = useMemo(
-    () => ({ balance, loading, error, unitLabel, labels: i18n.labels, refresh }),
+    () => ({
+      balance,
+      loading,
+      error,
+      unitLabel,
+      labels: i18n.labels,
+      refresh,
+    }),
     [balance, error, i18n.labels, loading, refresh, unitLabel],
   );
 

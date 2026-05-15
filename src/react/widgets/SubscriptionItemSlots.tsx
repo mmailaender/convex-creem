@@ -210,7 +210,8 @@ export const SubscriptionUnitPicker = ({
 }) => {
   const ctx = useSubscriptionItem();
   const resolvedLabel = label ?? ctx.labels.subscription.units;
-  const resolvedChangeLabel = changeLabel ?? ctx.labels.subscription.changeUnits;
+  const resolvedChangeLabel =
+    changeLabel ?? ctx.labels.subscription.changeUnits;
   const resolvedUpdateLabel = updateLabel ?? ctx.labels.subscription.update;
   const resolvedCancelLabel = cancelLabel ?? ctx.labels.common.cancel;
   const [editing, setEditing] = useState(false);

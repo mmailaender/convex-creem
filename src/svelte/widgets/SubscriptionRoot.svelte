@@ -21,7 +21,15 @@
   } from "../creemConvexContext.js";
   import { pendingCheckout } from "../../core/pendingCheckout.js";
 
-  import type { PlanCatalog, PlanCatalogEntry, UIPlanEntry, RecurringCycle, UpdateBehavior } from "../../core/types.js";
+  import type {
+    PlanCatalog,
+    PlanCatalogEntry,
+    UIPlanEntry,
+    RecurringCycle,
+    UpdateBehavior,
+    UpdateBehaviorIntent,
+    UpdateBehaviorSetting,
+  } from "../../core/types.js";
   import {
     mergeBillingLabels,
     resolveBillingI18n,
@@ -62,7 +70,7 @@
     units?: number;
     showUnitPicker?: boolean;
     twoColumnLayout?: boolean;
-    updateBehavior?: UpdateBehavior;
+    updateBehavior?: UpdateBehaviorSetting;
     unstyled?: boolean;
     onBeforeCheckout?: (intent: CheckoutIntent) => Promise<boolean> | boolean;
     onBeforePlanChange?: (intent: PlanChangeIntent) => Promise<boolean> | boolean;
@@ -148,6 +156,8 @@
   const updateRef = resolvedApi.subscriptions?.update;
   const cancelRef = resolvedApi.subscriptions?.cancel;
   const resumeRef = resolvedApi.subscriptions?.resume;
+  const cancelScheduledUpdateRef =
+    resolvedApi.subscriptions?.cancelScheduledUpdate;
 
   const billingModelQuery = useQuery(billingUiModelRef, {});
 
@@ -157,7 +167,13 @@
   let actionError = $state<string | null>(null);
   let updateDialogOpen = $state(false);
   let pendingUpdate = $state<
-    | { kind: "plan-switch"; plan: UIPlanEntry; productId: string; units?: number }
+    | {
+        kind: "plan-switch";
+        plan: UIPlanEntry;
+        productId?: string;
+        freePlanId?: string;
+        units?: number;
+      }
     | { kind: "unit-update"; units: number }
     | null
   >(null);
@@ -255,27 +271,6 @@
       }
       startCheckout(pending.productId, pending.units);
     });
-  });
-
-  const activePlanId = $derived.by<string | null>(() => {
-    if (!model) return null;
-    // Use this component's matched subscription product ID, not the global one
-    const subProductId = localSubscriptionProductId;
-    if (subProductId) {
-      const matchedPlan = plans.find((plan) => {
-        const values = Object.values(plan.creemProductIds ?? {}).filter(
-          Boolean,
-        ) as string[];
-        return values.includes(subProductId);
-      });
-      return matchedPlan?.planId ?? null;
-    }
-    // No active subscription — if user is signed in, treat the free plan as active
-    if (model.user) {
-      const freePlan = plans.find((p) => p.category === "free");
-      if (freePlan) return freePlan.planId;
-    }
-    return null;
   });
 
   const allProducts = $derived(model?.allProducts ?? []);
@@ -423,6 +418,89 @@
   );
   const localSubscriptionState = $derived(matchedSubscription?.status ?? null);
   const localSubscribedUnits = $derived(matchedSubscription?.units ?? null);
+  const localScheduledUpdate = $derived(
+    (model?.scheduledSubscriptionUpdates ?? []).find(
+      (update) => update.subscriptionId === matchedSubscription?.id,
+    ) ?? null,
+  );
+
+  const activePlanId = $derived.by<string | null>(() => {
+    if (!model) return null;
+    // Use this component's matched subscription product ID, not the global one.
+    const subProductId = localSubscriptionProductId;
+    if (subProductId) {
+      const matchedPlan = plans.find((plan) => {
+        const values = Object.values(plan.creemProductIds ?? {}).filter(
+          Boolean,
+        ) as string[];
+        return values.includes(subProductId);
+      });
+      return matchedPlan?.planId ?? null;
+    }
+    // No active subscription: if user is signed in, treat the free plan as active.
+    if (model.user) {
+      const freePlan = plans.find((p) => p.category === "free");
+      if (freePlan) return freePlan.planId;
+    }
+    return null;
+  });
+
+  function getProductPrice(productId?: string | null) {
+    return productId
+      ? (allProducts.find((product) => product.id === productId)?.price ?? null)
+      : null;
+  }
+
+  function getPlanForProduct(productId?: string | null) {
+    return productId
+      ? (plans.find((plan) =>
+          Object.values(plan.creemProductIds ?? {}).includes(productId),
+        ) ?? null)
+      : null;
+  }
+
+  function resolveUpdateBehavior(
+    update:
+      | {
+          kind: "plan-switch";
+          plan: UIPlanEntry;
+          productId?: string;
+          freePlanId?: string;
+          units?: number;
+        }
+      | { kind: "unit-update"; units: number },
+  ): UpdateBehavior {
+    if (typeof updateBehavior !== "function") return updateBehavior;
+
+    const currentPlan = getPlanForProduct(localSubscriptionProductId);
+    const intent: UpdateBehaviorIntent =
+      update.kind === "plan-switch"
+        ? {
+            kind: "plan-switch",
+            fromPlanId: activePlanId,
+            toPlanId: update.plan.planId,
+            fromPlan: currentPlan,
+            toPlan: update.plan,
+            fromProductId: localSubscriptionProductId,
+            toProductId: update.productId ?? null,
+            fromPrice: getProductPrice(localSubscriptionProductId),
+            toPrice: getProductPrice(update.productId),
+            currentUnits: localSubscribedUnits,
+            targetUnits: update.units,
+          }
+        : {
+            kind: "unit-update",
+            fromPlanId: activePlanId,
+            fromPlan: currentPlan,
+            fromProductId: localSubscriptionProductId,
+            toProductId: localSubscriptionProductId,
+            fromPrice: getProductPrice(localSubscriptionProductId),
+            toPrice: getProductPrice(localSubscriptionProductId),
+            currentUnits: localSubscribedUnits,
+            targetUnits: update.units,
+          };
+    return updateBehavior(intent);
+  }
 
   const getFallbackSuccessUrl = (): string | undefined => {
     if (typeof window === "undefined") return undefined;
@@ -542,7 +620,8 @@
 
   const requestSwitchPlan = async (payload: {
     plan: UIPlanEntry;
-    productId: string;
+    productId?: string;
+    freePlanId?: string;
     units?: number;
   }) => {
     // Consent gate: onBeforePlanChange
@@ -551,6 +630,7 @@
         fromPlanId: activePlanId,
         toPlanId: payload.plan.planId,
         productId: payload.productId,
+        freePlanId: payload.freePlanId,
         units: payload.units,
       });
       if (!proceed) return;
@@ -569,6 +649,7 @@
   const confirmUpdate = async () => {
     if (!updateRef || !pendingUpdate) return;
     const update = pendingUpdate;
+    const selectedUpdateBehavior = resolveUpdateBehavior(update);
     const subId = matchedSubscription?.id;
     updateDialogOpen = false;
     pendingUpdate = null;
@@ -578,15 +659,37 @@
         await client.mutation(
           updateRef,
           {
-            productId: update.productId,
+            ...(update.productId ? { productId: update.productId } : {}),
+            ...(update.freePlanId ? { freePlanId: update.freePlanId } : {}),
             ...(subId ? { subscriptionId: subId } : {}),
-            updateBehavior,
+            updateBehavior: selectedUpdateBehavior,
           },
           {
             optimisticUpdate: (store) => {
               const current = store.getQuery(billingUiModelRef, {});
               if (current) {
                 const m = current as ConnectedBillingModel;
+                if (selectedUpdateBehavior === "period-end") {
+                  store.setQuery(billingUiModelRef, {}, {
+                    ...m,
+                    scheduledSubscriptionUpdates: [
+                      ...(m.scheduledSubscriptionUpdates ?? []).filter(
+                        (scheduled) => scheduled.subscriptionId !== subId,
+                      ),
+                      {
+                        entityId: "",
+                        subscriptionId: subId ?? "",
+                        targetProductId: update.productId,
+                        targetPlanId: update.freePlanId,
+                        effectiveAt: matchedSubscription?.currentPeriodEnd ?? "",
+                        status: "pending",
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                      },
+                    ],
+                  });
+                  return;
+                }
                 store.setQuery(
                   billingUiModelRef,
                   {},
@@ -594,7 +697,7 @@
                     ...m,
                     activeSubscriptions: (m.activeSubscriptions ?? []).map((s) =>
                       ownProductIds.has(s.productId)
-                        ? { ...s, productId: update.productId }
+                        ? { ...s, productId: update.productId ?? s.productId }
                         : s,
                     ),
                   },
@@ -609,13 +712,33 @@
           {
             units: update.units,
             ...(subId ? { subscriptionId: subId } : {}),
-            updateBehavior,
+            updateBehavior: selectedUpdateBehavior,
           },
           {
             optimisticUpdate: (store) => {
               const current = store.getQuery(billingUiModelRef, {});
               if (current) {
                 const m = current as ConnectedBillingModel;
+                if (selectedUpdateBehavior === "period-end") {
+                  store.setQuery(billingUiModelRef, {}, {
+                    ...m,
+                    scheduledSubscriptionUpdates: [
+                      ...(m.scheduledSubscriptionUpdates ?? []).filter(
+                        (scheduled) => scheduled.subscriptionId !== subId,
+                      ),
+                      {
+                        entityId: "",
+                        subscriptionId: subId ?? "",
+                        targetUnits: update.units,
+                        effectiveAt: matchedSubscription?.currentPeriodEnd ?? "",
+                        status: "pending",
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                      },
+                    ],
+                  });
+                  return;
+                }
                 store.setQuery(
                   billingUiModelRef,
                   {},
@@ -647,6 +770,7 @@
 
   const updateSummary = $derived.by(() => {
     if (!pendingUpdate) return null;
+    const selectedUpdateBehavior = resolveUpdateBehavior(pendingUpdate);
 
     if (pendingUpdate.kind === "plan-switch") {
       const currentPlan = plans.find((p) => {
@@ -669,13 +793,15 @@
           )
         : null;
       const newBreakdown = useUnitBreakdown
-        ? formatUnitPriceBreakdown(
-            pendingUpdate.productId,
-            allProducts,
-            switchUnits,
-            resolvedI18n.labels,
-            resolvedI18n.formatCurrency,
-          )
+        ? pendingUpdate.productId
+          ? formatUnitPriceBreakdown(
+              pendingUpdate.productId,
+              allProducts,
+              switchUnits,
+              resolvedI18n.labels,
+              resolvedI18n.formatCurrency,
+            )
+          : null
         : null;
       const currentPrice =
         currentBreakdown?.total ??
@@ -686,15 +812,17 @@
         );
       const newPrice =
         newBreakdown?.total ??
-        formatPriceWithInterval(
-          pendingUpdate.productId,
-          allProducts,
-          resolvedI18n.formatCurrency,
-        );
+        (pendingUpdate.productId
+          ? formatPriceWithInterval(
+              pendingUpdate.productId,
+              allProducts,
+              resolvedI18n.formatCurrency,
+            )
+          : null);
 
       return buildUpdateSummary({
         kind: "plan-switch",
-        updateBehavior,
+        updateBehavior: selectedUpdateBehavior,
         currentLabel: currentPrice ? `${currentTitle} \u00b7 ${currentPrice}` : currentTitle,
         newLabel: newPrice
           ? `${pendingUpdate.plan.title ?? resolvedI18n.labels.subscription.newPlan} \u00b7 ${newPrice}`
@@ -727,7 +855,7 @@
 
     return buildUpdateSummary({
       kind: "unit-update",
-      updateBehavior,
+      updateBehavior: selectedUpdateBehavior,
       currentLabel: currentPrice ?? resolvedI18n.labels.subscription.unitCount(currentUnits),
       newLabel: newPrice ?? resolvedI18n.labels.subscription.unitCount(pendingUpdate.units),
       currentPeriodEnd: matchedSubscription?.currentPeriodEnd,
@@ -736,6 +864,32 @@
       labels: resolvedI18n.labels,
       formatDate: resolvedI18n.formatDate,
     });
+  });
+
+  const scheduledUpdateLabel = $derived.by(() => {
+    if (!localScheduledUpdate) return null;
+    if (localScheduledUpdate.targetProductId) {
+      const targetPlan = getPlanForProduct(localScheduledUpdate.targetProductId);
+      const price = formatPriceWithInterval(
+        localScheduledUpdate.targetProductId,
+        allProducts,
+        resolvedI18n.formatCurrency,
+      );
+      const title = targetPlan?.title ?? resolvedI18n.labels.subscription.newPlan;
+      return price ? `${title} \u00b7 ${price}` : title;
+    }
+    if (localScheduledUpdate.targetPlanId) {
+      const targetPlan = plans.find(
+        (plan) => plan.planId === localScheduledUpdate.targetPlanId,
+      );
+      return targetPlan?.title ?? localScheduledUpdate.targetPlanId;
+    }
+    if (localScheduledUpdate.targetUnits !== undefined) {
+      return resolvedI18n.labels.subscription.unitCount(
+        localScheduledUpdate.targetUnits,
+      );
+    }
+    return null;
   });
 
   const confirmCancelSubscription = async () => {
@@ -815,6 +969,45 @@
     }
   };
 
+  const undoScheduledUpdate = async () => {
+    if (!cancelScheduledUpdateRef) return;
+    const subId = matchedSubscription?.id;
+    actionError = null;
+    try {
+      await client.mutation(
+        cancelScheduledUpdateRef,
+        {
+          ...(subId ? { subscriptionId: subId } : {}),
+        },
+        {
+          optimisticUpdate: (store) => {
+            const current = store.getQuery(billingUiModelRef, {});
+            if (current) {
+              const m = current as ConnectedBillingModel;
+              store.setQuery(
+                billingUiModelRef,
+                {},
+                {
+                  ...m,
+                  scheduledSubscriptionUpdates: (
+                    m.scheduledSubscriptionUpdates ?? []
+                  ).filter((update) => update.subscriptionId !== subId),
+                  activeSubscriptions: (m.activeSubscriptions ?? []).map((s) =>
+                    s.id === subId ? { ...s, cancelAtPeriodEnd: false } : s,
+                  ),
+                },
+              );
+            }
+          },
+        },
+      );
+    } catch (error) {
+      actionError = error instanceof Error
+        ? error.message
+        : resolvedI18n.labels.subscription.resumeFailed;
+    }
+  };
+
   const openCancelDialog = () => {
     cancelDialogOpen = true;
   };
@@ -842,9 +1035,14 @@
             ...snapshot.metadata,
             cancelAtPeriodEnd: localCancelAtPeriodEnd,
             currentPeriodEnd: localCurrentPeriodEnd,
+            scheduledSubscriptionUpdate: localScheduledUpdate,
           },
         }}
         isLoading={isActionLoading}
+        scheduledUpdateLabel={scheduledUpdateLabel}
+        onUndoUpdate={cancelScheduledUpdateRef && canResume
+          ? undoScheduledUpdate
+          : undefined}
         onResume={resumeRef && canResume ? resumeSubscription : undefined}
         labels={resolvedI18n.labels}
         formatDate={resolvedI18n.formatDate}

@@ -20,7 +20,10 @@ export const BillingPortal = ({
   const provider = useCreemConvex();
   const resolvedApi = requireCreemConvexApi("BillingPortal", provider);
   const resolvedPermissions = permissions ?? provider?.permissions;
-  const i18n = useMemo(() => resolveBillingI18n(provider?.i18n), [provider?.i18n]);
+  const i18n = useMemo(
+    () => resolveBillingI18n(provider?.i18n),
+    [provider?.i18n],
+  );
   const canAccess = resolvedPermissions?.canAccessPortal !== false;
 
   const client = useConvex();

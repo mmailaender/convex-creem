@@ -179,5 +179,6 @@
     "marked": "^18.0.3",
     "remeda": "^2.34.0",
     "standardwebhooks": "^1.0.0"
-  }
+  },
+  "packageManager": "pnpm@11.1.2"
 }

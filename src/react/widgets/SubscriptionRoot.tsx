@@ -24,6 +24,8 @@ import type {
   UIPlanEntry,
   RecurringCycle,
   UpdateBehavior,
+  UpdateBehaviorIntent,
+  UpdateBehaviorSetting,
 } from "../../core/types.js";
 import {
   mergeBillingLabels,
@@ -132,7 +134,7 @@ export const SubscriptionRoot = ({
   units?: number;
   showUnitPicker?: boolean;
   twoColumnLayout?: boolean;
-  updateBehavior?: UpdateBehavior;
+  updateBehavior?: UpdateBehaviorSetting;
   unstyled?: boolean;
   onBeforeCheckout?: (intent: CheckoutIntent) => Promise<boolean> | boolean;
   onBeforePlanChange?: (intent: PlanChangeIntent) => Promise<boolean> | boolean;
@@ -178,6 +180,8 @@ export const SubscriptionRoot = ({
   const updateRef = resolvedApi.subscriptions?.update;
   const cancelRef = resolvedApi.subscriptions?.cancel;
   const resumeRef = resolvedApi.subscriptions?.resume;
+  const cancelScheduledUpdateRef =
+    resolvedApi.subscriptions?.cancelScheduledUpdate;
 
   const modelRaw = useQuery(billingUiModelRef, {});
   const model = (modelRaw ?? null) as ConnectedBillingModel | null;
@@ -194,7 +198,8 @@ export const SubscriptionRoot = ({
     | {
         kind: "plan-switch";
         plan: UIPlanEntry;
-        productId: string;
+        productId?: string;
+        freePlanId?: string;
         units?: number;
       }
     | { kind: "unit-update"; units: number }
@@ -429,6 +434,13 @@ export const SubscriptionRoot = ({
   const localCurrentPeriodEnd = matchedSubscription?.currentPeriodEnd ?? null;
   const localSubscriptionState = matchedSubscription?.status ?? null;
   const localSubscribedUnits = matchedSubscription?.units ?? null;
+  const localScheduledUpdate = useMemo(
+    () =>
+      (model?.scheduledSubscriptionUpdates ?? []).find(
+        (update) => update.subscriptionId === matchedSubscription?.id,
+      ) ?? null,
+    [model?.scheduledSubscriptionUpdates, matchedSubscription?.id],
+  );
 
   const snapshot = model?.billingSnapshot ?? null;
 
@@ -460,6 +472,78 @@ export const SubscriptionRoot = ({
     }
     return null;
   }, [model, localSubscriptionProductId, plans]);
+
+  const getProductPrice = useCallback(
+    (productId?: string | null) =>
+      productId
+        ? (allProducts.find((product) => product.id === productId)?.price ??
+          null)
+        : null,
+    [allProducts],
+  );
+
+  const getPlanForProduct = useCallback(
+    (productId?: string | null) =>
+      productId
+        ? (plans.find((plan) =>
+            Object.values(plan.creemProductIds ?? {}).includes(productId),
+          ) ?? null)
+        : null,
+    [plans],
+  );
+
+  const resolveUpdateBehavior = useCallback(
+    (
+      update:
+        | {
+            kind: "plan-switch";
+            plan: UIPlanEntry;
+            productId?: string;
+            freePlanId?: string;
+            units?: number;
+          }
+        | { kind: "unit-update"; units: number },
+    ): UpdateBehavior => {
+      if (typeof updateBehavior !== "function") return updateBehavior;
+
+      const currentPlan = getPlanForProduct(localSubscriptionProductId);
+      const intent: UpdateBehaviorIntent =
+        update.kind === "plan-switch"
+          ? {
+              kind: "plan-switch",
+              fromPlanId: activePlanId,
+              toPlanId: update.plan.planId,
+              fromPlan: currentPlan,
+              toPlan: update.plan,
+              fromProductId: localSubscriptionProductId,
+              toProductId: update.productId ?? null,
+              fromPrice: getProductPrice(localSubscriptionProductId),
+              toPrice: getProductPrice(update.productId),
+              currentUnits: localSubscribedUnits,
+              targetUnits: update.units,
+            }
+          : {
+              kind: "unit-update",
+              fromPlanId: activePlanId,
+              fromPlan: currentPlan,
+              fromProductId: localSubscriptionProductId,
+              toProductId: localSubscriptionProductId,
+              fromPrice: getProductPrice(localSubscriptionProductId),
+              toPrice: getProductPrice(localSubscriptionProductId),
+              currentUnits: localSubscribedUnits,
+              targetUnits: update.units,
+            };
+      return updateBehavior(intent);
+    },
+    [
+      activePlanId,
+      getPlanForProduct,
+      getProductPrice,
+      localSubscribedUnits,
+      localSubscriptionProductId,
+      updateBehavior,
+    ],
+  );
 
   const startCheckout = useCallback(
     async (productId: string, checkoutUnits?: number) => {
@@ -543,7 +627,8 @@ export const SubscriptionRoot = ({
   const requestSwitchPlan = useCallback(
     async (payload: {
       plan: UIPlanEntry;
-      productId: string;
+      productId?: string;
+      freePlanId?: string;
       units?: number;
     }) => {
       // Consent gate: onBeforePlanChange
@@ -552,6 +637,7 @@ export const SubscriptionRoot = ({
           fromPlanId: activePlanId,
           toPlanId: payload.plan.planId,
           productId: payload.productId,
+          freePlanId: payload.freePlanId,
           units: payload.units,
         });
         if (!proceed) return;
@@ -579,6 +665,7 @@ export const SubscriptionRoot = ({
   const confirmUpdate = useCallback(async () => {
     if (!updateRef || !pendingUpdate) return;
     const update = pendingUpdate;
+    const selectedUpdateBehavior = resolveUpdateBehavior(update);
     const subId = matchedSubscription?.id;
     setUpdateDialogOpen(false);
     setPendingUpdate(null);
@@ -588,15 +675,42 @@ export const SubscriptionRoot = ({
         await client.mutation(
           updateRef,
           {
-            productId: update.productId,
+            ...(update.productId ? { productId: update.productId } : {}),
+            ...(update.freePlanId ? { freePlanId: update.freePlanId } : {}),
             ...(subId ? { subscriptionId: subId } : {}),
-            updateBehavior,
+            updateBehavior: selectedUpdateBehavior,
           },
           {
             optimisticUpdate: (store) => {
               const current = store.getQuery(billingUiModelRef, {});
               if (current) {
                 const m = current as ConnectedBillingModel;
+                if (selectedUpdateBehavior === "period-end") {
+                  store.setQuery(
+                    billingUiModelRef,
+                    {},
+                    {
+                      ...m,
+                      scheduledSubscriptionUpdates: [
+                        ...(m.scheduledSubscriptionUpdates ?? []).filter(
+                          (scheduled) => scheduled.subscriptionId !== subId,
+                        ),
+                        {
+                          entityId: "",
+                          subscriptionId: subId ?? "",
+                          targetProductId: update.productId,
+                          targetPlanId: update.freePlanId,
+                          effectiveAt:
+                            matchedSubscription?.currentPeriodEnd ?? "",
+                          status: "pending",
+                          createdAt: new Date().toISOString(),
+                          updatedAt: new Date().toISOString(),
+                        },
+                      ],
+                    },
+                  );
+                  return;
+                }
                 store.setQuery(
                   billingUiModelRef,
                   {},
@@ -605,7 +719,7 @@ export const SubscriptionRoot = ({
                     activeSubscriptions: (m.activeSubscriptions ?? []).map(
                       (s) =>
                         ownProductIds.has(s.productId)
-                          ? { ...s, productId: update.productId }
+                          ? { ...s, productId: update.productId ?? s.productId }
                           : s,
                     ),
                   },
@@ -620,13 +734,38 @@ export const SubscriptionRoot = ({
           {
             units: update.units,
             ...(subId ? { subscriptionId: subId } : {}),
-            updateBehavior,
+            updateBehavior: selectedUpdateBehavior,
           },
           {
             optimisticUpdate: (store) => {
               const current = store.getQuery(billingUiModelRef, {});
               if (current) {
                 const m = current as ConnectedBillingModel;
+                if (selectedUpdateBehavior === "period-end") {
+                  store.setQuery(
+                    billingUiModelRef,
+                    {},
+                    {
+                      ...m,
+                      scheduledSubscriptionUpdates: [
+                        ...(m.scheduledSubscriptionUpdates ?? []).filter(
+                          (scheduled) => scheduled.subscriptionId !== subId,
+                        ),
+                        {
+                          entityId: "",
+                          subscriptionId: subId ?? "",
+                          targetUnits: update.units,
+                          effectiveAt:
+                            matchedSubscription?.currentPeriodEnd ?? "",
+                          status: "pending",
+                          createdAt: new Date().toISOString(),
+                          updatedAt: new Date().toISOString(),
+                        },
+                      ],
+                    },
+                  );
+                  return;
+                }
                 store.setQuery(
                   billingUiModelRef,
                   {},
@@ -659,7 +798,7 @@ export const SubscriptionRoot = ({
     client,
     billingUiModelRef,
     ownProductIds,
-    updateBehavior,
+    resolveUpdateBehavior,
     resolvedI18n.labels.subscription.switchFailed,
     resolvedI18n.labels.subscription.unitUpdateFailed,
   ]);
@@ -671,6 +810,7 @@ export const SubscriptionRoot = ({
 
   const updateSummary = useMemo(() => {
     if (!pendingUpdate) return null;
+    const selectedUpdateBehavior = resolveUpdateBehavior(pendingUpdate);
 
     if (pendingUpdate.kind === "plan-switch") {
       const currentPlan = plans.find((p) => {
@@ -697,13 +837,15 @@ export const SubscriptionRoot = ({
           )
         : null;
       const newBreakdown = useUnitBreakdown
-        ? formatUnitPriceBreakdown(
-            pendingUpdate.productId,
-            allProducts,
-            switchUnits,
-            resolvedI18n.labels,
-            resolvedI18n.formatCurrency,
-          )
+        ? pendingUpdate.productId
+          ? formatUnitPriceBreakdown(
+              pendingUpdate.productId,
+              allProducts,
+              switchUnits,
+              resolvedI18n.labels,
+              resolvedI18n.formatCurrency,
+            )
+          : null
         : null;
       const currentPrice =
         currentBreakdown?.total ??
@@ -714,21 +856,24 @@ export const SubscriptionRoot = ({
         );
       const newPrice =
         newBreakdown?.total ??
-        formatPriceWithInterval(
-          pendingUpdate.productId,
-          allProducts,
-          resolvedI18n.formatCurrency,
-        );
+        (pendingUpdate.productId
+          ? formatPriceWithInterval(
+              pendingUpdate.productId,
+              allProducts,
+              resolvedI18n.formatCurrency,
+            )
+          : null);
 
       return buildUpdateSummary({
         kind: "plan-switch",
-        updateBehavior,
+        updateBehavior: selectedUpdateBehavior,
         currentLabel: currentPrice
           ? `${currentTitle} \u00b7 ${currentPrice}`
           : currentTitle,
         newLabel: newPrice
           ? `${pendingUpdate.plan.title ?? resolvedI18n.labels.subscription.newPlan} \u00b7 ${newPrice}`
-          : (pendingUpdate.plan.title ?? resolvedI18n.labels.subscription.newPlan),
+          : (pendingUpdate.plan.title ??
+            resolvedI18n.labels.subscription.newPlan),
         currentCaption: currentBreakdown?.calculation ?? null,
         newCaption: newBreakdown?.calculation ?? null,
         currentPeriodEnd: matchedSubscription?.currentPeriodEnd,
@@ -757,9 +902,10 @@ export const SubscriptionRoot = ({
 
     return buildUpdateSummary({
       kind: "unit-update",
-      updateBehavior,
+      updateBehavior: selectedUpdateBehavior,
       currentLabel:
-        currentPrice ?? resolvedI18n.labels.subscription.unitCount(currentUnits),
+        currentPrice ??
+        resolvedI18n.labels.subscription.unitCount(currentUnits),
       newLabel:
         newPrice ??
         resolvedI18n.labels.subscription.unitCount(pendingUpdate.units),
@@ -776,8 +922,43 @@ export const SubscriptionRoot = ({
     allProducts,
     localSubscribedUnits,
     units,
-    updateBehavior,
+    resolveUpdateBehavior,
     matchedSubscription,
+    resolvedI18n,
+  ]);
+
+  const scheduledUpdateLabel = useMemo(() => {
+    if (!localScheduledUpdate) return null;
+    if (localScheduledUpdate.targetProductId) {
+      const targetPlan = getPlanForProduct(
+        localScheduledUpdate.targetProductId,
+      );
+      const price = formatPriceWithInterval(
+        localScheduledUpdate.targetProductId,
+        allProducts,
+        resolvedI18n.formatCurrency,
+      );
+      const title =
+        targetPlan?.title ?? resolvedI18n.labels.subscription.newPlan;
+      return price ? `${title} \u00b7 ${price}` : title;
+    }
+    if (localScheduledUpdate.targetPlanId) {
+      const targetPlan = plans.find(
+        (plan) => plan.planId === localScheduledUpdate.targetPlanId,
+      );
+      return targetPlan?.title ?? localScheduledUpdate.targetPlanId;
+    }
+    if (localScheduledUpdate.targetUnits !== undefined) {
+      return resolvedI18n.labels.subscription.unitCount(
+        localScheduledUpdate.targetUnits,
+      );
+    }
+    return null;
+  }, [
+    allProducts,
+    getPlanForProduct,
+    localScheduledUpdate,
+    plans,
     resolvedI18n,
   ]);
 
@@ -873,6 +1054,53 @@ export const SubscriptionRoot = ({
     client,
     billingUiModelRef,
     ownProductIds,
+    resolvedI18n.labels.subscription.resumeFailed,
+  ]);
+
+  const undoScheduledUpdate = useCallback(async () => {
+    if (!cancelScheduledUpdateRef) return;
+    const subId = matchedSubscription?.id;
+    setActionError(null);
+    try {
+      await client.mutation(
+        cancelScheduledUpdateRef,
+        {
+          ...(subId ? { subscriptionId: subId } : {}),
+        },
+        {
+          optimisticUpdate: (store) => {
+            const current = store.getQuery(billingUiModelRef, {});
+            if (current) {
+              const m = current as ConnectedBillingModel;
+              store.setQuery(
+                billingUiModelRef,
+                {},
+                {
+                  ...m,
+                  scheduledSubscriptionUpdates: (
+                    m.scheduledSubscriptionUpdates ?? []
+                  ).filter((update) => update.subscriptionId !== subId),
+                  activeSubscriptions: (m.activeSubscriptions ?? []).map((s) =>
+                    s.id === subId ? { ...s, cancelAtPeriodEnd: false } : s,
+                  ),
+                },
+              );
+            }
+          },
+        },
+      );
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : resolvedI18n.labels.subscription.resumeFailed,
+      );
+    }
+  }, [
+    billingUiModelRef,
+    cancelScheduledUpdateRef,
+    client,
+    matchedSubscription,
     resolvedI18n.labels.subscription.resumeFailed,
   ]);
 
@@ -990,9 +1218,16 @@ export const SubscriptionRoot = ({
                     ...snapshot.metadata,
                     cancelAtPeriodEnd: localCancelAtPeriodEnd,
                     currentPeriodEnd: localCurrentPeriodEnd,
+                    scheduledSubscriptionUpdate: localScheduledUpdate,
                   },
                 }}
                 isLoading={isActionLoading}
+                scheduledUpdateLabel={scheduledUpdateLabel}
+                onUndoUpdate={
+                  cancelScheduledUpdateRef && canResume
+                    ? undoScheduledUpdate
+                    : undefined
+                }
                 onResume={
                   resumeRef && canResume ? resumeSubscription : undefined
                 }
@@ -1099,7 +1334,10 @@ export const SubscriptionRoot = ({
                       {resolvedI18n.labels.subscription.dialogs.cancelTitle}
                     </Dialog.Title>
                     <Dialog.Description className="dialog-description">
-                      {resolvedI18n.labels.subscription.dialogs.cancelDescription}
+                      {
+                        resolvedI18n.labels.subscription.dialogs
+                          .cancelDescription
+                      }
                     </Dialog.Description>
                     <div className="dialog-actions">
                       <button
@@ -1110,7 +1348,10 @@ export const SubscriptionRoot = ({
                         {resolvedI18n.labels.subscription.dialogs.confirmCancel}
                       </button>
                       <Dialog.CloseTrigger className="button-faded h-8 w-full">
-                        {resolvedI18n.labels.subscription.dialogs.keepSubscription}
+                        {
+                          resolvedI18n.labels.subscription.dialogs
+                            .keepSubscription
+                        }
                       </Dialog.CloseTrigger>
                     </div>
                   </Dialog.Content>

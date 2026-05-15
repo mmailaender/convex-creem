@@ -231,11 +231,33 @@ export type CheckoutIntent = {
  * - `"proration-charge-immediately"` — prorate and charge the difference now
  * - `"proration-charge"` — prorate, charge on next invoice
  * - `"proration-none"` — no proration, change takes effect on next billing cycle
+ * - `"period-end"` — keep current access until period end, then apply the update
  */
 export type UpdateBehavior =
   | "proration-charge-immediately"
   | "proration-charge"
-  | "proration-none";
+  | "proration-none"
+  | "period-end";
+
+export type UpdateBehaviorIntent = {
+  kind: "plan-switch" | "unit-update";
+  fromPlanId?: string | null;
+  toPlanId?: string | null;
+  fromPlan?: PlanCatalogEntry | null;
+  toPlan?: PlanCatalogEntry | null;
+  fromProductId?: string | null;
+  toProductId?: string | null;
+  fromPrice?: number | null;
+  toPrice?: number | null;
+  currentUnits?: number | null;
+  targetUnits?: number;
+};
+
+export type UpdateBehaviorResolver = (
+  intent: UpdateBehaviorIntent,
+) => UpdateBehavior;
+
+export type UpdateBehaviorSetting = UpdateBehavior | UpdateBehaviorResolver;
 
 /** Get a human-readable description for a plan switch based on the proration behavior. */
 export const getSwitchPlanDescription = (
@@ -253,7 +275,24 @@ export const getSwitchPlanDescription = (
       return `${prefix} The price difference will be prorated and applied to your next invoice.`;
     case "proration-none":
       return `${prefix} The new price will take effect at your next billing cycle.`;
+    case "period-end":
+      return `${prefix} The current plan stays active until the end of the current billing period.`;
   }
+};
+
+/** App-side scheduled subscription update stored until the current period ends. */
+export type ScheduledSubscriptionUpdate = {
+  entityId: string;
+  subscriptionId: string;
+  targetProductId?: string;
+  targetPlanId?: string;
+  targetUnits?: number;
+  effectiveAt: string;
+  status: "pending" | "applying" | "applied" | "superseded" | "failed";
+  scheduledFunctionId?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 /** A single evaluated usage-limit check result. */
@@ -338,8 +377,10 @@ export type PlanChangeIntent = {
   fromPlanId: string | null;
   /** Plan ID the user is switching to. */
   toPlanId: string;
-  /** Creem product ID of the target plan. */
-  productId: string;
+  /** Creem product ID of the target paid plan. Undefined for app-owned free plans. */
+  productId?: string;
+  /** Stable app plan ID of the target free plan. */
+  freePlanId?: string;
   /** Number of units (for unit-based plans). */
   units?: number;
 };
