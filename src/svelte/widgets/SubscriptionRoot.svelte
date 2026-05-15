@@ -161,8 +161,12 @@
 
   const billingModelQuery = useQuery(billingUiModelRef, {});
 
-  let selectedCycle = $state<RecurringCycle>(resolvedDefaultCycle);
-  let selectedGroupId = $state<string | null>(defaultGroup ?? null);
+  let selectedCycle = $state<RecurringCycle>(
+    untrack(() => resolvedDefaultCycle),
+  );
+  let selectedGroupId = $state<string | null>(
+    untrack(() => defaultGroup ?? null),
+  );
   let isActionLoading = $state(false);
   let actionError = $state<string | null>(null);
   let updateDialogOpen = $state(false);

@@ -40,7 +40,9 @@
       {defaultValue}
       {disabled}
       class={unstyled ? className : `creem-base:segment-group ${className}`}
-      onValueChange={(details: { value: string }) => onValueChange?.(details.value)}
+      onValueChange={(details) => {
+        if (details.value != null) onValueChange?.(details.value);
+      }}
     >
       <ArkSegmentGroup.Indicator
         class={unstyled ? "" : "creem-base:segment-group-indicator"}

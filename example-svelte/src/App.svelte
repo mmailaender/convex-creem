@@ -21,6 +21,7 @@
     plansOf,
     type ConnectedBillingApi,
     type CreditsContextValue,
+    type PlanChangeIntent,
     type Transition,
   } from "@mmailaender/convex-creem/svelte";
   import { api } from "../../convex/_generated/api.js";
@@ -406,11 +407,8 @@
     units?: number;
   }) => ensureConsentAccepted();
 
-  const onBeforePlanChange = async (_intent: {
-    fromPlanId: string | null;
-    toPlanId: string;
-    productId: string;
-  }) => ensureConsentAccepted();
+  const onBeforePlanChange = async (_intent: PlanChangeIntent) =>
+    ensureConsentAccepted();
 
   const onBeforeFreePlanActivation = async (_intent: { freePlanId: string }) =>
     ensureConsentAccepted();
