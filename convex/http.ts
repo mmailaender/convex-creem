@@ -6,11 +6,11 @@ const http = httpRouter();
 creem.registerRoutes(http, {
   // Optional custom path, default is "/creem/events"
   path: "/creem/events",
-  // Typesafe event handlers for any Creem webhook event.
+  // Event handlers for supported Creem webhook events.
   // The component automatically stores subscriptions and orders from webhooks.
   // Add custom handlers here for app-specific logic (e.g. sending emails, logging).
   events: {
-    "subscription.updated": async (_ctx, event) => {
+    "subscription.update": async (_ctx, event) => {
       console.log("Subscription updated", event);
       const data = (event.data ?? event.object) as
         | {

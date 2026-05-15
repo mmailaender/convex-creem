@@ -21,7 +21,6 @@ import {
   getConvexEntityId,
   parseSubscription,
   parseCheckout,
-  parseProduct,
 } from "./parsers.js";
 import {
   type FunctionReference,
@@ -37,7 +36,6 @@ import {
   type RunMutationCtx,
   type RunSchedulerMutationCtx,
   type RunQueryCtx,
-  convertToDatabaseProduct,
   convertToDatabaseSubscription,
   convertToOrder,
   type RunActionCtx,
@@ -231,6 +229,26 @@ export type WebhookEventHandlers = Record<
   string,
   (ctx: RunActionCtx, event: CreemWebhookEvent) => Promise<void> | void
 >;
+
+const subscriptionWebhookEvents = new Set([
+  "subscription.active",
+  "subscription.paid",
+  "subscription.canceled",
+  "subscription.scheduled_cancel",
+  "subscription.past_due",
+  "subscription.expired",
+  "subscription.trialing",
+  "subscription.paused",
+  "subscription.unpaid",
+  "subscription.update",
+]);
+
+const supportedWebhookEvents = new Set([
+  "checkout.completed",
+  ...subscriptionWebhookEvents,
+  "refund.created",
+  "dispute.created",
+]);
 
 /**
  * Callback that resolves the authenticated user for `creem.api({ resolve })`.
@@ -1764,8 +1782,9 @@ export class Creem {
   /**
    * Register the Creem webhook HTTP route on your Convex `httpRouter`.
    *
-   * Automatically handles `checkout.completed`, `subscription.*`, and `product.*`
-   * events — upserts customers, subscriptions, orders, and products in the Convex DB.
+   * Automatically handles supported Creem checkout, subscription, and refund
+   * events — upserts customers, subscriptions, and orders in the Convex DB.
+   * Dispute events are verified and dispatched to custom handlers.
    *
    * @param http - Your Convex HTTP router (from `httpRouter()`)
    * @param options.path - Webhook endpoint path (default: `"/creem/events"`)
@@ -1819,11 +1838,11 @@ export class Creem {
           if (
             eventData &&
             typeof eventData === "object" &&
-            eventType.startsWith("checkout.")
+            eventType === "checkout.completed"
           ) {
             const raw = eventData as Record<string, unknown>;
             const checkout = parseCheckout(raw);
-            if (checkout && eventType === "checkout.completed") {
+            if (checkout) {
               // Auto-create customer record from checkout metadata
               const customerObj =
                 typeof checkout.customer === "object"
@@ -1924,7 +1943,7 @@ export class Creem {
           if (
             eventData &&
             typeof eventData === "object" &&
-            eventType.startsWith("subscription.")
+            subscriptionWebhookEvents.has(eventType)
           ) {
             const raw = eventData as Record<string, unknown>;
             const parsed = parseSubscription(raw);
@@ -1934,15 +1953,9 @@ export class Creem {
               const subscription = convertToDatabaseSubscription(parsed, {
                 rawMetadata: rawMeta,
               });
-              if (eventType === "subscription.created") {
-                await ctx.runMutation(this.component.lib.createSubscription, {
-                  subscription,
-                });
-              } else {
-                await ctx.runMutation(this.component.lib.updateSubscription, {
-                  subscription,
-                });
-              }
+              await ctx.runMutation(this.component.lib.updateSubscription, {
+                subscription,
+              });
 
               // Auto-create customer record from subscription metadata
               const customerEntity =
@@ -1972,30 +1985,9 @@ export class Creem {
             }
           }
 
-          if (
-            eventData &&
-            typeof eventData === "object" &&
-            eventType.startsWith("product.")
-          ) {
-            const raw = eventData as Record<string, unknown>;
-            const parsed = parseProduct(raw);
-            if (parsed) {
-              const product = convertToDatabaseProduct(parsed);
-              if (eventType === "product.created") {
-                await ctx.runMutation(this.component.lib.createProduct, {
-                  product,
-                });
-              } else {
-                await ctx.runMutation(this.component.lib.updateProduct, {
-                  product,
-                });
-              }
-            } else {
-              console.warn(`Could not parse product for ${eventType}`);
-            }
-          }
-
-          const handler = mergedEvents[eventType];
+          const handler = supportedWebhookEvents.has(eventType)
+            ? mergedEvents[eventType]
+            : undefined;
           if (handler) {
             await handler(ctx, event);
           }

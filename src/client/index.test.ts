@@ -1310,7 +1310,6 @@ describe("registerRoutes", () => {
 
     const response = await signAndSend(handler!, ctx, body, SECRET);
     expect(response.status).toBe(202);
-    // Should update (not create, since eventType is subscription.active, not subscription.created)
     expect(ctx.runMutation).toHaveBeenCalledWith(
       REFS.updateSubscription,
       expect.objectContaining({
@@ -1321,150 +1320,30 @@ describe("registerRoutes", () => {
     );
   });
 
-  it("handles subscription.created — calls createSubscription", async () => {
-    const creem = new Creem(mockComponent, {
-      apiKey: "k",
-      webhookSecret: SECRET,
-    });
-    const { handler } = setupWebhookHandler(creem);
-    const ctx = createMockCtx();
+  it.each(["subscription.created", "product.created", "product.updated"])(
+    "ignores unsupported Creem webhook event name %s",
+    async (eventType) => {
+      const creem = new Creem(mockComponent, {
+        apiKey: "k",
+        webhookSecret: SECRET,
+      });
+      const customHandler = vi.fn();
+      const { handler } = setupWebhookHandler(creem, {
+        [eventType]: customHandler,
+      });
+      const ctx = createMockCtx();
 
-    // Use real-shaped payload with eventType=subscription.created
-    const body = JSON.stringify({
-      eventType: "subscription.created",
-      created_at: 1772265324184,
-      object: {
-        id: "sub_new_123",
-        object: "subscription",
-        product: {
-          id: "prod_3prhYLElQzQaZMq7pePQqf",
-          object: "product",
-          name: "Test Subscription Product",
-          description: "A test product",
-          price: 2999,
-          currency: "USD",
-          billing_type: "recurring",
-          billing_period: "once",
-          status: "active",
-          tax_mode: "exclusive",
-          tax_category: "saas",
-          default_success_url: null,
-          created_at: "2026-02-28T07:55:24.184Z",
-          updated_at: "2026-02-28T07:55:24.184Z",
-          mode: "test",
-        },
-        customer: {
-          id: "cust_50fklVtISQkWoAydmZ1LJb",
-          object: "customer",
-          email: "test-customer@creem.io",
-          name: "Test Customer",
-          country: "US",
-          created_at: "2026-02-28T07:55:24.184Z",
-          updated_at: "2026-02-28T07:55:24.184Z",
-          mode: "test",
-        },
-        collection_method: "charge_automatically",
-        status: "active",
-        current_period_start_date: "2026-02-28T07:55:24.184Z",
-        current_period_end_date: "2026-03-30T07:55:24.184Z",
-        canceled_at: null,
-        created_at: "2026-02-28T07:55:24.184Z",
-        updated_at: "2026-02-28T07:55:24.184Z",
-        mode: "test",
-        metadata: { convexUserId: "user_2" },
-      },
-    });
+      const body = JSON.stringify({
+        eventType,
+        object: { id: "evt_object_1", object: "unknown" },
+      });
 
-    const response = await signAndSend(handler!, ctx, body, SECRET);
-    expect(response.status).toBe(202);
-    expect(ctx.runMutation).toHaveBeenCalledWith(
-      REFS.createSubscription,
-      expect.objectContaining({
-        subscription: expect.objectContaining({ id: "sub_new_123" }),
-      }),
-    );
-  });
-
-  it("handles product.created — calls createProduct", async () => {
-    const creem = new Creem(mockComponent, {
-      apiKey: "k",
-      webhookSecret: SECRET,
-    });
-    const { handler } = setupWebhookHandler(creem);
-    const ctx = createMockCtx();
-
-    // product.* events have the product directly in object
-    // But parseProduct may fail on simplified data — the handler logs warning and skips
-    // Use real product shape from the checkout payload
-    const body = JSON.stringify({
-      eventType: "product.created",
-      object: {
-        id: "prod_35PR89LmiAjsR8JJwO7uM7",
-        object: "product",
-        name: "Test Product",
-        description: "A test product for webhook simulation",
-        price: 2999,
-        currency: "USD",
-        billing_type: "onetime",
-        billing_period: "once",
-        status: "active",
-        tax_mode: "exclusive",
-        tax_category: "saas",
-        default_success_url: null,
-        created_at: "2026-02-28T07:52:06.979Z",
-        updated_at: "2026-02-28T07:52:06.979Z",
-        mode: "test",
-      },
-    });
-
-    const response = await signAndSend(handler!, ctx, body, SECRET);
-    expect(response.status).toBe(202);
-    expect(ctx.runMutation).toHaveBeenCalledWith(
-      REFS.createProduct,
-      expect.objectContaining({
-        product: expect.objectContaining({ id: "prod_35PR89LmiAjsR8JJwO7uM7" }),
-      }),
-    );
-  });
-
-  it("handles product.updated — calls updateProduct", async () => {
-    const creem = new Creem(mockComponent, {
-      apiKey: "k",
-      webhookSecret: SECRET,
-    });
-    const { handler } = setupWebhookHandler(creem);
-    const ctx = createMockCtx();
-
-    const body = JSON.stringify({
-      eventType: "product.updated",
-      object: {
-        id: "prod_35PR89LmiAjsR8JJwO7uM7",
-        object: "product",
-        name: "Updated Product",
-        description: "Updated description",
-        price: 1999,
-        currency: "USD",
-        billing_type: "onetime",
-        billing_period: "once",
-        status: "active",
-        tax_mode: "exclusive",
-        tax_category: "saas",
-        default_success_url: null,
-        created_at: "2026-02-28T07:52:06.979Z",
-        updated_at: "2026-02-28T08:00:00.000Z",
-        mode: "test",
-      },
-    });
-
-    const response = await signAndSend(handler!, ctx, body, SECRET);
-    expect(response.status).toBe(202);
-    expect(ctx.runMutation).toHaveBeenCalledWith(
-      REFS.updateProduct,
-      expect.objectContaining({
-        product: expect.objectContaining({ id: "prod_35PR89LmiAjsR8JJwO7uM7" }),
-      }),
-    );
-  });
+      const response = await signAndSend(handler!, ctx, body, SECRET);
+      expect(response.status).toBe(202);
+      expect(ctx.runMutation).not.toHaveBeenCalled();
+      expect(customHandler).not.toHaveBeenCalled();
+    },
+  );
 
   it("calls custom event handler when provided", async () => {
     const creem = new Creem(mockComponent, {

@@ -145,8 +145,8 @@ export default http;
 ```
 
 Use your **Convex site URL** + `/creem/events` as the webhook endpoint in your
-Creem dashboard. The component automatically handles `checkout.completed`,
-Creem subscription lifecycle events, `refund.created`, and `dispute.created`.
+Creem dashboard. The component automatically handles `checkout.completed`, Creem
+subscription lifecycle events, `refund.created`, and `dispute.created`.
 
 > For custom event handlers (e.g. sending emails on checkout), see
 > [Webhook event middleware](#webhook-event-middleware).
