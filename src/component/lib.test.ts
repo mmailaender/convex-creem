@@ -1048,9 +1048,8 @@ describe("listUserOrders query", () => {
     expect(orders).toEqual([]);
   });
 
-  it("filters to only paid onetime orders", async () => {
+  it("filters to only onetime orders and keeps payment statuses", async () => {
     await t.mutation(api.lib.insertCustomer, createTestCustomer());
-    // Paid onetime — should be included
     await t.mutation(api.lib.createOrder, {
       order: createTestOrder({
         id: "ord_paid",
@@ -1058,7 +1057,6 @@ describe("listUserOrders query", () => {
         type: "onetime",
       }),
     });
-    // Pending onetime — should be excluded
     await t.mutation(api.lib.createOrder, {
       order: createTestOrder({
         id: "ord_pending",
@@ -1077,8 +1075,11 @@ describe("listUserOrders query", () => {
     const orders = await t.query(api.lib.listUserOrders, {
       entityId: "user_456",
     });
-    expect(orders).toHaveLength(1);
-    expect(orders[0].id).toBe("ord_paid");
+    expect(orders).toHaveLength(2);
+    expect(orders.map((order) => order.id).sort()).toEqual([
+      "ord_paid",
+      "ord_pending",
+    ]);
   });
 });
 

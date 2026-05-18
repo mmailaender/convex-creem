@@ -1,165 +1,137 @@
 import {
-  findPlanById,
   findPlanByProductId,
   normalizePlanCatalog,
   normalizeRecurringCycle,
 } from "./catalog.js";
+import { derivePaymentRecoveryState } from "./selectors.js";
 import type {
   AvailableAction,
-  BillingResolverInput,
+  BillingSnapshotOrder,
+  BillingSnapshotSubscription,
   BillingSnapshot,
-  BillingType,
-  PlanCategory,
-  PlanCatalogEntry,
+  PlanCatalog,
+  PaymentRecoveryState,
   SubscriptionSnapshot,
 } from "./types.js";
 
-const toCategoryFromSubscription = (
-  subscription: SubscriptionSnapshot | null | undefined,
-): PlanCategory => {
-  const status = subscription?.status;
-  if (status === "trialing") {
-    return "trial";
-  }
-  if (
-    status === "active" ||
-    status === "scheduled_cancel" ||
-    status === "past_due" ||
-    status === "canceled"
-  ) {
-    return "paid";
-  }
-  return "custom";
+/** Input for `resolveBillingSnapshot`. */
+export type BillingSnapshotResolverInput = {
+  /** Billing entity ID. */
+  entityId: string;
+  /** Plan catalog for plan-aware resolution. */
+  catalog?: PlanCatalog;
+  /** All subscriptions for the entity (active, ended, etc.). */
+  subscriptions?: SubscriptionSnapshot[];
+  /** One-time orders with basic metadata. */
+  orders?: Array<{
+    orderId: string;
+    productId: string;
+    status: string;
+  }>;
+  /** Override for the current timestamp (ISO string). */
+  now?: string;
 };
 
-const toBillingType = (
-  plan: PlanCatalogEntry | undefined,
-  input: BillingResolverInput,
-): BillingType => {
-  if (plan?.billingType) {
-    return plan.billingType;
-  }
-  if (input.payment) {
-    return "onetime";
-  }
-  if (input.currentSubscription) {
-    return "recurring";
-  }
-  return "custom";
+const ACTIVE_STATUSES = new Set([
+  "active",
+  "trialing",
+  "past_due",
+  "scheduled_cancel",
+]);
+
+/**
+ * Resolve a `BillingSnapshot` from subscriptions, orders, and catalog.
+ *
+ * The snapshot is array-based so it supports multiple simultaneous subscriptions
+ * (base + add-ons) and one-time orders as first-class citizens, with payment
+ * recovery state derived from all subscription statuses.
+ */
+export const resolveBillingSnapshot = (
+  input: BillingSnapshotResolverInput,
+): BillingSnapshot => {
+  const catalog = normalizePlanCatalog(input.catalog);
+  const now = input.now ?? new Date().toISOString();
+
+  // Map raw subscriptions to snapshot rows.
+  const subscriptions: BillingSnapshotSubscription[] = (
+    input.subscriptions ?? []
+  ).map((sub) => {
+    const plan = findPlanByProductId(catalog, sub.productId);
+    return {
+      planId: plan?.planId ?? null,
+      productId: sub.productId ?? "",
+      subscriptionId: sub.id ?? "",
+      status: sub.status ?? "unknown",
+      recurringCycle: normalizeRecurringCycle(sub.recurringInterval) ?? null,
+      kind: plan?.metadata?.kind as string | undefined,
+      units: sub.units,
+      cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      currentPeriodEnd: sub.currentPeriodEnd,
+      trialEnd: sub.trialEnd,
+    };
+  });
+
+  // Map raw orders to snapshot rows.
+  const orders: BillingSnapshotOrder[] = (input.orders ?? []).map((order) => {
+    const plan = findPlanByProductId(catalog, order.productId);
+    return {
+      planId: plan?.planId ?? null,
+      orderId: order.orderId,
+      productId: order.productId,
+      status: order.status,
+    };
+  });
+
+  // Derive payment recovery from all subscriptions
+  const paymentRecoveryState: PaymentRecoveryState =
+    derivePaymentRecoveryState(subscriptions);
+
+  // Build available actions from active subscriptions
+  const actions = buildBillingActions(subscriptions, orders);
+
+  return {
+    entityId: input.entityId,
+    catalogVersion: catalog?.version,
+    subscriptions,
+    orders,
+    paymentRecoveryState,
+    availableBillingActions: actions,
+    resolvedAt: now,
+  };
 };
 
-const buildActions = (
-  input: BillingResolverInput,
-  plan: PlanCatalogEntry | undefined,
-  billingType: BillingType,
+const buildBillingActions = (
+  subscriptions: BillingSnapshotSubscription[],
+  orders: BillingSnapshotOrder[],
 ): AvailableAction[] => {
   const actions = new Set<AvailableAction>();
-  const subscription = input.currentSubscription;
+  const activeSubs = subscriptions.filter((s) => ACTIVE_STATUSES.has(s.status));
+  const hasReactivatable = subscriptions.some(
+    (s) => s.status === "canceled" || s.status === "scheduled_cancel",
+  );
 
-  if (plan?.category === "enterprise") {
-    actions.add("contact_sales");
-    return Array.from(actions);
-  }
-
-  if (billingType === "onetime") {
+  if (activeSubs.length === 0 && !hasReactivatable && orders.length === 0) {
     actions.add("checkout");
     return Array.from(actions);
   }
 
-  if (!subscription) {
-    actions.add("checkout");
-    return Array.from(actions);
-  }
-
-  actions.add("portal");
-
-  if (
-    subscription.status === "active" ||
-    subscription.status === "trialing" ||
-    subscription.status === "scheduled_cancel"
-  ) {
+  if (activeSubs.length > 0) {
+    actions.add("portal");
     actions.add("cancel");
   }
 
-  if (
-    subscription.status === "canceled" ||
-    subscription.status === "scheduled_cancel"
-  ) {
+  if (hasReactivatable) {
     actions.add("reactivate");
+    // No active subs means the user can also start fresh
+    if (activeSubs.length === 0) {
+      actions.add("checkout");
+    }
   }
 
-  if ((plan?.billingCycles?.length ?? 0) > 1) {
-    actions.add("switch_interval");
-  }
-
-  if (
-    (plan?.pricingModel === "unit" ||
-      subscription.units != null ||
-      (subscription as { seats?: number | null }).seats != null) &&
-    billingType === "recurring"
-  ) {
-    actions.add("update_units");
+  // One-time orders can always add more
+  if (orders.length > 0) {
+    actions.add("checkout");
   }
 
   return Array.from(actions);
-};
-
-/**
- * Resolve a `BillingSnapshot` from subscription, catalog, and payment data.
- * This is the core billing state resolver — determines the active plan, category,
- * available actions, and metadata based on the current subscription state.
- *
- * Used internally by `creem.getBillingSnapshot()`. Can also be called directly
- * for custom billing UIs that don't use the Creem class.
- */
-export const resolveBillingSnapshot = (
-  input: BillingResolverInput,
-): BillingSnapshot => {
-  const catalog = normalizePlanCatalog(input.catalog);
-  const subscription = input.currentSubscription ?? null;
-  const planFromSubscription = findPlanByProductId(
-    catalog,
-    subscription?.productId,
-  );
-  const fallbackPlan = catalog?.defaultPlanId
-    ? findPlanById(catalog, catalog.defaultPlanId)
-    : undefined;
-  const activePlan = planFromSubscription ?? fallbackPlan;
-
-  const billingType = toBillingType(activePlan, input);
-  const recurringCycle = normalizeRecurringCycle(
-    subscription?.recurringInterval,
-  );
-  const availableBillingCycles =
-    activePlan?.billingCycles && activePlan.billingCycles.length > 0
-      ? activePlan.billingCycles
-      : recurringCycle
-        ? [recurringCycle]
-        : [];
-
-  return {
-    resolvedAt: input.now ?? new Date().toISOString(),
-    catalogVersion: catalog?.version,
-    activePlanId: activePlan?.planId ?? null,
-    activeCategory:
-      subscription?.status === "trialing"
-        ? "trial"
-        : (activePlan?.category ?? toCategoryFromSubscription(subscription)),
-    billingType,
-    recurringCycle,
-    availableBillingCycles,
-    subscriptionState: subscription?.status,
-    units:
-      subscription?.units ??
-      (subscription as { seats?: number | null } | null)?.seats ??
-      undefined,
-    payment: input.payment ?? null,
-    availableActions: buildActions(input, activePlan, billingType),
-    metadata: {
-      cancelAtPeriodEnd: subscription?.cancelAtPeriodEnd ?? false,
-      currentPeriodEnd: subscription?.currentPeriodEnd ?? null,
-      trialEnd: subscription?.trialEnd ?? null,
-      userContext: input.userContext ?? {},
-    },
-  };
 };

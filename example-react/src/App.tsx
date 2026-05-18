@@ -10,6 +10,7 @@ import {
   defineBillingCatalog,
   evaluateUsageLimits,
   plansOf,
+  selectBaseSubscription,
   type ConnectedBillingApi,
   type ConnectedBillingModel,
   type Transition,
@@ -189,13 +190,15 @@ export default function App() {
   const billingModel = useQuery(api.billing.uiModel, {}) as
     | ConnectedBillingModel
     | undefined;
-  const billingSnapshot = billingModel?.billingSnapshot ?? null;
+  const snapshot = billingModel?.snapshot ?? null;
   const generateDemoImageAction = useAction(api.billing.generateDemoImage);
   const [demoImageLoading, setDemoImageLoading] = useState(false);
   const [demoImageMessage, setDemoImageMessage] = useState<string | null>(null);
   const [demoImageError, setDemoImageError] = useState<string | null>(null);
   const usage = { aiMessages: 72, projects: 3 };
-  const usagePlanId = billingSnapshot?.activePlanId ?? "basic-individual";
+  const usagePlanId =
+    (snapshot ? selectBaseSubscription(snapshot)?.planId : null) ??
+    "basic-individual";
   const usageLimits = evaluateUsageLimits({
     catalog: billingCatalog,
     planId: usagePlanId,
@@ -1088,7 +1091,7 @@ export default function App() {
                   </p>
                   <div className="mt-4">
                     <BillingGate
-                      snapshot={billingSnapshot}
+                      snapshot={snapshot}
                       requiredActions="portal"
                       fallback={
                         <div className="rounded-lg bg-surface-subtle p-4 body-m text-foreground-muted">

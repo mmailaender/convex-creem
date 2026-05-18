@@ -1,6 +1,5 @@
 import type {
   BillingSnapshot,
-  NormalizedBillingSnapshot,
   PlanCatalog,
   PlanChangeIntent,
   RecurringCycle,
@@ -18,11 +17,8 @@ import type { BillingI18n } from "./i18n.js";
 export type BillingContextValue = {
   // ── State ──────────────────────────────────────────────────
 
-  /** Resolved billing snapshot (legacy flat format). */
+  /** Billing snapshot with subscriptions[] and orders[]. */
   snapshot: BillingSnapshot | null;
-
-  /** Normalized billing snapshot with subscriptions[] and orders[]. */
-  normalizedSnapshot: NormalizedBillingSnapshot | null;
 
   /** Plan catalog (for product resolution and plan metadata). */
   catalog: PlanCatalog | null;

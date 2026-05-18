@@ -19,6 +19,7 @@
     createCreemSvelte,
     evaluateUsageLimits,
     plansOf,
+    selectBaseSubscription,
     type ConnectedBillingApi,
     type CreditsContextValue,
     type PlanChangeIntent,
@@ -418,8 +419,8 @@
   // ────────────────────────────────────────────────────────────────────────────
 
   const billingModelQuery = useQuery(api.billing.uiModel, {});
-  const billingSnapshot = $derived(
-    billingModelQuery.data?.billingSnapshot ?? null,
+  const snapshot = $derived(
+    billingModelQuery.data?.snapshot ?? null,
   );
   const convexClient = useConvexClient();
   let demoImageLoading = $state(false);
@@ -448,7 +449,9 @@
   }
   const usage = { aiMessages: 72, projects: 3 };
   const usagePlanId = $derived(
-    billingSnapshot?.activePlanId ?? billingCatalog.defaultPlanId ?? "free",
+    (snapshot
+      ? selectBaseSubscription(snapshot)?.planId
+      : null) ?? billingCatalog.defaultPlanId ?? "free",
   );
   const usageLimits = $derived(
     evaluateUsageLimits({
@@ -1633,7 +1636,7 @@
               <p class="label-m text-foreground-placeholder">Feature gate</p>
               <div class="mt-4">
                 <BillingGate
-                  snapshot={billingSnapshot}
+                  snapshot={snapshot}
                   requiredActions="portal"
                 >
                   <div

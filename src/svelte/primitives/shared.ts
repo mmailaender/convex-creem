@@ -54,9 +54,9 @@ export const resolveProductIdForPlan = (
 };
 
 export const hasBillingActionLocal = (
-  snapshot: BillingSnapshot,
+  snapshot: Pick<BillingSnapshot, "availableBillingActions">,
   action: AvailableAction,
-) => snapshot.availableActions.includes(action);
+) => snapshot.availableBillingActions.includes(action);
 
 export const formatPrice = (
   amount: number,

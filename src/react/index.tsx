@@ -36,7 +36,6 @@ export {
   useCredits,
 } from "./widgets/index.js";
 export type {
-  BillingSnapshot,
   CheckoutSuccessParams,
   OneTimePaymentStatus,
   RecurringCycle,
@@ -44,16 +43,17 @@ export type {
 export { defineBillingCatalog, plansOf } from "../core/catalog.js";
 export {
   hasBillingAction,
-  isEnterpriseBilling,
+  isEmptyBilling,
   isOneTimeBilling,
   isTerminalPaymentStatus,
-  shouldShowBillingCycleToggle,
   derivePaymentRecoveryState,
+  selectBaseSubscription,
+  selectActiveAddOns,
   selectOwnedProductIds,
   resolveBasePlanId,
 } from "../core/selectors.js";
 export { evaluateUsageLimits } from "../core/usageLimits.js";
-export { resolveNormalizedSnapshot } from "../core/normalizedResolver.js";
+export { resolveBillingSnapshot } from "../core/resolver.js";
 export { createCreemReact } from "./createCreemReact.js";
 export type {
   CreateCreemReactOptions,
@@ -78,7 +78,7 @@ export type {
   UsageLimitResult,
   BillingSnapshotSubscription,
   BillingSnapshotOrder,
-  NormalizedBillingSnapshot,
+  BillingSnapshot,
   PlanChangeIntent as PlanChangeIntentCore,
 } from "../core/types.js";
 export type {
@@ -92,4 +92,4 @@ export type {
   BillingContextValue,
   BillingProviderConfig,
 } from "../core/context.js";
-export type { NormalizedResolverInput } from "../core/normalizedResolver.js";
+export type { BillingSnapshotResolverInput } from "../core/resolver.js";

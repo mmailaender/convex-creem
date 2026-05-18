@@ -643,12 +643,13 @@ Pass `permissions` to control who can access the portal (e.g. only admins):
 
 ### 4. Feature Gating
 
-Use `BillingGate` to conditionally render UI based on available billing actions:
+Use `BillingGate` to conditionally render UI based on available billing actions
+from the billing snapshot:
 
 **Svelte**
 
 ```svelte
-<BillingGate snapshot={billingSnapshot} requiredActions="portal">
+<BillingGate snapshot={snapshot} requiredActions="portal">
   {#snippet children()}
     <p>You have portal access.</p>
   {/snippet}
@@ -662,7 +663,7 @@ Use `BillingGate` to conditionally render UI based on available billing actions:
 
 ```tsx
 <BillingGate
-  snapshot={billingSnapshot}
+  snapshot={snapshot}
   requiredActions="portal"
   fallback={<p>Upgrade to access the billing portal.</p>}
 >
@@ -1017,16 +1018,16 @@ cancel call when you need to override that default.
 
 **`creem.orders.*`**
 
-| Method                     | Data source | Description          |
-| -------------------------- | ----------- | -------------------- |
-| `.list(ctx, { entityId })` | Convex DB   | Paid one-time orders |
+| Method                     | Data source | Description     |
+| -------------------------- | ----------- | --------------- |
+| `.list(ctx, { entityId })` | Convex DB   | One-time orders |
 
 **Composite helpers (top-level methods)**
 
-| Method                                            | Description                                                                                                                                               |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `creem.getBillingModel(ctx, { entityId, user? })` | Aggregates snapshot + products + subscriptions + orders into a single object for widgets. Graceful when `entityId` is null (returns public catalog only). |
-| `creem.getBillingSnapshot(ctx, { entityId })`     | Resolved billing state (plan, status, available actions). Uses `resolvePlan` override if configured, otherwise built-in resolver.                         |
+| Method                                            | Description                                                                                                                        |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `creem.getBillingModel(ctx, { entityId, user? })` | Aggregates the widget model into a single object for connected UI. Graceful when `entityId` is null (returns public catalog only). |
+| `creem.getBillingSnapshot(ctx, { entityId })`     | Billing state with `subscriptions[]`, `orders[]`, `paymentRecoveryState`, and `availableBillingActions`.                           |
 
 ### `creem.api({ resolve })` — convenience exports
 
@@ -1050,6 +1051,40 @@ Generates ready-to-export Convex function definitions. Each function calls your
 | `customers.portalUrl`   | `customers.portalUrl`   | action | Auto-resolves auth                                                                 |
 | `transactions.search`   | `transactions.search`   | action | Auto-resolves auth and returns paginated transaction history                       |
 | `orders.list`           | `orders.list`           | query  | Auto-resolves auth                                                                 |
+
+`snapshot` and `creem.getBillingSnapshot(...)` return the backend billing
+snapshot:
+
+```ts
+{
+  entityId: "org_123",
+  catalogVersion: "2026-05",
+  subscriptions: [
+    {
+      planId: "private",
+      productId: "prod_20GpOqRYWpSpU1pv1KCPet",
+      subscriptionId: "sub_123",
+      status: "active",
+      recurringCycle: "every-year",
+      kind: "base",
+      units: 3,
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: "2026-06-18T00:00:00.000Z",
+    },
+  ],
+  orders: [
+    {
+      planId: "lifetime-export",
+      orderId: "ord_123",
+      productId: "prod_7kP3mAqR9xT2vB6nLwY8Cs",
+      status: "paid",
+    },
+  ],
+  paymentRecoveryState: "none",
+  availableBillingActions: ["portal", "cancel"],
+  resolvedAt: "2026-05-18T00:00:00.000Z",
+}
+```
 
 ### Infrastructure
 
@@ -1323,25 +1358,25 @@ directly — pass data and callbacks as props.
 
 Renders a grid of pricing cards with an optional billing cycle toggle.
 
-| Prop                    | Type                      | Description                           |
-| ----------------------- | ------------------------- | ------------------------------------- |
-| `plans`                 | `UIPlanEntry[]`           | Plan definitions                      |
-| `snapshot`              | `BillingSnapshot \| null` | Current billing state                 |
-| `selectedCycle`         | `RecurringCycle`          | Active billing cycle                  |
-| `products`              | `ConnectedProduct[]`      | Product data for price resolution     |
-| `subscriptionProductId` | `string \| null`          | Currently subscribed product          |
-| `subscriptionStatus`    | `string \| null`          | Subscription status                   |
-| `units`                 | `number`                  | Checkout unit count                   |
-| `showUnitPicker`        | `boolean`                 | Show quantity picker                  |
-| `subscribedUnits`       | `number \| null`          | Current unit count                    |
-| `isGroupSubscribed`     | `boolean`                 | Whether group has active subscription |
-| `disableCheckout`       | `boolean`                 | Disable checkout buttons              |
-| `disableSwitch`         | `boolean`                 | Disable plan switch buttons           |
-| `disableUnits`          | `boolean`                 | Disable unit controls                 |
-| `onCycleChange`         | `(cycle) => void`         | Billing cycle change handler          |
-| `onCheckout`            | `(payload) => void`       | Checkout handler                      |
-| `onSwitchPlan`          | `(payload) => void`       | Plan switch handler                   |
-| `onUpdateUnits`         | `(payload) => void`       | Unit update handler                   |
+| Prop                    | Type                 | Description                           |
+| ----------------------- | -------------------- | ------------------------------------- |
+| `plans`                 | `UIPlanEntry[]`      | Plan definitions                      |
+| `activePlanId`          | `string \| null`     | Currently active plan ID              |
+| `selectedCycle`         | `RecurringCycle`     | Active billing cycle                  |
+| `products`              | `ConnectedProduct[]` | Product data for price resolution     |
+| `subscriptionProductId` | `string \| null`     | Currently subscribed product          |
+| `subscriptionStatus`    | `string \| null`     | Subscription status                   |
+| `units`                 | `number`             | Checkout unit count                   |
+| `showUnitPicker`        | `boolean`            | Show quantity picker                  |
+| `subscribedUnits`       | `number \| null`     | Current unit count                    |
+| `isGroupSubscribed`     | `boolean`            | Whether group has active subscription |
+| `disableCheckout`       | `boolean`            | Disable checkout buttons              |
+| `disableSwitch`         | `boolean`            | Disable plan switch buttons           |
+| `disableUnits`          | `boolean`            | Disable unit controls                 |
+| `onCycleChange`         | `(cycle) => void`    | Billing cycle change handler          |
+| `onCheckout`            | `(payload) => void`  | Checkout handler                      |
+| `onSwitchPlan`          | `(payload) => void`  | Plan switch handler                   |
+| `onUpdateUnits`         | `(payload) => void`  | Unit update handler                   |
 
 #### `<PricingCard>`
 
@@ -1429,24 +1464,25 @@ Shows a trial expiration notice.
 Shows a scheduled cancellation or app-side period-end update notice. Scheduled
 updates can include the target plan/unit label and can expose an undo action.
 
-| Prop                   | Type                      | Description                                         |
-| ---------------------- | ------------------------- | --------------------------------------------------- |
-| `snapshot`             | `BillingSnapshot \| null` | Current billing state                               |
-| `isLoading`            | `boolean`                 | Loading state for resume/undo buttons               |
-| `onResume`             | `() => void`              | Resume handler (shows "Undo cancellation" button)   |
-| `onUndoUpdate`         | `() => void`              | Undo handler for app-side scheduled updates         |
-| `scheduledUpdateLabel` | `string \| null`          | Human-readable target plan, price, or unit quantity |
-| `className`            | `string`                  | CSS class                                           |
+| Prop                   | Type                                | Description                                         |
+| ---------------------- | ----------------------------------- | --------------------------------------------------- |
+| `cancelAtPeriodEnd`    | `boolean`                           | Whether cancellation is scheduled                   |
+| `currentPeriodEnd`     | `string \| null`                    | Current billing period end                          |
+| `scheduledUpdate`      | `{ effectiveAt?: unknown } \| null` | App-side period-end update intent                   |
+| `isLoading`            | `boolean`                           | Loading state for resume/undo buttons               |
+| `onResume`             | `() => void`                        | Resume handler (shows "Undo cancellation" button)   |
+| `onUndoUpdate`         | `() => void`                        | Undo handler for app-side scheduled updates         |
+| `scheduledUpdateLabel` | `string \| null`                    | Human-readable target plan, price, or unit quantity |
+| `className`            | `string`                            | CSS class                                           |
 
 #### `<PaymentWarningBanner>`
 
 Shows a warning for pending, refunded, or partially refunded payments.
 
-| Prop        | Type                      | Description           |
-| ----------- | ------------------------- | --------------------- |
-| `snapshot`  | `BillingSnapshot \| null` | Current billing state |
-| `payment`   | `PaymentSnapshot \| null` | Override payment data |
-| `className` | `string`                  | CSS class             |
+| Prop        | Type                      | Description  |
+| ----------- | ------------------------- | ------------ |
+| `payment`   | `PaymentSnapshot \| null` | Payment data |
+| `className` | `string`                  | CSS class    |
 
 #### `<OneTimePaymentStatusBadge>`
 
@@ -1496,6 +1532,26 @@ backward-compatible aliases for the previous seat-specific names.
 The `units` prop remains the quantity passed to checkout and subscription
 updates. A unit can still represent a seat, but the public API no longer assumes
 that seats are the only unit-based pricing use case.
+
+### Billing Snapshot Contract
+
+`creem.getBillingSnapshot(...)` and the generated
+`creem.api({ resolve }).snapshot` query return the canonical `BillingSnapshot`
+shape with explicit arrays for subscriptions and one-time orders.
+
+| Previous flat field         | Current source                                                              |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `activePlanId`              | Derive from `snapshot.subscriptions`, usually the active `kind: "base"` row |
+| `subscriptionProductId`     | `snapshot.subscriptions[n].productId`                                       |
+| `subscriptionState`         | `snapshot.subscriptions[n].status`                                          |
+| `recurringCycle`            | `snapshot.subscriptions[n].recurringCycle`                                  |
+| `availableActions`          | `snapshot.availableBillingActions`                                          |
+| `payment`                   | Use payment/order-specific queries or `snapshot.orders` for paid orders     |
+| `ownedProductIds`           | Derive from paid rows in `snapshot.orders`                                  |
+| primary subscription fields | Derive from the relevant `snapshot.subscriptions` row                       |
+
+The generated `uiModel` used by connected widgets exposes the same canonical
+snapshot as `uiModel.snapshot`.
 
 ### Product credit grants
 

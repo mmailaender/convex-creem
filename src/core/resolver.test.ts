@@ -1,283 +1,166 @@
-import { describe, expect, it } from "vitest";
+import { describe, it, expect } from "vitest";
 import { resolveBillingSnapshot } from "./resolver.js";
+import type { PlanCatalog, SubscriptionSnapshot } from "./types.js";
+
+const catalog: PlanCatalog = {
+  version: "1",
+  defaultPlanId: "free",
+  plans: [
+    { planId: "free", category: "free" },
+    {
+      planId: "basic",
+      category: "paid",
+      billingType: "recurring",
+      billingCycles: ["every-month", "every-year"],
+      creemProductIds: {
+        "every-month": "prod_basic_m",
+        "every-year": "prod_basic_y",
+      },
+    },
+    {
+      planId: "addon",
+      category: "paid",
+      billingType: "recurring",
+      creemProductIds: { "every-month": "prod_addon_m" },
+      metadata: { kind: "addon" },
+    },
+  ],
+};
 
 describe("resolveBillingSnapshot", () => {
-  it("maps recurring subscription intervals and unit actions", () => {
-    const snapshot = resolveBillingSnapshot({
-      catalog: {
-        version: "1",
-        plans: [
-          {
-            planId: "pro",
-            category: "paid",
-            billingType: "recurring",
-            billingCycles: ["every-month", "every-year"],
-            pricingModel: "unit",
-            creemProductIds: {
-              monthly: "prod_monthly",
-              yearly: "prod_yearly",
-            },
-          },
-        ],
-      },
-      currentSubscription: {
-        productId: "prod_monthly",
+  it("returns empty arrays with no subscriptions or orders", () => {
+    const result = resolveBillingSnapshot({
+      entityId: "e1",
+      catalog,
+      now: "2025-01-01T00:00:00Z",
+    });
+    expect(result.subscriptions).toHaveLength(0);
+    expect(result.orders).toHaveLength(0);
+    expect(result.paymentRecoveryState).toBe("none");
+    expect(result.availableBillingActions).toContain("checkout");
+    expect(result.entityId).toBe("e1");
+    expect(result.catalogVersion).toBe("1");
+  });
+
+  it("maps subscriptions with plan IDs from catalog", () => {
+    const subs: SubscriptionSnapshot[] = [
+      {
+        id: "sub_1",
+        productId: "prod_basic_m",
         status: "active",
         recurringInterval: "every-month",
         units: 5,
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd: "2025-02-01T00:00:00Z",
       },
-    });
-
-    expect(snapshot.activePlanId).toBe("pro");
-    expect(snapshot.recurringCycle).toBe("every-month");
-    expect(snapshot.availableActions).toContain("switch_interval");
-    expect(snapshot.availableActions).toContain("update_units");
-  });
-
-  it("supports one-time payments", () => {
-    const snapshot = resolveBillingSnapshot({
-      catalog: {
-        version: "1",
-        plans: [
-          {
-            planId: "credits",
-            category: "paid",
-            billingType: "onetime",
-            creemProductIds: { default: "prod_credits" },
-          },
-        ],
-      },
-      payment: {
-        status: "pending",
-        productId: "prod_credits",
-      },
-    });
-
-    expect(snapshot.billingType).toBe("onetime");
-    expect(snapshot.payment?.status).toBe("pending");
-    expect(snapshot.availableActions).toEqual(["checkout"]);
-  });
-
-  it("maps trialing subscription to trial category with trialEnd in metadata", () => {
-    const snapshot = resolveBillingSnapshot({
-      catalog: {
-        version: "1",
-        plans: [
-          {
-            planId: "basic",
-            category: "paid",
-            billingType: "recurring",
-            creemProductIds: { "every-month": "prod_basic" },
-          },
-        ],
-      },
-      currentSubscription: {
-        productId: "prod_basic",
-        status: "trialing",
-        recurringInterval: "every-month",
-        trialEnd: "2026-03-04T08:23:39.000Z",
-      },
-    });
-
-    expect(snapshot.activeCategory).toBe("trial");
-    expect(snapshot.subscriptionState).toBe("trialing");
-    expect(snapshot.metadata?.trialEnd).toBe("2026-03-04T08:23:39.000Z");
-    expect(snapshot.availableActions).toContain("cancel");
-  });
-
-  it("falls back to custom category when no catalog mapping exists", () => {
-    const snapshot = resolveBillingSnapshot({
-      currentSubscription: {
-        status: "unpaid",
-      },
-    });
-
-    expect(snapshot.activeCategory).toBe("custom");
-    expect(snapshot.availableActions).toEqual(["portal"]);
-  });
-
-  it("maps scheduled_cancel to paid with cancel + reactivate actions", () => {
-    const snapshot = resolveBillingSnapshot({
-      catalog: {
-        version: "1",
-        plans: [
-          {
-            planId: "pro",
-            category: "paid",
-            billingType: "recurring",
-            creemProductIds: { "every-month": "prod_1" },
-          },
-        ],
-      },
-      currentSubscription: {
-        productId: "prod_1",
-        status: "scheduled_cancel",
-        recurringInterval: "every-month",
-        cancelAtPeriodEnd: true,
-        currentPeriodEnd: "2026-03-01T00:00:00.000Z",
-      },
-    });
-
-    expect(snapshot.activeCategory).toBe("paid");
-    expect(snapshot.subscriptionState).toBe("scheduled_cancel");
-    expect(snapshot.availableActions).toContain("cancel");
-    expect(snapshot.availableActions).toContain("reactivate");
-    expect(snapshot.availableActions).toContain("portal");
-    expect(snapshot.metadata?.cancelAtPeriodEnd).toBe(true);
-  });
-
-  it("maps past_due subscription to paid category", () => {
-    const snapshot = resolveBillingSnapshot({
-      catalog: {
-        version: "1",
-        plans: [
-          {
-            planId: "basic",
-            category: "paid",
-            billingType: "recurring",
-            creemProductIds: { "every-month": "prod_basic" },
-          },
-        ],
-      },
-      currentSubscription: {
-        productId: "prod_basic",
-        status: "past_due",
-        recurringInterval: "every-month",
-      },
-    });
-
-    expect(snapshot.activeCategory).toBe("paid");
-    expect(snapshot.subscriptionState).toBe("past_due");
-    expect(snapshot.availableActions).toContain("portal");
-  });
-
-  it("maps enterprise plan to contact_sales action only", () => {
-    const snapshot = resolveBillingSnapshot({
-      catalog: {
-        version: "1",
-        plans: [
-          {
-            planId: "enterprise",
-            category: "enterprise",
-            billingType: "custom",
-            creemProductIds: { default: "prod_ent" },
-          },
-        ],
-      },
-      currentSubscription: {
-        productId: "prod_ent",
+      {
+        id: "sub_2",
+        productId: "prod_addon_m",
         status: "active",
         recurringInterval: "every-month",
       },
+    ];
+    const result = resolveBillingSnapshot({
+      entityId: "e1",
+      catalog,
+      subscriptions: subs,
+      now: "2025-01-15T00:00:00Z",
     });
+    expect(result.subscriptions).toHaveLength(2);
 
-    expect(snapshot.activeCategory).toBe("enterprise");
-    expect(snapshot.availableActions).toEqual(["contact_sales"]);
+    const basic = result.subscriptions.find((s) => s.planId === "basic");
+    expect(basic).toBeDefined();
+    expect(basic!.productId).toBe("prod_basic_m");
+    expect(basic!.subscriptionId).toBe("sub_1");
+    expect(basic!.status).toBe("active");
+    expect(basic!.recurringCycle).toBe("every-month");
+    expect(basic!.units).toBe(5);
+
+    const addon = result.subscriptions.find((s) => s.planId === "addon");
+    expect(addon).toBeDefined();
+    expect(addon!.kind).toBe("addon");
+
+    expect(result.paymentRecoveryState).toBe("none");
+    expect(result.availableBillingActions).toContain("portal");
+    expect(result.availableBillingActions).toContain("cancel");
   });
 
-  it("returns checkout action when no subscription exists", () => {
-    const snapshot = resolveBillingSnapshot({
-      catalog: {
-        version: "1",
-        plans: [
-          {
-            planId: "pro",
-            category: "paid",
-            billingType: "recurring",
-            creemProductIds: { "every-month": "prod_1" },
-          },
-        ],
-      },
+  it("maps orders with plan IDs from catalog", () => {
+    const result = resolveBillingSnapshot({
+      entityId: "e1",
+      catalog,
+      orders: [
+        { orderId: "ord_1", productId: "prod_basic_m", status: "paid" },
+        { orderId: "ord_2", productId: "prod_unknown", status: "paid" },
+      ],
     });
-
-    expect(snapshot.availableActions).toEqual(["checkout"]);
-    expect(snapshot.activePlanId).toBeNull();
+    expect(result.orders).toHaveLength(2);
+    expect(result.orders[0].planId).toBe("basic");
+    expect(result.orders[1].planId).toBeNull();
+    expect(result.availableBillingActions).toContain("checkout");
   });
 
-  it("maps canceled subscription to paid with reactivate action", () => {
-    const snapshot = resolveBillingSnapshot({
-      catalog: {
-        version: "1",
-        plans: [
-          {
-            planId: "pro",
-            category: "paid",
-            billingType: "recurring",
-            creemProductIds: { "every-month": "prod_1" },
-          },
-        ],
-      },
-      currentSubscription: {
-        productId: "prod_1",
-        status: "canceled",
-        recurringInterval: "every-month",
-      },
+  it("derives warning recovery state from past_due subscriptions", () => {
+    const subs: SubscriptionSnapshot[] = [
+      { id: "sub_1", productId: "prod_basic_m", status: "past_due" },
+    ];
+    const result = resolveBillingSnapshot({
+      entityId: "e1",
+      catalog,
+      subscriptions: subs,
     });
-
-    expect(snapshot.activeCategory).toBe("paid");
-    expect(snapshot.availableActions).toContain("reactivate");
-    expect(snapshot.availableActions).toContain("portal");
+    expect(result.paymentRecoveryState).toBe("warning");
   });
 
-  it("uses defaultPlanId as fallback when no subscription product matches", () => {
-    const snapshot = resolveBillingSnapshot({
-      catalog: {
-        version: "1",
-        defaultPlanId: "free",
-        plans: [
-          {
-            planId: "free",
-            category: "free",
-            billingType: "custom",
-          },
-          {
-            planId: "pro",
-            category: "paid",
-            billingType: "recurring",
-            creemProductIds: { "every-month": "prod_1" },
-          },
-        ],
-      },
+  it("derives blocked recovery state from unpaid subscriptions", () => {
+    const subs: SubscriptionSnapshot[] = [
+      { id: "sub_1", productId: "prod_basic_m", status: "unpaid" },
+    ];
+    const result = resolveBillingSnapshot({
+      entityId: "e1",
+      catalog,
+      subscriptions: subs,
     });
-
-    expect(snapshot.activePlanId).toBe("free");
-    expect(snapshot.activeCategory).toBe("free");
+    expect(result.paymentRecoveryState).toBe("blocked");
   });
 
-  it("infers onetime billing type from payment when no plan exists", () => {
-    const snapshot = resolveBillingSnapshot({
-      payment: {
-        status: "pending",
-        productId: "prod_unknown",
-      },
+  it("includes reactivate action for canceled subscriptions alongside active", () => {
+    const subs: SubscriptionSnapshot[] = [
+      { id: "sub_1", productId: "prod_basic_m", status: "active" },
+      { id: "sub_2", productId: "prod_addon_m", status: "canceled" },
+    ];
+    const result = resolveBillingSnapshot({
+      entityId: "e1",
+      catalog,
+      subscriptions: subs,
     });
-
-    expect(snapshot.billingType).toBe("onetime");
-    expect(snapshot.activePlanId).toBeNull();
-    expect(snapshot.availableActions).toEqual(["checkout"]);
+    expect(result.availableBillingActions).toContain("reactivate");
+    expect(result.availableBillingActions).toContain("cancel");
   });
 
-  it("infers recurring billing type from subscription when no plan exists", () => {
-    const snapshot = resolveBillingSnapshot({
-      currentSubscription: {
-        status: "active",
-        recurringInterval: "every-year",
-      },
+  it("offers checkout when only canceled subscriptions exist", () => {
+    const subs: SubscriptionSnapshot[] = [
+      { id: "sub_1", productId: "prod_basic_m", status: "canceled" },
+    ];
+    const result = resolveBillingSnapshot({
+      entityId: "e1",
+      catalog,
+      subscriptions: subs,
     });
-
-    expect(snapshot.billingType).toBe("recurring");
-    expect(snapshot.recurringCycle).toBe("every-year");
-    expect(snapshot.availableBillingCycles).toEqual(["every-year"]);
+    expect(result.availableBillingActions).toContain("checkout");
+    expect(result.availableBillingActions).toContain("reactivate");
   });
 
-  it("normalizes unknown recurring interval to custom", () => {
-    const snapshot = resolveBillingSnapshot({
-      currentSubscription: {
-        status: "active",
-        recurringInterval: "every-two-weeks",
-      },
+  it("handles subscriptions with unknown product IDs gracefully", () => {
+    const subs: SubscriptionSnapshot[] = [
+      { id: "sub_1", productId: "prod_unknown", status: "active" },
+    ];
+    const result = resolveBillingSnapshot({
+      entityId: "e1",
+      catalog,
+      subscriptions: subs,
     });
-
-    expect(snapshot.recurringCycle).toBe("custom");
+    expect(result.subscriptions[0].planId).toBeNull();
+    expect(result.subscriptions[0].productId).toBe("prod_unknown");
   });
 });

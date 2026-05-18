@@ -1,6 +1,5 @@
 <script lang="ts">
   /* global $props, $derived */
-  import type { BillingSnapshot } from "../../core/types.js";
   import {
     defaultBillingLabels,
     type BillingDateFormatInput,
@@ -8,7 +7,9 @@
   } from "../../core/i18n.js";
 
   interface Props {
-    snapshot?: BillingSnapshot | null;
+    cancelAtPeriodEnd?: boolean;
+    currentPeriodEnd?: string | null;
+    scheduledUpdate?: { effectiveAt?: unknown } | null;
     className?: string;
     isLoading?: boolean;
     onResume?: () => void;
@@ -19,7 +20,9 @@
   }
 
   let {
-    snapshot = null,
+    cancelAtPeriodEnd = false,
+    currentPeriodEnd = null,
+    scheduledUpdate = null,
     className = "",
     isLoading = false,
     onResume = undefined,
@@ -29,29 +32,19 @@
     formatDate = undefined,
   }: Props = $props();
 
-  const scheduledUpdate = $derived(
-    snapshot?.metadata?.scheduledSubscriptionUpdate &&
-      typeof snapshot.metadata.scheduledSubscriptionUpdate === "object"
-      ? (snapshot.metadata.scheduledSubscriptionUpdate as {
-          effectiveAt?: unknown;
-        })
-      : null,
-  );
   const hasScheduledUpdate = $derived(scheduledUpdate != null);
   const show = $derived(
-    snapshot?.metadata?.cancelAtPeriodEnd === true || hasScheduledUpdate,
+    cancelAtPeriodEnd || hasScheduledUpdate,
   );
-  const currentPeriodEnd = $derived(
+  const resolvedPeriodEnd = $derived(
     hasScheduledUpdate && typeof scheduledUpdate?.effectiveAt === "string"
       ? scheduledUpdate.effectiveAt
-      : typeof snapshot?.metadata?.currentPeriodEnd === "string"
-      ? snapshot.metadata.currentPeriodEnd
-      : undefined,
+      : currentPeriodEnd,
   );
   const formattedPeriodEnd = $derived(
-    currentPeriodEnd
+    resolvedPeriodEnd
       ? (formatDate ?? (({ date }) => date.toLocaleDateString()))({
-          date: new Date(currentPeriodEnd),
+          date: new Date(resolvedPeriodEnd),
         })
       : undefined,
   );

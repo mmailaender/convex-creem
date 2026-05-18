@@ -57,9 +57,9 @@ export const resolveProductIdForPlan = (
 
 /** Local variant of `hasBillingAction` for use in shared UI code. */
 export const hasBillingActionLocal = (
-  snapshot: BillingSnapshot,
+  snapshot: Pick<BillingSnapshot, "availableBillingActions">,
   action: AvailableAction,
-) => snapshot.availableActions.includes(action);
+) => snapshot.availableBillingActions.includes(action);
 
 /** Format a price amount (in cents) to a localized currency string (e.g. `999` + `"USD"` → `"$9.99"`). */
 export const formatPrice = (

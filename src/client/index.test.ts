@@ -97,6 +97,32 @@ const PRODUCT_1 = {
   defaultSuccessUrl: null,
 };
 
+const ORDER_1 = {
+  id: "ord_1",
+  customerId: "cust_1",
+  productId: "prod_1",
+  amount: 2999,
+  currency: "USD",
+  status: "paid",
+  type: "onetime",
+  createdAt: "2026-02-01T00:00:00Z",
+  updatedAt: "2026-02-01T00:00:00Z",
+};
+
+const TEST_BILLING_CATALOG = defineBillingCatalog({
+  version: "test",
+  plans: [
+    {
+      planId: "pro",
+      category: "paid",
+      billingType: "recurring",
+      creemProductIds: {
+        "every-month": "prod_1",
+      },
+    },
+  ],
+});
+
 // ── Constructor ─────────────────────────────────────────────────────
 
 describe("Creem constructor", () => {
@@ -710,7 +736,7 @@ describe("getBillingModel", () => {
     const result = await creem.getBillingModel(ctx as never, {
       entityId: null,
     });
-    expect(result.billingSnapshot).toBeNull();
+    expect(result.snapshot).toBeNull();
     expect(result.allProducts).toEqual([PRODUCT_1]);
     expect(result.ownedProductIds).toEqual([]);
     expect(result.hasCreemCustomer).toBe(false);
@@ -736,13 +762,17 @@ describe("getBillingModel", () => {
       [REFS.listAllUserSubscriptions]: [ACTIVE_SUB],
       [REFS.listUserSubscriptions]: [ACTIVE_SUB],
       [REFS.getCustomerByEntityId]: { id: "cust_1" },
-      [REFS.listUserOrders]: [{ productId: "prod_1" }],
+      [REFS.listUserOrders]: [
+        { id: "ord_1", productId: "prod_1", status: "paid" },
+        { id: "ord_pending", productId: "prod_pending", status: "pending" },
+      ],
     });
     const result = await creem.getBillingModel(ctx as never, {
       entityId: "user_1",
       user: { _id: "user_1", email: "a@b.com" },
     });
-    expect(result.billingSnapshot).toBeDefined();
+    expect(result.snapshot).toBeDefined();
+    expect(result.snapshot?.subscriptions).toHaveLength(1);
     expect(result.allProducts).toEqual([PRODUCT_1]);
     expect(result.subscriptionProductId).toBe("prod_1");
     expect(result.ownedProductIds).toEqual(["prod_1"]);
@@ -773,33 +803,56 @@ describe("getBillingModel", () => {
 describe("getBillingSnapshot", () => {
   let creem: Creem;
   beforeEach(() => {
-    creem = new Creem(mockComponent, { apiKey: "k", webhookSecret: "s" });
+    creem = new Creem(mockComponent, {
+      apiKey: "k",
+      webhookSecret: "s",
+      billingCatalog: TEST_BILLING_CATALOG,
+    });
   });
 
-  it("returns a snapshot with no subscription", async () => {
+  it("returns a snapshot with no subscription or orders", async () => {
     const ctx = createMockCtx({
-      [REFS.getCurrentSubscription]: null,
       [REFS.listAllUserSubscriptions]: [],
+      [REFS.listUserOrders]: [],
     });
     const result = await creem.getBillingSnapshot(ctx as never, {
       entityId: "user_1",
     });
-    expect(result).toBeDefined();
-    expect(result.activeCategory).toBeDefined();
+    expect(result.entityId).toBe("user_1");
+    expect(result.catalogVersion).toBe("test");
+    expect(result.subscriptions).toEqual([]);
+    expect(result.orders).toEqual([]);
+    expect(result.availableBillingActions).toContain("checkout");
     expect(result.resolvedAt).toBeDefined();
   });
 
-  it("returns a snapshot with active subscription", async () => {
+  it("returns a snapshot with subscriptions and orders", async () => {
     const ctx = createMockCtx({
-      [REFS.getCurrentSubscription]: ACTIVE_SUB,
-      [REFS.getProduct]: PRODUCT_1,
       [REFS.listAllUserSubscriptions]: [ACTIVE_SUB],
+      [REFS.listUserOrders]: [ORDER_1],
     });
     const result = await creem.getBillingSnapshot(ctx as never, {
       entityId: "user_1",
     });
-    expect(result).toBeDefined();
-    expect(result.activeCategory).toBeDefined();
+    expect(result.subscriptions).toEqual([
+      expect.objectContaining({
+        planId: "pro",
+        productId: "prod_1",
+        subscriptionId: "sub_1",
+        status: "active",
+        units: 1,
+      }),
+    ]);
+    expect(result.orders).toEqual([
+      expect.objectContaining({
+        planId: "pro",
+        orderId: "ord_1",
+        productId: "prod_1",
+        status: "paid",
+      }),
+    ]);
+    expect(result.paymentRecoveryState).toBe("none");
+    expect(result.availableBillingActions).toContain("portal");
     expect(result.resolvedAt).toBeDefined();
   });
 });
@@ -1643,7 +1696,7 @@ describe("api() convenience exports", () => {
       });
       const handler = extractHandler(apiExports.uiModel as never);
       const result = await handler(ctx, {});
-      expect(result.billingSnapshot).toBeNull();
+      expect(result.snapshot).toBeNull();
       expect(result.allProducts).toEqual([PRODUCT_1]);
     });
 
@@ -1688,12 +1741,25 @@ describe("api() convenience exports", () => {
     it("returns snapshot when resolve succeeds", async () => {
       resolve.mockResolvedValue({ entityId: "user_1" });
       const ctx = createMockCtx({
-        [REFS.getCurrentSubscription]: null,
-        [REFS.listAllUserSubscriptions]: [],
+        [REFS.listAllUserSubscriptions]: [ACTIVE_SUB],
+        [REFS.listUserOrders]: [ORDER_1],
       });
       const handler = extractHandler(apiExports.snapshot as never);
       const result = await handler(ctx, {});
-      expect(result).toBeDefined();
+      expect(result.subscriptions).toEqual([
+        expect.objectContaining({
+          productId: "prod_1",
+          subscriptionId: "sub_1",
+          status: "active",
+        }),
+      ]);
+      expect(result.orders).toEqual([
+        expect.objectContaining({
+          orderId: "ord_1",
+          productId: "prod_1",
+          status: "paid",
+        }),
+      ]);
       expect(result.resolvedAt).toBeDefined();
     });
   });

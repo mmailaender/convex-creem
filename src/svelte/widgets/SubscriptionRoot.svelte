@@ -262,7 +262,7 @@
       ? true
       : resolvedPermissions?.canUpdateUnits !== false,
   );
-  const snapshot = $derived(model?.billingSnapshot ?? null);
+  const snapshot = $derived(model?.snapshot ?? null);
 
   $effect(() => {
     if (!model?.user) return;
@@ -1033,15 +1033,9 @@
   {:else}
     {#if ownsActiveSubscription && snapshot}
       <ScheduledChangeBanner
-        snapshot={{
-          ...snapshot,
-          metadata: {
-            ...snapshot.metadata,
-            cancelAtPeriodEnd: localCancelAtPeriodEnd,
-            currentPeriodEnd: localCurrentPeriodEnd,
-            scheduledSubscriptionUpdate: localScheduledUpdate,
-          },
-        }}
+        cancelAtPeriodEnd={localCancelAtPeriodEnd}
+        currentPeriodEnd={localCurrentPeriodEnd}
+        scheduledUpdate={localScheduledUpdate}
         isLoading={isActionLoading}
         scheduledUpdateLabel={scheduledUpdateLabel}
         onUndoUpdate={cancelScheduledUpdateRef && canResume
@@ -1052,7 +1046,7 @@
         formatDate={resolvedI18n.formatDate}
       />
     {/if}
-    <PaymentWarningBanner {snapshot} labels={resolvedI18n.labels} />
+    <PaymentWarningBanner labels={resolvedI18n.labels} />
 
     {#if groupSelector === "auto" && groupItems.length > 1}
       <div class={unstyled ? "" : "creem-base:flex creem-base:justify-center"}>
@@ -1073,7 +1067,7 @@
     {:else}
       <PricingSection
         plans={visiblePlans}
-        snapshot={snapshot ? { ...snapshot, activePlanId } : null}
+        {activePlanId}
         selectedCycle={effectiveCycle}
         products={allProducts}
         subscriptionProductId={localSubscriptionProductId}

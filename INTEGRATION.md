@@ -255,8 +255,8 @@ import {
   derivePaymentRecoveryState,
 } from "@mmailaender/convex-creem/react";
 
-// Auto-detect from billing snapshot
-<PaymentRecoveryBanner snapshot={billingSnapshot} />
+// Auto-detect from the billing snapshot
+<PaymentRecoveryBanner snapshot={snapshot} />
 
 // With explicit portal button
 <PaymentRecoveryButton portalUrl={api.billing.customersPortalUrl}>
@@ -295,23 +295,23 @@ import { BillingPortal, BillingHistory } from "@mmailaender/convex-creem/react";
 
 ---
 
-## 12. Normalized billing snapshot (advanced)
+## 12. Billing snapshot (advanced)
 
 For apps with multiple subscriptions (base + add-ons):
 
 ```ts
-import { resolveNormalizedSnapshot } from "@mmailaender/convex-creem/react";
+import { resolveBillingSnapshot } from "@mmailaender/convex-creem/react";
 
-const normalized = resolveNormalizedSnapshot({
+const snapshot = resolveBillingSnapshot({
   entityId: "user_123",
   catalog,
   subscriptions: [...],
   orders: [...],
 });
 
-// normalized.subscriptions → typed subscription rows with planId, productId, status
-// normalized.orders → typed order rows
-// normalized.paymentRecoveryState → "none" | "warning" | "blocked"
+// snapshot.subscriptions → typed subscription rows with planId, productId, status
+// snapshot.orders → typed order rows
+// snapshot.paymentRecoveryState → "none" | "warning" | "blocked"
 ```
 
 ---

@@ -9,15 +9,15 @@ export const TrialLimitBanner = ({
   trialEndsAt?: string | null;
   className?: string;
 }) => {
-  if (snapshot?.activeCategory !== "trial") {
+  const trialSubscription = snapshot?.subscriptions.find(
+    (subscription) => subscription.status === "trialing",
+  );
+
+  if (!trialSubscription) {
     return null;
   }
 
-  const resolvedTrialEnd =
-    trialEndsAt ??
-    (typeof snapshot.metadata?.trialEnd === "string"
-      ? snapshot.metadata.trialEnd
-      : null);
+  const resolvedTrialEnd = trialEndsAt ?? trialSubscription.trialEnd ?? null;
 
   return (
     <div

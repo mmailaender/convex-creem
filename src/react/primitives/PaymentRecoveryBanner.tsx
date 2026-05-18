@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type {
+  BillingSnapshotSubscription,
   BillingSnapshot,
   PaymentRecoveryState,
   SubscriptionSnapshot,
@@ -16,7 +17,7 @@ import { defaultBillingLabels, type BillingLabels } from "../../core/i18n.js";
  *
  * @example
  * ```tsx
- * <PaymentRecoveryBanner snapshot={billingSnapshot} />
+ * <PaymentRecoveryBanner snapshot={snapshot} />
  * ```
  */
 export const PaymentRecoveryBanner = ({
@@ -27,7 +28,12 @@ export const PaymentRecoveryBanner = ({
   labels = defaultBillingLabels,
 }: {
   snapshot?: BillingSnapshot | null;
-  subscriptions?: SubscriptionSnapshot | SubscriptionSnapshot[] | null;
+  subscriptions?:
+    | SubscriptionSnapshot
+    | SubscriptionSnapshot[]
+    | BillingSnapshotSubscription
+    | BillingSnapshotSubscription[]
+    | null;
   recoveryState?: PaymentRecoveryState;
   className?: string;
   labels?: BillingLabels;
@@ -37,13 +43,11 @@ export const PaymentRecoveryBanner = ({
     if (subscriptions !== undefined) {
       return derivePaymentRecoveryState(subscriptions);
     }
-    if (snapshot?.subscriptionState) {
-      return derivePaymentRecoveryState({
-        status: snapshot.subscriptionState,
-      });
+    if (snapshot) {
+      return snapshot.paymentRecoveryState;
     }
     return "none";
-  }, [externalState, subscriptions, snapshot?.subscriptionState]);
+  }, [externalState, subscriptions, snapshot]);
 
   if (state === "none") return null;
 

@@ -1,4 +1,3 @@
-import type { BillingSnapshot } from "../../core/types.js";
 import {
   defaultBillingLabels,
   type BillingDateFormatInput,
@@ -6,7 +5,9 @@ import {
 } from "../../core/i18n.js";
 
 export const ScheduledChangeBanner = ({
-  snapshot,
+  cancelAtPeriodEnd = false,
+  currentPeriodEnd = null,
+  scheduledUpdate = null,
   className = "",
   isLoading = false,
   onResume,
@@ -15,7 +16,9 @@ export const ScheduledChangeBanner = ({
   labels = defaultBillingLabels,
   formatDate,
 }: {
-  snapshot?: BillingSnapshot | null;
+  cancelAtPeriodEnd?: boolean;
+  currentPeriodEnd?: string | null;
+  scheduledUpdate?: { effectiveAt?: unknown } | null;
   className?: string;
   isLoading?: boolean;
   onResume?: () => void;
@@ -24,30 +27,18 @@ export const ScheduledChangeBanner = ({
   labels?: BillingLabels;
   formatDate?: (input: BillingDateFormatInput) => string;
 }) => {
-  const scheduledUpdate =
-    snapshot?.metadata?.scheduledSubscriptionUpdate &&
-    typeof snapshot.metadata.scheduledSubscriptionUpdate === "object"
-      ? (snapshot.metadata.scheduledSubscriptionUpdate as {
-          effectiveAt?: unknown;
-        })
-      : null;
   const hasScheduledUpdate = scheduledUpdate != null;
-  if (
-    !snapshot?.metadata ||
-    (snapshot.metadata.cancelAtPeriodEnd !== true && !hasScheduledUpdate)
-  ) {
+  if (!cancelAtPeriodEnd && !hasScheduledUpdate) {
     return null;
   }
 
-  const currentPeriodEnd =
+  const resolvedPeriodEnd =
     hasScheduledUpdate && typeof scheduledUpdate.effectiveAt === "string"
       ? scheduledUpdate.effectiveAt
-      : typeof snapshot.metadata.currentPeriodEnd === "string"
-        ? snapshot.metadata.currentPeriodEnd
-        : undefined;
-  const formattedPeriodEnd = currentPeriodEnd
+      : currentPeriodEnd;
+  const formattedPeriodEnd = resolvedPeriodEnd
     ? (formatDate ?? (({ date }) => date.toLocaleDateString()))({
-        date: new Date(currentPeriodEnd),
+        date: new Date(resolvedPeriodEnd),
       })
     : undefined;
 

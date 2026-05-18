@@ -1,19 +1,17 @@
 import { useMemo } from "react";
-import type { BillingSnapshot, PaymentSnapshot } from "../../core/types.js";
+import type { PaymentSnapshot } from "../../core/types.js";
 import { defaultBillingLabels, type BillingLabels } from "../../core/i18n.js";
 
 export const PaymentWarningBanner = ({
-  snapshot,
   payment,
   className = "",
   labels = defaultBillingLabels,
 }: {
-  snapshot?: BillingSnapshot | null;
   payment?: PaymentSnapshot | null;
   className?: string;
   labels?: BillingLabels;
 }) => {
-  const activePayment = payment ?? snapshot?.payment ?? null;
+  const activePayment = payment ?? null;
 
   const message = useMemo(() => {
     if (!activePayment || activePayment.status === "paid") return null;

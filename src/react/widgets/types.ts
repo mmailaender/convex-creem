@@ -125,8 +125,8 @@ export type ConnectedBillingModel = {
     isTrialing?: boolean;
     trialEnd?: string | null;
   } | null;
-  /** Resolved billing state (plan, status, available actions). `null` when unauthenticated. */
-  billingSnapshot: BillingSnapshot | null;
+  /** Billing state. `null` when unauthenticated. */
+  snapshot: BillingSnapshot | null;
   /** All synced products from the Creem dashboard. */
   allProducts: ConnectedProduct[];
   /** Product IDs the entity has purchased (one-time orders). */

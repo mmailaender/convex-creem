@@ -9,12 +9,12 @@
 
   let { snapshot, trialEndsAt = null, className = "" }: Props = $props();
 
-  const show = $derived(snapshot?.activeCategory === "trial");
+  const trialSubscription = $derived(
+    snapshot?.subscriptions.find((subscription) => subscription.status === "trialing") ?? null,
+  );
+  const show = $derived(trialSubscription != null);
   const resolvedTrialEnd = $derived(
-    trialEndsAt ??
-      (typeof snapshot?.metadata?.trialEnd === "string"
-        ? snapshot.metadata.trialEnd
-        : null),
+    trialEndsAt ?? trialSubscription?.trialEnd ?? null,
   );
 </script>
 

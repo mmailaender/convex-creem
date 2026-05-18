@@ -41,16 +41,15 @@ import {
   type RunActionCtx,
 } from "../component/util.js";
 import type { ComponentApi } from "../component/_generated/component.js";
-import { resolveBillingSnapshot as defaultResolveBillingSnapshot } from "../core/resolver.js";
+import { resolveBillingSnapshot } from "../core/resolver.js";
 import {
   findCreditGrantByProductId,
   normalizePlanCatalog,
 } from "../core/catalog.js";
 import type {
-  BillingSnapshot,
   CreditGrant,
+  BillingSnapshot,
   PlanCatalog,
-  PaymentSnapshot,
   SubscriptionSnapshot,
 } from "../core/types.js";
 
@@ -483,7 +482,7 @@ export class Creem {
       entityId,
     });
   }
-  /** Return paid one-time orders for an entity. */
+  /** Return one-time orders for an entity. */
   private listUserOrders(ctx: RunQueryCtx, { entityId }: { entityId: string }) {
     return ctx.runQuery(this.component.lib.listUserOrders, {
       entityId,
@@ -517,34 +516,36 @@ export class Creem {
   }
 
   /**
-   * Resolve the current billing state for a billing entity.
-   * Returns plan, status, available actions, subscription metadata, etc.
-   * Used internally by `getBillingModel` and exposed for custom billing UIs.
+   * Resolve the backend billing snapshot for a billing entity.
+   *
+   * This is the public app-facing billing state contract. It keeps subscriptions
+   * and one-time orders as arrays so apps can derive their own plan state without
+   * depending on widget convenience fields.
    */
   async getBillingSnapshot(
     ctx: RunQueryCtx,
     {
       entityId,
-      payment,
     }: {
       entityId: string;
-      payment?: PaymentSnapshot | null;
     },
   ): Promise<BillingSnapshot> {
-    const [currentSubscription, allSubscriptions] = await Promise.all([
-      this.getCurrentSubscription(ctx, { entityId }),
+    const [subscriptions, orders] = await Promise.all([
       this.listAllUserSubscriptions(ctx, { entityId }),
+      this.listUserOrders(ctx, { entityId }),
     ]);
 
-    return defaultResolveBillingSnapshot({
-      currentSubscription: currentSubscription
-        ? this.toSubscriptionSnapshot(currentSubscription)
-        : null,
-      allSubscriptions: allSubscriptions.map((subscription) =>
+    return resolveBillingSnapshot({
+      entityId,
+      catalog: this.billingCatalog,
+      subscriptions: (subscriptions ?? []).map((subscription) =>
         this.toSubscriptionSnapshot(subscription),
       ),
-      payment: payment ?? null,
-      userContext: undefined,
+      orders: (orders ?? []).map((order) => ({
+        orderId: order.id,
+        productId: order.productId,
+        status: order.status,
+      })),
     });
   }
 
@@ -1335,7 +1336,7 @@ export class Creem {
   /**
    * Order namespace.
    *
-   * - `.list()` — paid one-time orders for a billing entity (Convex DB)
+   * - `.list()` — one-time orders for a billing entity (Convex DB)
    */
   get orders() {
     return {
@@ -1410,8 +1411,8 @@ export class Creem {
   /**
    * Composite billing model for connected widgets.
    *
-   * Aggregates snapshot + products + subscriptions + orders into a single
-   * object that `<Subscription.Root>` and `<Product.Root>` widgets consume.
+   * Aggregates the snapshot, products, subscriptions, and orders into a single
+   * object that `<Subscription.Root>` and `<Product.Root>` consume.
    *
    * Graceful when `entityId` is `null` — returns public product catalog only
    * (useful for unauthenticated pricing pages).
@@ -1434,7 +1435,7 @@ export class Creem {
     if (!entityId) {
       return {
         user: user ?? null,
-        billingSnapshot: null as BillingSnapshot | null,
+        snapshot: null as BillingSnapshot | null,
         allProducts: products,
         ownedProductIds: [] as string[],
         subscriptionProductId: null as string | null,
@@ -1456,26 +1457,30 @@ export class Creem {
       };
     }
     const [
-      billingSnapshot,
+      snapshot,
       subscription,
       activeSubscriptions,
       customer,
-      orders,
       scheduledSubscriptionUpdates,
     ] = await Promise.all([
       this.getBillingSnapshot(ctx, { entityId }),
       this.getCurrentSubscription(ctx, { entityId }),
       this.listUserSubscriptions(ctx, { entityId }),
       this.getCustomerByEntityId(ctx, entityId),
-      this.listUserOrders(ctx, { entityId }),
       ctx.runQuery(this.component.lib.listPendingScheduledSubscriptionUpdates, {
         entityId,
       }),
     ]);
-    const ownedProductIds = [...new Set(orders.map((o) => o.productId))];
+    const ownedProductIds = [
+      ...new Set(
+        snapshot.orders
+          .filter((order) => order.status === "paid")
+          .map((order) => order.productId),
+      ),
+    ];
     return {
       user: user ?? null,
-      billingSnapshot,
+      snapshot,
       allProducts: products,
       ownedProductIds,
       subscriptionProductId: subscription?.productId ?? null,

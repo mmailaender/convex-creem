@@ -8,5 +8,4 @@ export { pendingCheckout } from "./pendingCheckout.js";
 export * from "./subscriptionUpdate.js";
 export * from "./usageLimits.js";
 export * from "./context.js";
-export * from "./normalizedResolver.js";
 export * from "./i18n.js";

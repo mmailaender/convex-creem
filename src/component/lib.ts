@@ -427,7 +427,7 @@ export const createOrder = mutation({
   },
 });
 
-/** List paid one-time orders for a user. */
+/** List one-time orders for a user. */
 export const listUserOrders = query({
   args: {
     entityId: v.string(),
@@ -445,9 +445,7 @@ export const listUserOrders = query({
       .query("orders")
       .withIndex("customerId", (q) => q.eq("customerId", customer.id))
       .collect();
-    return orders
-      .filter((o) => o.status === "paid" && o.type === "onetime")
-      .map(omitSystemFields);
+    return orders.filter((o) => o.type === "onetime").map(omitSystemFields);
   },
 });
 

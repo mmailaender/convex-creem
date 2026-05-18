@@ -1,5 +1,6 @@
 import type {
   AvailableAction,
+  BillingSnapshotSubscription,
   BillingSnapshot,
   OneTimePaymentStatus,
   PaymentRecoveryState,
@@ -14,23 +15,44 @@ const TERMINAL_PAYMENT_STATUSES = new Set<OneTimePaymentStatus>([
 
 /** Check whether a specific action is available in the given billing snapshot. */
 export const hasBillingAction = (
-  snapshot: BillingSnapshot,
+  snapshot: Pick<BillingSnapshot, "availableBillingActions">,
   action: AvailableAction,
-) => snapshot.availableActions.includes(action);
+) => snapshot.availableBillingActions.includes(action);
 
-/** Check whether the billing snapshot represents a one-time purchase (not a subscription). */
-export const isOneTimeBilling = (snapshot: BillingSnapshot) =>
-  snapshot.billingType === "onetime";
+/** Check whether the billing snapshot contains one-time orders but no subscriptions. */
+export const isOneTimeBilling = (
+  snapshot: Pick<BillingSnapshot, "orders" | "subscriptions">,
+) => snapshot.subscriptions.length === 0 && snapshot.orders.length > 0;
 
-/** Check whether the billing snapshot represents an enterprise plan. */
-export const isEnterpriseBilling = (snapshot: BillingSnapshot) =>
-  snapshot.activeCategory === "enterprise";
+/** Check whether the billing snapshot has no paid subscription/order ownership. */
+export const isEmptyBilling = (
+  snapshot: Pick<BillingSnapshot, "orders" | "subscriptions">,
+) => snapshot.subscriptions.length === 0 && snapshot.orders.length === 0;
 
-/** Whether the billing cycle toggle (e.g. Monthly/Yearly) should be shown in the UI. */
-export const shouldShowBillingCycleToggle = (snapshot: BillingSnapshot) =>
-  snapshot.billingType === "recurring" &&
-  snapshot.availableBillingCycles.length > 1 &&
-  hasBillingAction(snapshot, "switch_interval");
+/** Select the first active-like base subscription from a billing snapshot. */
+export const selectBaseSubscription = (
+  snapshot: Pick<BillingSnapshot, "subscriptions">,
+) => {
+  const active = snapshot.subscriptions.filter((subscription) =>
+    ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status),
+  );
+  return (
+    active.find((subscription) => subscription.kind === "base") ??
+    active.find((subscription) => subscription.kind == null) ??
+    active[0] ??
+    null
+  );
+};
+
+/** Select active-like add-on subscriptions from a billing snapshot. */
+export const selectActiveAddOns = (
+  snapshot: Pick<BillingSnapshot, "subscriptions">,
+) =>
+  snapshot.subscriptions.filter(
+    (subscription) =>
+      subscription.kind === "addon" &&
+      ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status),
+  );
 
 /** Whether the payment status is terminal (paid, refunded, or partially refunded). */
 export const isTerminalPaymentStatus = (status: OneTimePaymentStatus) =>
@@ -46,6 +68,8 @@ export const derivePaymentRecoveryState = (
   subscriptions:
     | SubscriptionSnapshot
     | SubscriptionSnapshot[]
+    | BillingSnapshotSubscription
+    | BillingSnapshotSubscription[]
     | null
     | undefined,
 ): PaymentRecoveryState => {
@@ -95,23 +119,34 @@ export const selectOwnedProductIds = (
  */
 export const resolveBasePlanId = (
   subscriptions:
-    | Array<{ productId?: string; status?: string }>
+    | Array<{ productId?: string; status?: string; kind?: string }>
     | null
     | undefined,
   findPlan: (productId: string) => { planId: string } | undefined,
 ): string | null => {
   if (!subscriptions || subscriptions.length === 0) return null;
-  const ACTIVE_STATUSES = new Set([
-    "active",
-    "trialing",
-    "past_due",
-    "scheduled_cancel",
-  ]);
-  for (const sub of subscriptions) {
-    if (sub.productId && sub.status && ACTIVE_STATUSES.has(sub.status)) {
+  const activeSubscriptions = subscriptions.filter(
+    (sub) => sub.status && ACTIVE_SUBSCRIPTION_STATUSES.has(sub.status),
+  );
+  const ordered = [
+    ...activeSubscriptions.filter((sub) => sub.kind === "base"),
+    ...activeSubscriptions.filter((sub) => sub.kind == null),
+    ...activeSubscriptions.filter(
+      (sub) => sub.kind != null && sub.kind !== "base",
+    ),
+  ];
+  for (const sub of ordered) {
+    if (sub.productId && sub.status) {
       const plan = findPlan(sub.productId);
       if (plan) return plan.planId;
     }
   }
   return null;
 };
+
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set([
+  "active",
+  "trialing",
+  "past_due",
+  "scheduled_cancel",
+]);

@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   hasBillingAction,
   isOneTimeBilling,
-  isEnterpriseBilling,
-  shouldShowBillingCycleToggle,
+  isEmptyBilling,
+  selectBaseSubscription,
+  selectActiveAddOns,
   isTerminalPaymentStatus,
   derivePaymentRecoveryState,
   selectOwnedProductIds,
@@ -14,92 +15,149 @@ import type { BillingSnapshot, SubscriptionSnapshot } from "./types.js";
 const makeSnapshot = (
   overrides: Partial<BillingSnapshot> = {},
 ): BillingSnapshot => ({
+  entityId: "entity_1",
   resolvedAt: new Date().toISOString(),
-  activePlanId: null,
-  activeCategory: "paid",
-  billingType: "recurring",
-  availableBillingCycles: [],
-  payment: null,
-  availableActions: [],
+  subscriptions: [],
+  orders: [],
+  paymentRecoveryState: "none",
+  availableBillingActions: [],
   ...overrides,
 });
 
 describe("hasBillingAction", () => {
   it("returns true when action is present", () => {
-    const snapshot = makeSnapshot({ availableActions: ["checkout", "portal"] });
+    const snapshot = makeSnapshot({
+      availableBillingActions: ["checkout", "portal"],
+    });
     expect(hasBillingAction(snapshot, "checkout")).toBe(true);
     expect(hasBillingAction(snapshot, "portal")).toBe(true);
   });
 
   it("returns false when action is absent", () => {
-    const snapshot = makeSnapshot({ availableActions: ["checkout"] });
+    const snapshot = makeSnapshot({ availableBillingActions: ["checkout"] });
     expect(hasBillingAction(snapshot, "cancel")).toBe(false);
   });
 });
 
 describe("isOneTimeBilling", () => {
-  it("returns true for onetime billing type", () => {
-    expect(isOneTimeBilling(makeSnapshot({ billingType: "onetime" }))).toBe(
-      true,
-    );
-  });
-
-  it("returns false for recurring billing type", () => {
-    expect(isOneTimeBilling(makeSnapshot({ billingType: "recurring" }))).toBe(
-      false,
-    );
-  });
-});
-
-describe("isEnterpriseBilling", () => {
-  it("returns true for enterprise category", () => {
+  it("returns true when there are orders but no subscriptions", () => {
     expect(
-      isEnterpriseBilling(makeSnapshot({ activeCategory: "enterprise" })),
+      isOneTimeBilling(
+        makeSnapshot({
+          orders: [
+            {
+              planId: "download",
+              orderId: "ord_1",
+              productId: "prod_1",
+              status: "paid",
+            },
+          ],
+        }),
+      ),
     ).toBe(true);
   });
 
-  it("returns false for paid category", () => {
-    expect(isEnterpriseBilling(makeSnapshot({ activeCategory: "paid" }))).toBe(
-      false,
-    );
+  it("returns false when there is an active subscription", () => {
+    expect(
+      isOneTimeBilling(
+        makeSnapshot({
+          subscriptions: [
+            {
+              planId: "pro",
+              productId: "prod_pro",
+              subscriptionId: "sub_1",
+              status: "active",
+              recurringCycle: "every-month",
+            },
+          ],
+        }),
+      ),
+    ).toBe(false);
   });
 });
 
-describe("shouldShowBillingCycleToggle", () => {
-  it("returns true when recurring with multiple cycles and switch_interval action", () => {
-    const snapshot = makeSnapshot({
-      billingType: "recurring",
-      availableBillingCycles: ["every-month", "every-year"],
-      availableActions: ["switch_interval", "portal"],
-    });
-    expect(shouldShowBillingCycleToggle(snapshot)).toBe(true);
+describe("isEmptyBilling", () => {
+  it("returns true when no orders or subscriptions are present", () => {
+    expect(isEmptyBilling(makeSnapshot())).toBe(true);
   });
 
-  it("returns false when only one cycle available", () => {
-    const snapshot = makeSnapshot({
-      billingType: "recurring",
-      availableBillingCycles: ["every-month"],
-      availableActions: ["switch_interval"],
-    });
-    expect(shouldShowBillingCycleToggle(snapshot)).toBe(false);
+  it("returns false when any billing row exists", () => {
+    expect(
+      isEmptyBilling(
+        makeSnapshot({
+          orders: [
+            {
+              planId: "download",
+              orderId: "ord_1",
+              productId: "prod_1",
+              status: "paid",
+            },
+          ],
+        }),
+      ),
+    ).toBe(false);
   });
+});
 
-  it("returns false when onetime billing type", () => {
+describe("selectBaseSubscription", () => {
+  it("prefers the active base subscription", () => {
     const snapshot = makeSnapshot({
-      billingType: "onetime",
-      availableBillingCycles: ["every-month", "every-year"],
-      availableActions: ["switch_interval"],
+      subscriptions: [
+        {
+          planId: "addon",
+          productId: "prod_addon",
+          subscriptionId: "sub_addon",
+          status: "active",
+          recurringCycle: "every-month",
+          kind: "addon",
+        },
+        {
+          planId: "pro",
+          productId: "prod_pro",
+          subscriptionId: "sub_base",
+          status: "active",
+          recurringCycle: "every-month",
+          kind: "base",
+        },
+      ],
     });
-    expect(shouldShowBillingCycleToggle(snapshot)).toBe(false);
+    expect(selectBaseSubscription(snapshot)?.subscriptionId).toBe("sub_base");
   });
+});
 
-  it("returns false when switch_interval action is not available", () => {
+describe("selectActiveAddOns", () => {
+  it("returns active add-on subscriptions", () => {
     const snapshot = makeSnapshot({
-      billingType: "recurring",
-      availableBillingCycles: ["every-month", "every-year"],
-      availableActions: ["portal"],
+      subscriptions: [
+        {
+          planId: "pro",
+          productId: "prod_pro",
+          subscriptionId: "sub_base",
+          status: "active",
+          recurringCycle: "every-month",
+          kind: "base",
+        },
+        {
+          planId: "storage",
+          productId: "prod_storage",
+          subscriptionId: "sub_addon",
+          status: "active",
+          recurringCycle: "every-month",
+          kind: "addon",
+        },
+        {
+          planId: "old-storage",
+          productId: "prod_old_storage",
+          subscriptionId: "sub_canceled_addon",
+          status: "canceled",
+          recurringCycle: "every-month",
+          kind: "addon",
+        },
+      ],
     });
-    expect(shouldShowBillingCycleToggle(snapshot)).toBe(false);
+    expect(
+      selectActiveAddOns(snapshot).map((sub) => sub.subscriptionId),
+    ).toEqual(["sub_addon"]);
   });
 });
 

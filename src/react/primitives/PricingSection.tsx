@@ -1,11 +1,7 @@
 import { useMemo } from "react";
 import { BillingToggle } from "./BillingToggle.js";
 import { PricingCard } from "./PricingCard.js";
-import type {
-  BillingSnapshot,
-  UIPlanEntry,
-  RecurringCycle,
-} from "../../core/types.js";
+import type { UIPlanEntry, RecurringCycle } from "../../core/types.js";
 import {
   defaultBillingLabels,
   type BillingCurrencyFormatInput,
@@ -15,7 +11,7 @@ import type { ConnectedProduct } from "../widgets/types.js";
 
 export const PricingSection = ({
   plans = [],
-  snapshot,
+  activePlanId,
   selectedCycle,
   products = [],
   subscriptionProductId,
@@ -41,7 +37,7 @@ export const PricingSection = ({
   formatCurrency,
 }: {
   plans?: UIPlanEntry[];
-  snapshot?: BillingSnapshot | null;
+  activePlanId?: string | null;
   selectedCycle?: RecurringCycle;
   products?: ConnectedProduct[];
   subscriptionProductId?: string | null;
@@ -86,8 +82,7 @@ export const PricingSection = ({
   }, [plans]);
 
   const hasEnterprisePlan = plans.some((p) => p.category === "enterprise");
-  const effectiveCycle =
-    selectedCycle ?? snapshot?.recurringCycle ?? availableCycles[0];
+  const effectiveCycle = selectedCycle ?? availableCycles[0];
   const showToggle = showCycleToggle && availableCycles.length > 1;
 
   return (
@@ -117,7 +112,7 @@ export const PricingSection = ({
             key={plan.planId}
             plan={plan}
             selectedCycle={effectiveCycle}
-            activePlanId={snapshot?.activePlanId}
+            activePlanId={activePlanId}
             subscriptionProductId={subscriptionProductId}
             subscriptionStatus={subscriptionStatus}
             subscriptionTrialEnd={subscriptionTrialEnd}

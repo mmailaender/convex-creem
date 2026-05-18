@@ -442,7 +442,7 @@ export const SubscriptionRoot = ({
     [model?.scheduledSubscriptionUpdates, matchedSubscription?.id],
   );
 
-  const snapshot = model?.billingSnapshot ?? null;
+  const snapshot = model?.snapshot ?? null;
 
   const canCheckout =
     !model?.user && resolvedOnBeforeCheckout != null
@@ -1212,15 +1212,9 @@ export const SubscriptionRoot = ({
           <>
             {ownsActiveSubscription && snapshot && (
               <ScheduledChangeBanner
-                snapshot={{
-                  ...snapshot,
-                  metadata: {
-                    ...snapshot.metadata,
-                    cancelAtPeriodEnd: localCancelAtPeriodEnd,
-                    currentPeriodEnd: localCurrentPeriodEnd,
-                    scheduledSubscriptionUpdate: localScheduledUpdate,
-                  },
-                }}
+                cancelAtPeriodEnd={localCancelAtPeriodEnd}
+                currentPeriodEnd={localCurrentPeriodEnd}
+                scheduledUpdate={localScheduledUpdate}
                 isLoading={isActionLoading}
                 scheduledUpdateLabel={scheduledUpdateLabel}
                 onUndoUpdate={
@@ -1235,10 +1229,7 @@ export const SubscriptionRoot = ({
                 formatDate={resolvedI18n.formatDate}
               />
             )}
-            <PaymentWarningBanner
-              snapshot={snapshot}
-              labels={resolvedI18n.labels}
-            />
+            <PaymentWarningBanner labels={resolvedI18n.labels} />
 
             {groupSelector === "auto" && groupItems.length > 1 && (
               <div
@@ -1260,7 +1251,7 @@ export const SubscriptionRoot = ({
             ) : (
               <PricingSection
                 plans={visiblePlans}
-                snapshot={snapshot ? { ...snapshot, activePlanId } : null}
+                activePlanId={activePlanId}
                 selectedCycle={effectiveCycle}
                 products={allProducts}
                 subscriptionProductId={localSubscriptionProductId}

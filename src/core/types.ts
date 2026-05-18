@@ -184,38 +184,6 @@ export type CheckoutSuccessParams = {
 };
 
 /**
- * Resolved billing state for a billing entity.
- * Central data structure consumed by widgets and `<BillingGate>`.
- * Produced by `creem.getBillingSnapshot()` or `resolveBillingSnapshot()`.
- */
-export type BillingSnapshot = {
-  /** ISO timestamp when this snapshot was resolved. */
-  resolvedAt: string;
-  /** Version of the plan catalog used for resolution (if a catalog was provided). */
-  catalogVersion?: string;
-  /** ID of the currently active plan (from the catalog), or `null` if none matched. */
-  activePlanId: string | null;
-  /** Category of the active plan (e.g. `"free"`, `"paid"`, `"trial"`, `"enterprise"`). */
-  activeCategory: PlanCategory;
-  /** Current billing model. */
-  billingType: BillingType;
-  /** Current billing interval (e.g. `"every-month"`). */
-  recurringCycle?: RecurringCycle;
-  /** All billing cycles available for the active plan. Used by `<BillingToggle>`. */
-  availableBillingCycles: RecurringCycle[];
-  /** Raw subscription status string (e.g. `"active"`, `"trialing"`, `"canceled"`). */
-  subscriptionState?: string;
-  /** Current unit count for unit-based subscriptions. */
-  units?: number;
-  /** One-time payment state, or `null` if not applicable. */
-  payment: PaymentSnapshot | null;
-  /** Actions the billing entity is allowed to perform. */
-  availableActions: AvailableAction[];
-  /** Additional metadata (cancelAtPeriodEnd, currentPeriodEnd, trialEnd, userContext). */
-  metadata?: Record<string, unknown>;
-};
-
-/**
  * Intent object passed to `onBeforeCheckout` and stored by `pendingCheckout`.
  * Represents the product and optional unit count the user wants to purchase.
  */
@@ -308,9 +276,9 @@ export type UsageLimitEntry = {
 /** Result of `evaluateUsageLimits`. Keys match the limit keys defined in the catalog plan. */
 export type UsageLimitResult = Record<string, UsageLimitEntry>;
 
-// ── Normalized billing snapshot types ──────────────────────────
+// ── Billing snapshot types ──────────────────────────
 
-/** A single subscription row in the normalized billing snapshot. */
+/** A single subscription row in the billing snapshot. */
 export type BillingSnapshotSubscription = {
   /** Stable plan ID from the catalog (if resolved). */
   planId: string | null;
@@ -334,7 +302,7 @@ export type BillingSnapshotSubscription = {
   trialEnd?: string | null;
 };
 
-/** A single order row in the normalized billing snapshot. */
+/** A single order row in the billing snapshot. */
 export type BillingSnapshotOrder = {
   /** Stable plan ID from the catalog (if resolved). */
   planId: string | null;
@@ -347,11 +315,11 @@ export type BillingSnapshotOrder = {
 };
 
 /**
- * Normalized billing snapshot with explicit subscription and order arrays.
- * This is the evolution of `BillingSnapshot` that supports multiple subscriptions
- * (base + add-ons) and one-time orders as first-class citizens.
+ * Billing snapshot with explicit subscription and order arrays.
+ * This supports multiple subscriptions (base + add-ons) and one-time orders as
+ * first-class citizens.
  */
-export type NormalizedBillingSnapshot = {
+export type BillingSnapshot = {
   /** Billing entity ID. */
   entityId: string;
   /** Version of the plan catalog used for resolution. */
@@ -383,23 +351,4 @@ export type PlanChangeIntent = {
   freePlanId?: string;
   /** Number of units (for unit-based plans). */
   units?: number;
-};
-
-/** Arbitrary user context passed through to the billing resolver. */
-export type BillingUserContext = Record<string, unknown>;
-
-/** Input for `resolveBillingSnapshot()`. Provide subscription + catalog data to resolve the billing state. */
-export type BillingResolverInput = {
-  /** Optional plan catalog for plan-aware resolution. */
-  catalog?: PlanCatalog;
-  /** The entity's current (primary) subscription, or `null` if none. */
-  currentSubscription?: SubscriptionSnapshot | null;
-  /** All subscriptions for the entity (including ended). */
-  allSubscriptions?: SubscriptionSnapshot[];
-  /** One-time payment state (from checkout success params). */
-  payment?: PaymentSnapshot | null;
-  /** Arbitrary user context passed through to `metadata.userContext`. */
-  userContext?: BillingUserContext;
-  /** Override for the current timestamp (ISO string). Defaults to `new Date().toISOString()`. */
-  now?: string;
 };

@@ -1,7 +1,7 @@
 <script lang="ts">
   import BillingToggle from "./BillingToggle.svelte";
   import PricingCard from "./PricingCard.svelte";
-  import type { BillingSnapshot, UIPlanEntry, RecurringCycle } from "../../core/types.js";
+  import type { UIPlanEntry, RecurringCycle } from "../../core/types.js";
   import {
     defaultBillingLabels,
     type BillingCurrencyFormatInput,
@@ -12,7 +12,7 @@
 
   interface Props {
     plans?: UIPlanEntry[];
-    snapshot?: BillingSnapshot | null;
+    activePlanId?: string | null;
     selectedCycle?: RecurringCycle;
     products?: ConnectedProduct[];
     subscriptionProductId?: string | null;
@@ -49,7 +49,7 @@
 
   let {
     plans = [],
-    snapshot = null,
+    activePlanId = null,
     selectedCycle = undefined,
     products = [],
     subscriptionProductId = null,
@@ -87,9 +87,7 @@
 
   const availableCycles = $derived(toUniqueCycles(plans));
   const hasEnterprisePlan = $derived(plans.some((plan) => plan.category === "enterprise"));
-  const effectiveCycle = $derived(
-    selectedCycle ?? snapshot?.recurringCycle ?? availableCycles[0],
-  );
+  const effectiveCycle = $derived(selectedCycle ?? availableCycles[0]);
   const showToggle = $derived(showCycleToggle && availableCycles.length > 1);
 </script>
 
@@ -110,7 +108,7 @@
       <PricingCard
         {plan}
         selectedCycle={effectiveCycle}
-        activePlanId={snapshot?.activePlanId}
+        {activePlanId}
         {subscriptionProductId}
         {subscriptionStatus}
         {subscriptionTrialEnd}

@@ -1177,6 +1177,7 @@ Until Creem exposes this, `convex-creem` should keep using app-owned stable
 ### One product with multiple billing cycles
 
 Feature Request:
+
 - [Yearly or monthly billing period for the same product](https://creem.featurebase.app/en/p/yearly-or-monthly-billing-period-for-the-same-product)
 
 Desired platform behavior:
@@ -1331,6 +1332,7 @@ Impact on `convex-creem`:
 ### Product localization / i18n
 
 Feature requests:
+
 - [Product Localization (i18n)](https://creem.featurebase.app/en/p/product-localization-i18n)
 - [Customer Portal Localization](https://creem.featurebase.app/en/p/customer-portal-localization)
 - [Dashboard Localization](https://creem.featurebase.app/en/p/dashboard-localization)
@@ -1398,7 +1400,7 @@ docs-only.
       product ID, including clear errors for missing intervals.
 - [x] Keep inline `productIds` as a migration escape hatch, but document
       catalog-backed `planId` as the preferred path.
-- [ ] Add selectors for owned products, active base subscription, active
+- [x] Add selectors for owned products, active base subscription, active
       add-ons, payment recovery state, available actions, and usage-limit
       evaluation.
 - [x] Normalize naming from seat-specific language to unit-based language in new
@@ -1406,14 +1408,14 @@ docs-only.
 
 ### Billing Snapshot
 
-- [ ] Move toward a normalized snapshot with `subscriptions[]` and `orders[]`
+- [x] Move toward a normalized snapshot with `subscriptions[]` and `orders[]`
       instead of a single primary subscription field.
 - [x] Include `planId`, `productId`, `subscriptionId`, `status`,
       `recurringCycle`, and optional `kind` on subscription rows.
 - [x] Include `planId`, `orderId`, `productId`, and `status` on order rows when
       products map to catalog entries.
 - [x] Derive `paymentRecoveryState` from subscription status.
-- [ ] Add selectors that keep UI convenience fields out of the base snapshot.
+- [x] Add selectors that keep UI convenience fields out of the base snapshot.
 
 ### Provider Contract
 

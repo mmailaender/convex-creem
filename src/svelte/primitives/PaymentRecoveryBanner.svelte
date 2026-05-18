@@ -1,5 +1,6 @@
 <script lang="ts">
   import type {
+    BillingSnapshotSubscription,
     BillingSnapshot,
     PaymentRecoveryState,
     SubscriptionSnapshot,
@@ -12,7 +13,12 @@
 
   interface Props {
     snapshot?: BillingSnapshot | null;
-    subscriptions?: SubscriptionSnapshot | SubscriptionSnapshot[] | null;
+    subscriptions?:
+      | SubscriptionSnapshot
+      | SubscriptionSnapshot[]
+      | BillingSnapshotSubscription
+      | BillingSnapshotSubscription[]
+      | null;
     recoveryState?: PaymentRecoveryState;
     class?: string;
     labels?: BillingLabels;
@@ -31,10 +37,8 @@
     if (subscriptions !== undefined) {
       return derivePaymentRecoveryState(subscriptions);
     }
-    if (snapshot?.subscriptionState) {
-      return derivePaymentRecoveryState({
-        status: snapshot.subscriptionState,
-      });
+    if (snapshot) {
+      return snapshot.paymentRecoveryState;
     }
     return "none";
   });
