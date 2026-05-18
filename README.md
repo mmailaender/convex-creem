@@ -1459,7 +1459,7 @@ Inline status badge for one-time payments.
 
 ---
 
-## Migration Guide
+## Migration 0.3.0 to 0.4.0
 
 ### Provider-based widget API
 
