@@ -1,0 +1,56 @@
+name: Test and lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Test and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.2
+
+      - name: Node setup
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          cache-dependency-path: pnpm-lock.yaml
+          node-version: "24.x"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Clean
+        run: pnpm clean
+
+      - name: Build
+        run: pnpm build
+
+      - name: Pack package
+        run: pnpm pack --pack-destination /tmp/convex-creem-pack
+
+      - name: Test
+        run: pnpm test
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint

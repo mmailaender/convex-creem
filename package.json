@@ -34,7 +34,9 @@
     "clean": "rm -rf dist *.tsbuildinfo",
     "build": "tsc --project ./tsconfig.build.json && cpy '**/*.svelte' '../../dist/svelte/' --cwd=src/svelte",
     "check": "tsc --noEmit && tsc -p example-react && tsc -p example-svelte && svelte-check --tsconfig ./example-svelte/tsconfig.json",
+    "typecheck": "pnpm check",
     "format": "prettier --write .",
+    "pack:package": "pnpm build && pnpm pack --pack-destination /tmp/convex-creem-pack",
     "lint": "eslint .",
     "all": "concurrently --kill-others --prefix-colors 'blue,yellow,magenta,cyan' --names 'frontend,backend,build,test' 'pnpm dev:frontend' 'pnpm dev:backend' 'pnpm dev:build' 'pnpm test:watch'",
     "test": "vitest run --typecheck",
@@ -42,10 +44,9 @@
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:coverage": "vitest run --coverage --coverage.reporter=text",
     "prepublishOnly": "pnpm clean && pnpm build",
-    "preversion": "pnpm clean && pnpm install --frozen-lockfile && pnpm build && concurrently --kill-others-on-fail --names 'test,lint,typecheck' --prefix-colors 'blue,yellow,magenta' 'pnpm test' 'pnpm lint' 'pnpm typecheck'",
-    "alpha": "pnpm version prerelease --preid alpha && pnpm publish --tag alpha && git push --follow-tags",
-    "release": "pnpm version patch && pnpm publish && git push --follow-tags",
-    "version": "vim -c 'normal o' -c 'normal o## '$npm_package_version CHANGELOG.md && prettier -w CHANGELOG.md && git add CHANGELOG.md"
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm clean && pnpm build && changeset publish && git push --follow-tags"
   },
   "files": [
     "dist",
@@ -114,6 +115,7 @@
     "@arethetypeswrong/cli": "0.18.2",
     "@ark-ui/react": "^5.36.2",
     "@ark-ui/svelte": "^5.21.2",
+    "@changesets/cli": "^2.31.0",
     "@convex-dev/eslint-plugin": "2.0.0",
     "@edge-runtime/vm": "5.0.0",
     "@eslint/eslintrc": "3.3.5",

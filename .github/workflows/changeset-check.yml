@@ -1,0 +1,47 @@
+name: Changeset check
+
+on:
+  pull_request:
+    branches: ["**"]
+    paths:
+      - "src/**"
+      - "package.json"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changeset:
+    name: Changeset check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.2
+
+      - name: Node setup
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          cache-dependency-path: pnpm-lock.yaml
+          node-version: "24.x"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for changesets
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if ! pnpm changeset status --since="origin/${BASE_REF}" 2>&1; then
+            echo "::warning::No changeset found. If this PR includes package changes that need a release, run 'pnpm changeset' to add one."
+          fi
