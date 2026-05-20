@@ -2,8 +2,11 @@
   import { getCreditsContext } from "./creditsContext.js";
 
   interface Props {
+    /** Status text CSS class. */
     class?: string;
+    /** Label shown while refreshing. */
     loadingLabel?: string;
+    /** Optional label shown while idle. Empty string hides idle status. */
     idleLabel?: string;
   }
 

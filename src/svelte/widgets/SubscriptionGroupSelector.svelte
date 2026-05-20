@@ -7,9 +7,13 @@
   } from "./subscriptionContext.js";
 
   interface Props {
+    /** Selector items. Defaults to groups registered with `Subscription.Root`. */
     items?: Array<{ value: string; label: string }>;
+    /** Controlled selected group. Defaults to the root's active group. */
     value?: string | null;
+    /** Called when the user selects a group. Defaults to updating the root context. */
     onValueChange?: (value: string) => void;
+    /** Wrapper CSS class. */
     class?: string;
   }
 

@@ -8,9 +8,13 @@
   } from "./subscriptionContext.js";
 
   interface Props {
+    /** Available billing cycles. Defaults to cycles available in the active root group. */
     cycles?: RecurringCycle[];
+    /** Controlled selected cycle. Defaults to the root's selected cycle. */
     value?: RecurringCycle;
+    /** Called when the user selects a cycle. Defaults to updating the root context. */
     onValueChange?: (cycle: RecurringCycle) => void;
+    /** Wrapper CSS class. */
     class?: string;
   }
 

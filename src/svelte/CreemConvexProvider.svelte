@@ -14,18 +14,27 @@
   } from "./widgets/types.js";
 
   interface Props {
+    /** Connected Convex function references used by all billing widgets below this provider. */
     api: ConnectedBillingApi;
+    /** Optional app-owned billing catalog used to resolve plan IDs, labels, product IDs, and limits. */
     catalog?: PlanCatalog;
+    /** Default billing cycle for subscription widgets when no local cycle is selected. */
     defaultCycle?: RecurringCycle;
+    /** UI permission flags. These only hide/disable client UI; enforce authorization in Convex functions. */
     permissions?: BillingPermissions;
+    /** Optional guard that can block checkout before redirecting to Creem. */
     onBeforeCheckout?: (intent: CheckoutIntent) => Promise<boolean> | boolean;
+    /** Optional guard that can block paid plan switches and unit updates. */
     onBeforePlanChange?: (
       intent: PlanChangeIntent,
     ) => Promise<boolean> | boolean;
+    /** Optional guard that can block activating an app-owned free plan. */
     onBeforeFreePlanActivation?: (intent: {
       freePlanId: string;
     }) => Promise<boolean> | boolean;
+    /** Locale, labels, and formatting overrides for widgets below this provider. */
     i18n?: BillingI18n;
+    /** Billing UI rendered inside the configured provider context. */
     children?: Snippet;
   }
 

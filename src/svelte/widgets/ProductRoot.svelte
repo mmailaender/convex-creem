@@ -30,15 +30,25 @@
   } from "../../core/productCheckout.js";
 
   interface Props {
+    /** Local UI permission overrides for this product root. */
     permissions?: BillingPermissions;
+    /** Upgrade path rules for mutually exclusive one-time products. */
     transition?: Transition[];
+    /** Wrapper CSS class. */
     class?: string;
+    /** Product card layout mode. */
     layout?: "default" | "single";
+    /** Visual style variant for product cards. */
     styleVariant?: "legacy" | "pricing";
+    /** Show synced Creem product images when available. */
     showImages?: boolean;
+    /** CTA style used by the pricing visual variant. */
     pricingCtaVariant?: "filled" | "faded";
+    /** Checkout success URL override. Defaults to Creem product success URL, then the current page. */
     successUrl?: string;
+    /** Optional checkout guard for this product root. Overrides provider guard. */
     onBeforeCheckout?: (intent: CheckoutIntent) => Promise<boolean> | boolean;
+    /** Product items registered inside this root. */
     children?: import("svelte").Snippet;
   }
 

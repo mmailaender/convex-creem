@@ -2,6 +2,7 @@
   import { getCreditsContext } from "./creditsContext.js";
 
   interface Props {
+    /** Error container CSS class. */
     class?: string;
   }
 

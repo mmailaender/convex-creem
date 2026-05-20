@@ -11,8 +11,11 @@
   import { resolveBillingI18n } from "../../core/i18n.js";
 
   interface Props {
+    /** Local UI permission overrides. `canAccessPortal: false` hides the portal button. */
     permissions?: BillingPermissions;
+    /** Button CSS class. */
     class?: string;
+    /** Optional custom button label. */
     children?: Snippet;
   }
 

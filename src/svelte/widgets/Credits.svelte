@@ -16,8 +16,11 @@
   import { resolveBillingI18n } from "../../core/i18n.js";
 
   interface Props {
+    /** Unit label displayed next to the balance, such as `credits` or `tokens`. */
     unitLabel?: string;
+    /** Wrapper CSS class. */
     class?: string;
+    /** Optional custom balance UI. Receives the credits context value. */
     children?: Snippet<[CreditsContextValue]>;
   }
 

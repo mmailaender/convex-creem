@@ -2,7 +2,9 @@
   import { getSubscriptionItemContext } from "./subscriptionItemContext.js";
 
   interface Props {
+    /** Button CSS class. */
     class?: string;
+    /** Cancel button label override. */
     label?: string;
   }
 

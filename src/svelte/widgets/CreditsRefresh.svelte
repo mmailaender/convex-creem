@@ -3,7 +3,9 @@
   import { getCreditsContext } from "./creditsContext.js";
 
   interface Props {
+    /** Button CSS class. */
     class?: string;
+    /** Accessible label override. */
     label?: string;
   }
 

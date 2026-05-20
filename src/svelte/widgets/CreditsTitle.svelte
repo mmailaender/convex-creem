@@ -2,7 +2,9 @@
   import { getCreditsContext } from "./creditsContext.js";
 
   interface Props {
+    /** Title CSS class. */
     class?: string;
+    /** Optional custom title content. */
     children?: import("svelte").Snippet;
   }
 

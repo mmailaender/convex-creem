@@ -3,17 +3,29 @@
   import { getSubscriptionItemContext } from "./subscriptionItemContext.js";
 
   interface Props {
+    /** Wrapper CSS class. */
     class?: string;
+    /** Class for the row containing the label and numeric input/value. */
     rowClass?: string;
+    /** Class for the unit label. */
     labelClass?: string;
+    /** Class for the edit action row. */
     actionsClass?: string;
+    /** Class for secondary actions such as Change or Cancel. */
     secondaryClass?: string;
+    /** Class for the primary update action. */
     primaryClass?: string;
+    /** Class passed to the internal numeric input. */
     numberInputClass?: string;
+    /** Unit label override. */
     label?: string;
+    /** Change button label override. */
     changeLabel?: string;
+    /** Update button label override. */
     updateLabel?: string;
+    /** Cancel button label override. */
     cancelLabel?: string;
+    /** Show current subscribed quantity before the change button. */
     detailed?: boolean;
   }
 

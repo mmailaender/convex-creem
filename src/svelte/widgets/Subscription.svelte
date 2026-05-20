@@ -19,13 +19,21 @@
   import { defaultBillingLabels } from "../../core/i18n.js";
 
   type BaseProps = {
+    /** Unique plan ID. Defaults to first product ID or the plan type when omitted. */
     planId?: string;
+    /** Display title. Defaults to catalog entry or synced Creem product name. */
     title?: string;
+    /** Display description. Defaults to catalog entry or synced Creem product description. */
     description?: string;
+    /** Optional pricing group ID used by group selectors. */
     groupId?: string;
+    /** Optional display label for `groupId`. */
     groupTitle?: string;
+    /** Whether this plan should render as recommended. */
     recommended?: boolean;
+    /** Wrapper CSS class for custom item children, or card class for default rendering. */
     class?: string;
+    /** Optional custom plan-card markup. */
     children?: import("svelte").Snippet;
   };
 

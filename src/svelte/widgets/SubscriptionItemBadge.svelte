@@ -2,8 +2,11 @@
   import { getSubscriptionItemContext } from "./subscriptionItemContext.js";
 
   interface Props {
+    /** Badge label override. Defaults to current/recommended labels when applicable. */
     label?: string;
+    /** Badge CSS class. */
     class?: string;
+    /** Optional custom badge content. */
     children?: import("svelte").Snippet;
   }
 

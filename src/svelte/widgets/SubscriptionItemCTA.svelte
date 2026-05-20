@@ -2,9 +2,13 @@
   import { getSubscriptionItemContext } from "./subscriptionItemContext.js";
 
   interface Props {
+    /** Button CSS class. */
     class?: string;
+    /** Label shown for the active/current plan state. */
     activeLabel?: string;
+    /** Label shown for initial checkout. */
     checkoutLabel?: string;
+    /** Label shown for switching to this plan. */
     switchLabel?: string;
   }
 

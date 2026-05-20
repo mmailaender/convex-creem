@@ -2,8 +2,11 @@
   import { getCreditsContext } from "./creditsContext.js";
 
   interface Props {
+    /** Wrapper CSS class. */
     class?: string;
+    /** Numeric amount CSS class. */
     amountClass?: string;
+    /** Unit label CSS class. */
     unitClass?: string;
   }
 
