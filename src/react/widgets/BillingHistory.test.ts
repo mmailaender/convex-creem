@@ -17,7 +17,10 @@ const svelteSource = readFileSync(
 describe("BillingHistory pagination styling", () => {
   it("marks the current page with design-system button styles", () => {
     expect(reactSource).toContain("page.value === api.page");
-    expect(svelteSource).toContain("page.value === api().page");
+    expect(svelteSource).toContain("page.value === paginationApi.page");
+    expect(svelteSource).toContain(
+      "<Pagination.Context render={paginationItems} />",
+    );
 
     expect(reactSource).toContain("button-filled");
     expect(svelteSource).toContain("button-filled");

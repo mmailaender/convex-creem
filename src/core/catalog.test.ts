@@ -10,7 +10,11 @@ import {
   findPlanById,
   findPlanByProductId,
   findCreditGrantByProductId,
+  hasAppPlanActivation,
+  isAppOwnedPlan,
+  isAppPlanEligible,
   resolvePlanProductId,
+  shouldShowPlan,
 } from "./catalog.js";
 
 describe("isSupportedRecurringCycle", () => {
@@ -288,6 +292,86 @@ describe("findCreditGrantByProductId", () => {
     };
 
     expect(findCreditGrantByProductId(catalog, "prod_license")).toBeUndefined();
+  });
+});
+
+describe("app-owned plan eligibility", () => {
+  const trialPlan = {
+    planId: "trial",
+    category: "trial" as const,
+    billingType: "custom" as const,
+    eligibility: {
+      oncePerEntity: true,
+      hideWhenIneligible: true,
+    },
+  };
+
+  it("detects app-owned plans", () => {
+    expect(isAppOwnedPlan(trialPlan)).toBe(true);
+    expect(
+      isAppOwnedPlan({
+        planId: "pro",
+        category: "paid",
+        billingType: "recurring",
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps a once-per-entity plan eligible until it was activated", () => {
+    expect(isAppPlanEligible(trialPlan, [], "free")).toBe(true);
+    expect(
+      isAppPlanEligible(
+        trialPlan,
+        [
+          {
+            entityId: "org_1",
+            planId: "trial",
+            firstActivatedAt: 1,
+            lastActivatedAt: 1,
+            activationCount: 1,
+          },
+        ],
+        "free",
+      ),
+    ).toBe(false);
+  });
+
+  it("shows the active plan even when it was already activated", () => {
+    const activations = [
+      {
+        entityId: "org_1",
+        planId: "trial",
+        firstActivatedAt: 1,
+        lastActivatedAt: 1,
+        activationCount: 1,
+      },
+    ];
+    expect(isAppPlanEligible(trialPlan, activations, "trial")).toBe(true);
+    expect(shouldShowPlan(trialPlan, activations, "trial")).toBe(true);
+  });
+
+  it("hides ineligible plans only when configured", () => {
+    const activations = [
+      {
+        entityId: "org_1",
+        planId: "trial",
+        firstActivatedAt: 1,
+        lastActivatedAt: 1,
+        activationCount: 1,
+      },
+    ];
+    expect(hasAppPlanActivation(activations, "trial")).toBe(true);
+    expect(shouldShowPlan(trialPlan, activations, "free")).toBe(false);
+    expect(
+      shouldShowPlan(
+        {
+          ...trialPlan,
+          eligibility: { oncePerEntity: true },
+        },
+        activations,
+        "free",
+      ),
+    ).toBe(true);
   });
 });
 

@@ -74,6 +74,26 @@ export type CreditGrant = {
   refundBehavior?: CreditGrantRefundBehavior;
 };
 
+/**
+ * Eligibility policy for app-owned plans such as no-card trials, free plans,
+ * beta access, or other custom entitlements that are activated by the host app.
+ */
+export type AppPlanEligibility = {
+  /**
+   * Allow this plan to be activated only once for a billing entity.
+   * Use for no-card app trials where replaying the trial after downgrade/cancel
+   * would be abuse.
+   */
+  oncePerEntity?: boolean;
+  /**
+   * Hide the card when this plan is no longer eligible and it is not the active plan.
+   * When false/omitted, custom compositions may still show or disable the option.
+   */
+  hideWhenIneligible?: boolean;
+  /** Optional UI copy for apps that choose to show disabled ineligible plans. */
+  ineligibleLabel?: string;
+};
+
 /** A single plan definition in the billing catalog. */
 export type PlanCatalogEntry = {
   /** Unique plan identifier (e.g. `"basic"`, `"premium"`). */
@@ -106,6 +126,8 @@ export type PlanCatalogEntry = {
   limits?: Readonly<Record<string, number>>;
   /** Optional app-side Customer Credits grant fulfilled from webhook events for this product. */
   creditGrant?: CreditGrant;
+  /** Optional eligibility policy for app-owned plan activations. */
+  eligibility?: AppPlanEligibility;
   /** Arbitrary metadata for custom logic. */
   metadata?: Readonly<Record<string, unknown>>;
 };
@@ -194,21 +216,42 @@ export type CheckoutIntent = {
   units?: number;
 };
 
-/**
- * How the Creem API handles plan switches and unit changes.
- * - `"proration-charge-immediately"` — prorate and charge the difference now
- * - `"proration-charge"` — prorate, charge on next invoice
- * - `"proration-none"` — no proration, change takes effect on next billing cycle
- * - `"period-end"` — keep current access until period end, then apply the update
- */
-export type UpdateBehavior =
-  | "proration-charge-immediately"
-  | "proration-charge"
-  | "proration-none"
-  | "period-end";
+/** Prorate and charge the price difference immediately. Creem paid subscription updates only. */
+export type ProrationChargeImmediatelyBehavior = "proration-charge-immediately";
 
-export type UpdateBehaviorIntent = {
-  kind: "plan-switch" | "unit-update";
+/** Prorate the price difference and apply it to the next invoice. Creem paid subscription updates only. */
+export type ProrationChargeBehavior = "proration-charge";
+
+/** Apply the paid subscription update without proration. Creem paid subscription updates only. */
+export type ProrationNoneBehavior = "proration-none";
+
+/** Keep current paid access until the period boundary, then apply the update or free-plan assignment. */
+export type PeriodEndUpdateBehavior = "period-end";
+
+/** Cancel the paid subscription immediately and activate the app-owned target plan now. Paid-to-free/app-plan switches only. */
+export type ImmediateFreePlanUpdateBehavior = "immediate";
+
+/** Creem paid subscription update behavior for paid-to-paid plan switches and unit changes. */
+export type PaidSubscriptionUpdateBehavior =
+  | ProrationChargeImmediatelyBehavior
+  | ProrationChargeBehavior
+  | ProrationNoneBehavior
+  | PeriodEndUpdateBehavior;
+
+/** Cancellation behavior for paid-to-free or paid-to-app-owned plan switches. */
+export type FreePlanUpdateBehavior =
+  | PeriodEndUpdateBehavior
+  | ImmediateFreePlanUpdateBehavior;
+
+/** Backwards-compatible name for paid subscription update behavior. */
+export type UpdateBehavior = PaidSubscriptionUpdateBehavior;
+
+/** Internal resolved behavior sent to the update mutation. */
+export type ResolvedUpdateBehavior =
+  | PaidSubscriptionUpdateBehavior
+  | FreePlanUpdateBehavior;
+
+type BaseUpdateBehaviorIntent = {
   fromPlanId?: string | null;
   toPlanId?: string | null;
   fromPlan?: PlanCatalogEntry | null;
@@ -221,15 +264,48 @@ export type UpdateBehaviorIntent = {
   targetUnits?: number;
 };
 
+export type PaidPlanUpdateBehaviorIntent = BaseUpdateBehaviorIntent & {
+  /** Paid product switch. `updateBehavior` may return Creem proration values or `"period-end"`. */
+  kind: "plan-switch";
+  target: "paid-plan";
+};
+
+export type UnitUpdateBehaviorIntent = BaseUpdateBehaviorIntent & {
+  /** Unit/seat quantity update. `updateBehavior` may return Creem proration values or `"period-end"`. */
+  kind: "unit-update";
+  target: "units";
+};
+
+export type FreePlanUpdateBehaviorIntent = BaseUpdateBehaviorIntent & {
+  /** Paid subscription to app-owned target plan. `freePlanUpdateBehavior` may return only `"period-end"` or `"immediate"`. */
+  kind: "plan-switch";
+  target: "free-plan";
+  freePlanId: string;
+  appPlanId?: string;
+};
+
+/** Intent passed to `updateBehavior` for paid subscription updates. */
+export type UpdateBehaviorIntent =
+  | PaidPlanUpdateBehaviorIntent
+  | UnitUpdateBehaviorIntent;
+
 export type UpdateBehaviorResolver = (
   intent: UpdateBehaviorIntent,
 ) => UpdateBehavior;
 
 export type UpdateBehaviorSetting = UpdateBehavior | UpdateBehaviorResolver;
 
+export type FreePlanUpdateBehaviorResolver = (
+  intent: FreePlanUpdateBehaviorIntent,
+) => FreePlanUpdateBehavior;
+
+export type FreePlanUpdateBehaviorSetting =
+  | FreePlanUpdateBehavior
+  | FreePlanUpdateBehaviorResolver;
+
 /** Get a human-readable description for a plan switch based on the proration behavior. */
 export const getSwitchPlanDescription = (
-  updateBehavior: UpdateBehavior,
+  updateBehavior: ResolvedUpdateBehavior,
   planTitle?: string,
 ): string => {
   const prefix = planTitle
@@ -245,6 +321,8 @@ export const getSwitchPlanDescription = (
       return `${prefix} The new price will take effect at your next billing cycle.`;
     case "period-end":
       return `${prefix} The current plan stays active until the end of the current billing period.`;
+    case "immediate":
+      return `${prefix} The current paid subscription will be canceled immediately.`;
   }
 };
 
@@ -314,10 +392,58 @@ export type BillingSnapshotOrder = {
   status: string;
 };
 
+/** Current or scheduled assignment for an app-owned catalog plan. */
+export type AppPlanAssignment = {
+  entityId: string;
+  planId: string;
+  status: "active" | "scheduled" | "ended";
+  startsAt: string;
+  endsAt?: string | null;
+  source?: string;
+  subscriptionId?: string;
+  assignedByUserId?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Derived unified access row across Creem subscriptions, Creem orders, and app-owned plans. */
+export type BillingAccessItem =
+  | {
+      source: "creem_subscription";
+      kind: "subscription";
+      planId: string | null;
+      productId: string;
+      subscriptionId: string;
+      status: string;
+      recurringCycle: RecurringCycle | null;
+      units?: number | null;
+      currentPeriodEnd?: string | null;
+      trialEnd?: string | null;
+    }
+  | {
+      source: "creem_order";
+      kind: "one_time";
+      planId: string | null;
+      productId: string;
+      orderId: string;
+      status: string;
+    }
+  | {
+      source: "app_plan_assignment";
+      kind: "app_plan";
+      planId: string;
+      status: AppPlanAssignment["status"];
+      startsAt: string;
+      endsAt?: string | null;
+      assignmentSource?: string;
+      subscriptionId?: string;
+    };
+
 /**
  * Billing snapshot with explicit subscription and order arrays.
  * This supports multiple subscriptions (base + add-ons) and one-time orders as
- * first-class citizens.
+ * first-class citizens. `access` is a derived read model, not another source
+ * of truth.
  */
 export type BillingSnapshot = {
   /** Billing entity ID. */
@@ -328,12 +454,26 @@ export type BillingSnapshot = {
   subscriptions: BillingSnapshotSubscription[];
   /** All one-time orders. */
   orders: BillingSnapshotOrder[];
+  /** App-owned plan assignments such as no-card trials or free plans. */
+  appPlanAssignments: AppPlanAssignment[];
+  /** Unified current access projection across subscriptions, orders, and app-owned plans. */
+  access: BillingAccessItem[];
   /** Derived payment recovery state from subscription statuses. */
   paymentRecoveryState: PaymentRecoveryState;
   /** Actions the billing entity is allowed to perform. */
   availableBillingActions: AvailableAction[];
   /** ISO timestamp when this snapshot was resolved. */
   resolvedAt: string;
+};
+
+/** Activation history for an app-owned catalog plan. */
+export type AppPlanActivation = {
+  entityId: string;
+  planId: string;
+  firstActivatedAt: number;
+  lastActivatedAt: number;
+  activationCount: number;
+  activatedByUserId?: string;
 };
 
 /**
@@ -347,6 +487,8 @@ export type PlanChangeIntent = {
   toPlanId: string;
   /** Creem product ID of the target paid plan. Undefined for app-owned free plans. */
   productId?: string;
+  /** Stable app plan ID of the target app-owned plan. */
+  appPlanId?: string;
   /** Stable app plan ID of the target free plan. */
   freePlanId?: string;
   /** Number of units (for unit-based plans). */

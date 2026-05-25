@@ -23,6 +23,10 @@ import type {
   PlanCatalogEntry,
   UIPlanEntry,
   RecurringCycle,
+  FreePlanUpdateBehaviorIntent,
+  FreePlanUpdateBehaviorSetting,
+  ResolvedUpdateBehavior,
+  SupportedRecurringCycle,
   UpdateBehavior,
   UpdateBehaviorIntent,
   UpdateBehaviorSetting,
@@ -33,13 +37,21 @@ import {
   type BillingI18n,
   type BillingLabelOverrides,
 } from "../../core/i18n.js";
-import { findPlanById, normalizePlanCatalog } from "../../core/catalog.js";
-import { buildUpdateSummary } from "../../core/subscriptionUpdate.js";
+import {
+  findPlanById,
+  normalizePlanCatalog,
+  shouldShowPlan,
+} from "../../core/catalog.js";
+import {
+  buildUpdateSummary,
+  resolveFreePlanUpdateBehavior,
+  resolveTargetUpdateBehavior,
+} from "../../core/subscriptionUpdate.js";
 import {
   formatPriceWithInterval,
   formatUnitPrice,
   formatUnitPriceBreakdown,
-} from "../shared.js";
+} from "../../core/display.js";
 import {
   requireCreemConvexApi,
   useCreemConvex,
@@ -72,6 +84,9 @@ const formatGroupTitle = (value: string) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
+const getActionErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
 const planTypeToCategory = (
   type: SubscriptionPlanRegistration["type"],
   fallback?: PlanCatalogEntry,
@@ -101,17 +116,19 @@ export const SubscriptionRoot = ({
   cycle,
   onCycleChange,
   intervalSelector = "auto",
+  cycleBadges,
   permissions,
   className = "",
   successUrl,
   units,
   showUnitPicker = false,
-  twoColumnLayout = false,
-  updateBehavior = "proration-charge-immediately",
+  columns = "auto",
+  updateBehavior,
+  freePlanUpdateBehavior,
   unstyled = false,
   onBeforeCheckout,
   onBeforePlanChange,
-  onBeforeFreePlanActivation,
+  onBeforePlanActivation,
   labels: labelOverrides,
   i18n,
   children,
@@ -127,19 +144,23 @@ export const SubscriptionRoot = ({
   cycle?: RecurringCycle;
   onCycleChange?: (cycle: RecurringCycle) => void;
   intervalSelector?: "auto" | "hidden" | "external";
+  cycleBadges?: Partial<Record<SupportedRecurringCycle, string>>;
   permissions?: BillingPermissions;
   class?: string;
   className?: string;
   successUrl?: string;
   units?: number;
   showUnitPicker?: boolean;
-  twoColumnLayout?: boolean;
+  columns?: "auto" | 1 | 2 | 3 | 4;
+  /** Paid subscription update behavior for paid-to-paid plan switches and unit changes. */
   updateBehavior?: UpdateBehaviorSetting;
+  /** Cancellation behavior for paid-to-free or paid-to-app-owned plan switches. */
+  freePlanUpdateBehavior?: FreePlanUpdateBehaviorSetting;
   unstyled?: boolean;
   onBeforeCheckout?: (intent: CheckoutIntent) => Promise<boolean> | boolean;
   onBeforePlanChange?: (intent: PlanChangeIntent) => Promise<boolean> | boolean;
-  onBeforeFreePlanActivation?: (intent: {
-    freePlanId: string;
+  onBeforePlanActivation?: (intent: {
+    planId: string;
   }) => Promise<boolean> | boolean;
   labels?: BillingLabelOverrides;
   i18n?: BillingI18n;
@@ -154,8 +175,8 @@ export const SubscriptionRoot = ({
     onBeforeCheckout ?? provider?.onBeforeCheckout;
   const resolvedOnBeforePlanChange =
     onBeforePlanChange ?? provider?.onBeforePlanChange;
-  const resolvedOnBeforeFreePlanActivation =
-    onBeforeFreePlanActivation ?? provider?.onBeforeFreePlanActivation;
+  const resolvedOnBeforePlanActivation =
+    onBeforePlanActivation ?? provider?.onBeforePlanActivation;
   const resolvedI18n = useMemo(() => {
     const providerI18n = resolveBillingI18n(provider?.i18n);
     return {
@@ -182,6 +203,7 @@ export const SubscriptionRoot = ({
   const resumeRef = resolvedApi.subscriptions?.resume;
   const cancelScheduledUpdateRef =
     resolvedApi.subscriptions?.cancelScheduledUpdate;
+  const activateAppPlanRef = resolvedApi.plans?.activate;
 
   const modelRaw = useQuery(billingUiModelRef, {});
   const model = (modelRaw ?? null) as ConnectedBillingModel | null;
@@ -199,6 +221,7 @@ export const SubscriptionRoot = ({
         kind: "plan-switch";
         plan: UIPlanEntry;
         productId?: string;
+        appPlanId?: string;
         freePlanId?: string;
         units?: number;
       }
@@ -287,6 +310,10 @@ export const SubscriptionRoot = ({
           undefined,
         contactUrl: plan.contactUrl ?? catalogEntry?.contactUrl,
         recommended: plan.recommended ?? catalogEntry?.recommended,
+        limits: catalogEntry?.limits,
+        creditGrant: catalogEntry?.creditGrant,
+        eligibility: catalogEntry?.eligibility,
+        metadata: catalogEntry?.metadata,
         creemProductIds:
           Object.keys(productIds).length > 0
             ? (productIds as Record<string, string>)
@@ -327,20 +354,20 @@ export const SubscriptionRoot = ({
       ? requestedGroupId
       : (groupItems[0]?.value ?? null);
 
-  const visiblePlans = useMemo(() => {
+  const groupedPlans = useMemo(() => {
     if (groupItems.length <= 1 || !activeGroupId) return plans;
     return plans.filter((plan) => plan.groupId === activeGroupId);
   }, [activeGroupId, groupItems.length, plans]);
 
   const availableCycles = useMemo(() => {
     const cycles = new Set<RecurringCycle>();
-    for (const plan of visiblePlans) {
+    for (const plan of groupedPlans) {
       for (const planCycle of plan.billingCycles ?? []) {
         cycles.add(planCycle);
       }
     }
     return Array.from(cycles);
-  }, [visiblePlans]);
+  }, [groupedPlans]);
   const effectiveCycle = useMemo(() => {
     const requestedCycle = cycle ?? selectedCycle;
     if (
@@ -466,12 +493,35 @@ export const SubscriptionRoot = ({
       });
       return matchedPlan?.planId ?? null;
     }
+    if (model.activePlanId !== undefined) {
+      return model.activePlanId;
+    }
+    const assignedPlanId =
+      model.appPlanAssignments?.find(
+        (assignment) =>
+          assignment.status === "active" &&
+          plans.some((plan) => plan.planId === assignment.planId),
+      )?.planId ?? null;
+    if (assignedPlanId) {
+      return assignedPlanId;
+    }
+    if (model.activeFreePlanId !== undefined) {
+      return model.activeFreePlanId;
+    }
     if (model.user) {
       const freePlan = plans.find((p) => p.category === "free");
       if (freePlan) return freePlan.planId;
     }
     return null;
   }, [model, localSubscriptionProductId, plans]);
+
+  const visiblePlans = useMemo(
+    () =>
+      groupedPlans.filter((plan) =>
+        shouldShowPlan(plan, model?.appPlanActivations, activePlanId),
+      ),
+    [activePlanId, groupedPlans, model?.appPlanActivations],
+  );
 
   const getProductPrice = useCallback(
     (productId?: string | null) =>
@@ -499,18 +549,49 @@ export const SubscriptionRoot = ({
             kind: "plan-switch";
             plan: UIPlanEntry;
             productId?: string;
+            appPlanId?: string;
             freePlanId?: string;
             units?: number;
           }
         | { kind: "unit-update"; units: number },
-    ): UpdateBehavior => {
-      if (typeof updateBehavior !== "function") return updateBehavior;
-
+    ): ResolvedUpdateBehavior => {
       const currentPlan = getPlanForProduct(localSubscriptionProductId);
+
+      if (update.kind === "plan-switch" && update.freePlanId) {
+        if (typeof freePlanUpdateBehavior !== "function") {
+          return resolveFreePlanUpdateBehavior(freePlanUpdateBehavior);
+        }
+        const intent: FreePlanUpdateBehaviorIntent = {
+          kind: "plan-switch",
+          target: "free-plan",
+          fromPlanId: activePlanId,
+          toPlanId: update.plan.planId,
+          fromPlan: currentPlan,
+          toPlan: update.plan,
+          fromProductId: localSubscriptionProductId,
+          toProductId: update.productId ?? null,
+          fromPrice: getProductPrice(localSubscriptionProductId),
+          toPrice: getProductPrice(update.productId),
+          currentUnits: localSubscribedUnits,
+          targetUnits: update.units,
+          freePlanId: update.freePlanId,
+          appPlanId: update.appPlanId,
+        };
+        return resolveFreePlanUpdateBehavior(freePlanUpdateBehavior(intent));
+      }
+
+      const applyTargetRules = (behavior: UpdateBehavior | undefined) =>
+        resolveTargetUpdateBehavior(behavior, {});
+
+      if (typeof updateBehavior !== "function") {
+        return applyTargetRules(updateBehavior);
+      }
+
       const intent: UpdateBehaviorIntent =
         update.kind === "plan-switch"
           ? {
               kind: "plan-switch",
+              target: "paid-plan",
               fromPlanId: activePlanId,
               toPlanId: update.plan.planId,
               fromPlan: currentPlan,
@@ -524,6 +605,7 @@ export const SubscriptionRoot = ({
             }
           : {
               kind: "unit-update",
+              target: "units",
               fromPlanId: activePlanId,
               fromPlan: currentPlan,
               fromProductId: localSubscriptionProductId,
@@ -533,12 +615,13 @@ export const SubscriptionRoot = ({
               currentUnits: localSubscribedUnits,
               targetUnits: update.units,
             };
-      return updateBehavior(intent);
+      return applyTargetRules(updateBehavior(intent));
     },
     [
       activePlanId,
       getPlanForProduct,
       getProductPrice,
+      freePlanUpdateBehavior,
       localSubscribedUnits,
       localSubscriptionProductId,
       updateBehavior,
@@ -578,9 +661,10 @@ export const SubscriptionRoot = ({
         window.location.href = url;
       } catch (error) {
         setActionError(
-          error instanceof Error
-            ? error.message
-            : resolvedI18n.labels.subscription.checkoutFailed,
+          getActionErrorMessage(
+            error,
+            resolvedI18n.labels.subscription.checkoutFailed,
+          ),
         );
       } finally {
         setIsActionLoading(false);
@@ -624,10 +708,31 @@ export const SubscriptionRoot = ({
     [startCheckout],
   );
 
+  const activateAppPlan = useCallback(
+    async (appPlanId: string) => {
+      setActionError(null);
+      try {
+        if (!activateAppPlanRef) return;
+        await client.mutation(activateAppPlanRef, {
+          planId: appPlanId,
+        });
+      } catch (cause) {
+        setActionError(
+          getActionErrorMessage(
+            cause,
+            resolvedI18n.labels.subscription.switchFailed,
+          ),
+        );
+      }
+    },
+    [activateAppPlanRef, client, resolvedI18n.labels.subscription.switchFailed],
+  );
+
   const requestSwitchPlan = useCallback(
     async (payload: {
       plan: UIPlanEntry;
       productId?: string;
+      appPlanId?: string;
       freePlanId?: string;
       units?: number;
     }) => {
@@ -637,33 +742,39 @@ export const SubscriptionRoot = ({
           fromPlanId: activePlanId,
           toPlanId: payload.plan.planId,
           productId: payload.productId,
+          appPlanId: payload.appPlanId,
           freePlanId: payload.freePlanId,
           units: payload.units,
         });
         if (!proceed) return;
       }
-      // Consent gate: onBeforeFreePlanActivation
-      if (
-        resolvedOnBeforeFreePlanActivation &&
-        payload.plan.category === "free"
-      ) {
-        const proceed = await resolvedOnBeforeFreePlanActivation({
-          freePlanId: payload.plan.planId,
+      const appPlanId = payload.appPlanId ?? payload.freePlanId;
+      // Consent gate: onBeforePlanActivation
+      if (resolvedOnBeforePlanActivation && appPlanId) {
+        const proceed = await resolvedOnBeforePlanActivation({
+          planId: appPlanId,
         });
         if (!proceed) return;
+      }
+      if (appPlanId && !matchedSubscription?.id && activateAppPlanRef) {
+        await activateAppPlan(appPlanId);
+        return;
       }
       setPendingUpdate({ kind: "plan-switch", ...payload });
       setUpdateDialogOpen(true);
     },
     [
+      activateAppPlan,
+      activateAppPlanRef,
       activePlanId,
+      matchedSubscription?.id,
       resolvedOnBeforePlanChange,
-      resolvedOnBeforeFreePlanActivation,
+      resolvedOnBeforePlanActivation,
     ],
   );
 
   const confirmUpdate = useCallback(async () => {
-    if (!updateRef || !pendingUpdate) return;
+    if (!pendingUpdate) return;
     const update = pendingUpdate;
     const selectedUpdateBehavior = resolveUpdateBehavior(update);
     const subId = matchedSubscription?.id;
@@ -672,6 +783,12 @@ export const SubscriptionRoot = ({
     setActionError(null);
     try {
       if (update.kind === "plan-switch") {
+        const appPlanId = update.appPlanId ?? update.freePlanId;
+        if (appPlanId && !subId && activateAppPlanRef) {
+          await activateAppPlan(appPlanId);
+          return;
+        }
+        if (!updateRef) return;
         await client.mutation(
           updateRef,
           {
@@ -699,7 +816,7 @@ export const SubscriptionRoot = ({
                           entityId: "",
                           subscriptionId: subId ?? "",
                           targetProductId: update.productId,
-                          targetPlanId: update.freePlanId,
+                          targetPlanId: update.appPlanId ?? update.freePlanId,
                           effectiveAt:
                             matchedSubscription?.currentPeriodEnd ?? "",
                           status: "pending",
@@ -729,6 +846,7 @@ export const SubscriptionRoot = ({
           },
         );
       } else {
+        if (!updateRef) return;
         await client.mutation(
           updateRef,
           {
@@ -784,15 +902,18 @@ export const SubscriptionRoot = ({
       }
     } catch (error) {
       setActionError(
-        error instanceof Error
-          ? error.message
-          : update.kind === "plan-switch"
+        getActionErrorMessage(
+          error,
+          update.kind === "plan-switch"
             ? resolvedI18n.labels.subscription.switchFailed
             : resolvedI18n.labels.subscription.unitUpdateFailed,
+        ),
       );
     }
   }, [
     updateRef,
+    activateAppPlanRef,
+    activateAppPlan,
     pendingUpdate,
     matchedSubscription,
     client,
@@ -852,6 +973,7 @@ export const SubscriptionRoot = ({
         formatPriceWithInterval(
           localSubscriptionProductId ?? undefined,
           allProducts,
+          resolvedI18n.labels,
           resolvedI18n.formatCurrency,
         );
       const newPrice =
@@ -860,6 +982,7 @@ export const SubscriptionRoot = ({
           ? formatPriceWithInterval(
               pendingUpdate.productId,
               allProducts,
+              resolvedI18n.labels,
               resolvedI18n.formatCurrency,
             )
           : null);
@@ -936,6 +1059,7 @@ export const SubscriptionRoot = ({
       const price = formatPriceWithInterval(
         localScheduledUpdate.targetProductId,
         allProducts,
+        resolvedI18n.labels,
         resolvedI18n.formatCurrency,
       );
       const title =
@@ -996,9 +1120,10 @@ export const SubscriptionRoot = ({
       );
     } catch (error) {
       setActionError(
-        error instanceof Error
-          ? error.message
-          : resolvedI18n.labels.subscription.cancelFailed,
+        getActionErrorMessage(
+          error,
+          resolvedI18n.labels.subscription.cancelFailed,
+        ),
       );
     }
   }, [
@@ -1043,9 +1168,10 @@ export const SubscriptionRoot = ({
       );
     } catch (error) {
       setActionError(
-        error instanceof Error
-          ? error.message
-          : resolvedI18n.labels.subscription.resumeFailed,
+        getActionErrorMessage(
+          error,
+          resolvedI18n.labels.subscription.resumeFailed,
+        ),
       );
     }
   }, [
@@ -1091,9 +1217,10 @@ export const SubscriptionRoot = ({
       );
     } catch (error) {
       setActionError(
-        error instanceof Error
-          ? error.message
-          : resolvedI18n.labels.subscription.resumeFailed,
+        getActionErrorMessage(
+          error,
+          resolvedI18n.labels.subscription.resumeFailed,
+        ),
       );
     }
   }, [
@@ -1130,10 +1257,14 @@ export const SubscriptionRoot = ({
       disableUnits: !canUpdateUnits,
       unstyled,
       labels: resolvedI18n.labels,
+      cycleBadges,
       formatCurrency: resolvedI18n.formatCurrency,
       formatDate: resolvedI18n.formatDate,
       checkout: handlePricingCheckout,
-      switchPlan: updateRef && canChange ? requestSwitchPlan : undefined,
+      switchPlan:
+        (updateRef || activateAppPlanRef) && canChange
+          ? requestSwitchPlan
+          : undefined,
       updateUnits: updateRef && canUpdateUnits ? handleUpdateUnits : undefined,
       cancelSubscription:
         cancelRef &&
@@ -1167,8 +1298,10 @@ export const SubscriptionRoot = ({
       canUpdateUnits,
       unstyled,
       resolvedI18n,
+      cycleBadges,
       handlePricingCheckout,
       updateRef,
+      activateAppPlanRef,
       requestSwitchPlan,
       handleUpdateUnits,
       cancelRef,
@@ -1260,7 +1393,8 @@ export const SubscriptionRoot = ({
                 units={units}
                 showUnitPicker={showUnitPicker}
                 showCycleToggle={intervalSelector === "auto"}
-                twoColumnLayout={twoColumnLayout}
+                cycleBadges={cycleBadges}
+                columns={columns}
                 subscribedUnits={localSubscribedUnits}
                 isGroupSubscribed={ownsActiveSubscription}
                 onCycleChange={
@@ -1273,7 +1407,9 @@ export const SubscriptionRoot = ({
                 disableUnits={!canUpdateUnits}
                 onCheckout={canCheckout ? handlePricingCheckout : undefined}
                 onSwitchPlan={
-                  updateRef && canChange ? requestSwitchPlan : undefined
+                  (updateRef || activateAppPlanRef) && canChange
+                    ? requestSwitchPlan
+                    : undefined
                 }
                 onUpdateUnits={
                   updateRef && canUpdateUnits ? handleUpdateUnits : undefined

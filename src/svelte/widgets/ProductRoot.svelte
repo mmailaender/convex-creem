@@ -1,7 +1,10 @@
 <script lang="ts">
   import { getContext, setContext, untrack } from "svelte";
   import { useConvexClient, useQuery } from "@mmailaender/convex-svelte";
-  import { formatPriceWithInterval } from "../primitives/shared.js";
+  import {
+    formatPriceWithInterval,
+    splitPriceLabel,
+  } from "../../core/display.js";
   import { resolveBillingI18n } from "../../core/i18n.js";
   import {
     PRODUCT_GROUP_CONTEXT_KEY,
@@ -224,18 +227,6 @@
     void startCheckout(productId);
   };
 
-  const splitPriceLabel = (
-    value: string | null,
-  ): { main: string; suffix: string | null; tail: string } | null => {
-    if (!value) return null;
-    const match = value.match(/^(.*?)(\/[a-z0-9]+)(.*)$/i);
-    if (!match) return { main: value, suffix: null, tail: "" };
-    return {
-      main: match[1]?.trim() ?? value,
-      suffix: match[2] ?? null,
-      tail: match[3]?.trim() ?? "",
-    };
-  };
 </script>
 
 <div class="hidden" aria-hidden="true">
@@ -276,6 +267,7 @@
       {@const resolvedPrice = formatPriceWithInterval(
         item.productId,
         allProducts,
+        i18n.labels,
         i18n.formatCurrency,
       )}
       {@const splitPrice = splitPriceLabel(resolvedPrice)}

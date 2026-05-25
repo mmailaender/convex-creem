@@ -19,6 +19,8 @@ const makeSnapshot = (
   resolvedAt: new Date().toISOString(),
   subscriptions: [],
   orders: [],
+  appPlanAssignments: [],
+  access: [],
   paymentRecoveryState: "none",
   availableBillingActions: [],
   ...overrides,

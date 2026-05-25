@@ -1,6 +1,9 @@
 import type { FunctionReference } from "convex/server";
 import type {
+  AppPlanActivation,
+  AppPlanAssignment,
   BillingSnapshot,
+  PlanCatalog,
   RecurringCycle,
   ScheduledSubscriptionUpdate,
 } from "../../core/types.js";
@@ -94,6 +97,11 @@ export type ConnectedBillingApi = {
     /** List credit/debit history entries. */
     listEntries?: FunctionReference<"action">;
   };
+  /** Optional app-owned plan activation mutation. */
+  plans?: {
+    /** Activate an app-owned catalog plan for the current billing entity. */
+    activate?: FunctionReference<"mutation">;
+  };
 };
 
 /** Product data as returned by the billing model query. Mirrors the Convex DB product schema. */
@@ -125,6 +133,8 @@ export type ConnectedBillingModel = {
     isTrialing?: boolean;
     trialEnd?: string | null;
   } | null;
+  /** Optional server-resolved billing catalog. Used by connected widgets when the provider has no catalog. */
+  catalog?: PlanCatalog | null;
   /** Billing state. `null` when unauthenticated. */
   snapshot: BillingSnapshot | null;
   /** All synced products from the Creem dashboard. */
@@ -133,6 +143,14 @@ export type ConnectedBillingModel = {
   ownedProductIds: string[];
   /** Product ID of the current subscription, or `null`. */
   subscriptionProductId: string | null;
+  /** Explicit app-owned active free plan ID. `undefined` preserves the default widget fallback. */
+  activeFreePlanId?: string | null;
+  /** App-owned active plan ID. Prefer this over `activeFreePlanId` for trial/free/custom plans. */
+  activePlanId?: string | null;
+  /** Activation history for app-owned plans, used for once-per-entity eligibility. */
+  appPlanActivations?: AppPlanActivation[];
+  /** Current and scheduled assignments for app-owned plans. */
+  appPlanAssignments?: AppPlanAssignment[];
   /** All active subscriptions with full details. */
   activeSubscriptions?: Array<{
     id: string;

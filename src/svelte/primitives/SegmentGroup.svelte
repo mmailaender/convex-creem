@@ -1,9 +1,13 @@
 <script lang="ts">
-  import { SegmentGroup as ArkSegmentGroup } from "@ark-ui/svelte/segment-group";
+  import {
+    SegmentGroup as ArkSegmentGroup,
+    type SegmentGroupValueChangeDetails,
+  } from "@ark-ui/svelte/segment-group";
 
   export type SegmentGroupItem = {
     label: string;
     value: string;
+    badge?: string;
     disabled?: boolean;
   };
 
@@ -40,7 +44,7 @@
       {defaultValue}
       {disabled}
       class={unstyled ? className : `creem-base:segment-group ${className}`}
-      onValueChange={(details) => {
+      onValueChange={(details: SegmentGroupValueChangeDetails) => {
         if (details.value != null) onValueChange?.(details.value);
       }}
     >
@@ -57,6 +61,15 @@
             class={unstyled ? "" : "creem-base:segment-group-item-text creem-base:label-m"}
           >
             {item.label}
+            {#if item.badge}
+              <span
+                class={unstyled
+                  ? ""
+                  : "creem-base:ml-2 creem-base:rounded-full creem-base:bg-blue-950 creem-base:px-2 creem-base:py-0.5 creem-base:text-xs creem-base:font-medium creem-base:text-blue-100 dark:creem-base:bg-blue-900/70 dark:creem-base:text-blue-100"}
+              >
+                {item.badge}
+              </span>
+            {/if}
           </ArkSegmentGroup.ItemText>
           <ArkSegmentGroup.ItemControl
             class={unstyled ? "" : "creem-base:segment-group-item-control"}

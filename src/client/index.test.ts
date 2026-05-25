@@ -39,6 +39,12 @@ const REFS = {
   listPendingScheduledSubscriptionUpdates: Symbol(
     "listPendingScheduledSubscriptionUpdates",
   ),
+  listAppPlanActivations: Symbol("listAppPlanActivations"),
+  listAppPlanAssignments: Symbol("listAppPlanAssignments"),
+  recordAppPlanActivation: Symbol("recordAppPlanActivation"),
+  assignAppPlan: Symbol("assignAppPlan"),
+  cancelScheduledAppPlanAssignment: Symbol("cancelScheduledAppPlanAssignment"),
+  endActiveAppPlanAssignments: Symbol("endActiveAppPlanAssignments"),
 } as const;
 
 const mockComponent = {
@@ -80,7 +86,7 @@ const ACTIVE_SUB = {
   cancelAtPeriodEnd: false,
   currentPeriodEnd: "2026-03-01T00:00:00Z",
   currentPeriodStart: "2026-02-01T00:00:00Z",
-  recurringInterval: "monthly",
+  recurringInterval: "every-month",
   seats: 1,
   trialEnd: null,
   entityId: "user_1",
@@ -303,7 +309,7 @@ describe("subscriptions namespace", () => {
       );
     });
 
-    it("requires period-end behavior for free plan updates", async () => {
+    it("rejects proration behavior for free plan updates", async () => {
       const ctx = createMockCtx({
         [REFS.getCurrentSubscription]: ACTIVE_SUB,
       });
@@ -314,7 +320,22 @@ describe("subscriptions namespace", () => {
           updateBehavior: "proration-charge",
         }),
       ).rejects.toThrow(
-        'freePlanId updates currently require updateBehavior: "period-end"',
+        'freePlanId updates support updateBehavior: "period-end" or "immediate"',
+      );
+    });
+
+    it("rejects immediate behavior for paid plan and unit updates", async () => {
+      const ctx = createMockCtx({
+        [REFS.getCurrentSubscription]: ACTIVE_SUB,
+      });
+      await expect(
+        creem.subscriptions.update(ctx as never, {
+          entityId: "user_1",
+          productId: "prod_2",
+          updateBehavior: "immediate",
+        }),
+      ).rejects.toThrow(
+        'updateBehavior: "immediate" is only supported for freePlanId updates',
       );
     });
 
@@ -439,6 +460,14 @@ describe("subscriptions namespace", () => {
           effectiveAt: "2026-03-01T00:00:00Z",
         },
       );
+      expect(ctx.runMutation).toHaveBeenCalledWith(REFS.assignAppPlan, {
+        entityId: "user_1",
+        planId: "free",
+        status: "scheduled",
+        startsAt: "2026-03-01T00:00:00Z",
+        source: "paid_to_free",
+        subscriptionId: "sub_1",
+      });
       expect(ctx.runMutation).toHaveBeenCalledWith(REFS.patchSubscription, {
         subscriptionId: "sub_1",
         cancelAtPeriodEnd: true,
@@ -449,6 +478,39 @@ describe("subscriptions namespace", () => {
         expect.objectContaining({
           subscriptionId: "sub_1",
           cancelMode: "scheduled",
+          previousStatus: "active",
+        }),
+      );
+    });
+
+    it("cancels paid subscription immediately when paid-to-free uses immediate", async () => {
+      const ctx = createMockCtx({
+        [REFS.getCurrentSubscription]: ACTIVE_SUB,
+      });
+      await creem.subscriptions.update(ctx as never, {
+        entityId: "user_1",
+        freePlanId: "free",
+        updateBehavior: "immediate",
+      });
+
+      expect(ctx.runMutation).toHaveBeenCalledWith(REFS.patchSubscription, {
+        subscriptionId: "sub_1",
+        status: "canceled",
+        cancelAtPeriodEnd: false,
+      });
+      expect(ctx.runMutation).toHaveBeenCalledWith(REFS.assignAppPlan, {
+        entityId: "user_1",
+        planId: "free",
+        status: "active",
+        source: "paid_to_free",
+        subscriptionId: "sub_1",
+      });
+      expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+        0,
+        REFS.executeSubscriptionLifecycle,
+        expect.objectContaining({
+          subscriptionId: "sub_1",
+          cancelMode: "immediate",
           previousStatus: "active",
         }),
       );
@@ -482,6 +544,13 @@ describe("subscriptions namespace", () => {
         {
           entityId: "user_1",
           subscriptionId: "sub_1",
+        },
+      );
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        REFS.cancelScheduledAppPlanAssignment,
+        {
+          subscriptionId: "sub_1",
+          planId: "free",
         },
       );
       expect(ctx.runMutation).toHaveBeenCalledWith(REFS.patchSubscription, {
@@ -1823,10 +1892,51 @@ describe("api() convenience exports", () => {
           targetPlanId: "free",
         }),
       );
+      expect(ctx.runMutation).toHaveBeenCalledWith(REFS.assignAppPlan, {
+        entityId: "user_1",
+        planId: "free",
+        status: "scheduled",
+        startsAt: "2026-03-01T00:00:00Z",
+        source: "paid_to_free",
+        subscriptionId: "sub_1",
+      });
       expect(ctx.runMutation).toHaveBeenCalledWith(REFS.patchSubscription, {
         subscriptionId: "sub_1",
         cancelAtPeriodEnd: true,
       });
+    });
+
+    it("supports paid-to-free immediate updates through generated API", async () => {
+      resolve.mockResolvedValue({ entityId: "user_1" });
+      const ctx = createMockCtx({
+        [REFS.getCurrentSubscription]: ACTIVE_SUB,
+      });
+      const handler = extractHandler(apiExports.subscriptions.update as never);
+      await handler(ctx, {
+        freePlanId: "free",
+        updateBehavior: "immediate",
+      });
+
+      expect(ctx.runMutation).toHaveBeenCalledWith(REFS.patchSubscription, {
+        subscriptionId: "sub_1",
+        status: "canceled",
+        cancelAtPeriodEnd: false,
+      });
+      expect(ctx.runMutation).toHaveBeenCalledWith(REFS.assignAppPlan, {
+        entityId: "user_1",
+        planId: "free",
+        status: "active",
+        source: "paid_to_free",
+        subscriptionId: "sub_1",
+      });
+      expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+        0,
+        REFS.executeSubscriptionLifecycle,
+        expect.objectContaining({
+          subscriptionId: "sub_1",
+          cancelMode: "immediate",
+        }),
+      );
     });
 
     it("throws when both productId and units provided", async () => {

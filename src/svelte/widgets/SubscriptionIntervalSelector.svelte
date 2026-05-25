@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getContext } from "svelte";
   import SegmentGroup from "../primitives/SegmentGroup.svelte";
-  import type { RecurringCycle } from "../../core/types.js";
+  import type { RecurringCycle, SupportedRecurringCycle } from "../../core/types.js";
   import {
     SUBSCRIPTION_CONTEXT_KEY,
     type SubscriptionContextValue,
@@ -14,6 +14,8 @@
     value?: RecurringCycle;
     /** Called when the user selects a cycle. Defaults to updating the root context. */
     onValueChange?: (cycle: RecurringCycle) => void;
+    /** Optional badges shown next to billing interval labels. Defaults to root badges. */
+    cycleBadges?: Partial<Record<SupportedRecurringCycle, string>>;
     /** Wrapper CSS class. */
     class?: string;
   }
@@ -22,6 +24,7 @@
     cycles,
     value,
     onValueChange,
+    cycleBadges,
     class: className = "",
   }: Props = $props();
   const rootContext = getContext<SubscriptionContextValue | undefined>(
@@ -45,6 +48,9 @@
     resolvedCycles.map((cycle) => ({
       value: cycle,
       label: rootContext?.getLabels().billingCycle[cycle] ?? cycle,
+      badge:
+        (cycle === "custom" ? undefined : cycleBadges?.[cycle]) ??
+        (cycle === "custom" ? undefined : rootContext?.getCycleBadge(cycle)),
     })),
   );
   const handleValueChange = (next: string) => {

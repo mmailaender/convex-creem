@@ -597,6 +597,329 @@ export const listPendingScheduledSubscriptionUpdates = query({
   },
 });
 
+/**
+ * Return the activation-history row for one app-owned plan.
+ *
+ * Activation history is an eligibility ledger, not current access state. For
+ * example, a no-card trial can use this row to enforce "once per entity" even
+ * after the trial assignment has ended.
+ */
+export const getAppPlanActivation = query({
+  args: {
+    entityId: v.string(),
+    planId: v.string(),
+  },
+  returns: v.union(schema.tables.appPlanActivations.validator, v.null()),
+  handler: async (ctx, args) => {
+    const activation = await ctx.db
+      .query("appPlanActivations")
+      .withIndex("entityId_planId", (q) =>
+        q.eq("entityId", args.entityId).eq("planId", args.planId),
+      )
+      .unique();
+    return omitSystemFields(activation);
+  },
+});
+
+/**
+ * List all app-owned plan activation-history rows for an entity.
+ *
+ * Widgets use this to hide or disable catalog entries that are no longer
+ * eligible, such as once-per-entity trials.
+ */
+export const listAppPlanActivations = query({
+  args: {
+    entityId: v.string(),
+  },
+  returns: v.array(schema.tables.appPlanActivations.validator),
+  handler: async (ctx, args) => {
+    const activations = await ctx.db
+      .query("appPlanActivations")
+      .withIndex("entityId", (q) => q.eq("entityId", args.entityId))
+      .collect();
+    return activations.map(omitSystemFields);
+  },
+});
+
+/**
+ * List current, scheduled, and ended app-owned plan assignments for an entity.
+ *
+ * Assignments are the component-owned current-state projection for plans that
+ * are not native Creem subscriptions, such as free plans, no-card trials, and
+ * custom internal plans.
+ */
+export const listAppPlanAssignments = query({
+  args: {
+    entityId: v.string(),
+  },
+  returns: v.array(schema.tables.appPlanAssignments.validator),
+  handler: async (ctx, args) => {
+    const assignments = await ctx.db
+      .query("appPlanAssignments")
+      .withIndex("entityId", (q) => q.eq("entityId", args.entityId))
+      .collect();
+    return assignments.map(omitSystemFields);
+  },
+});
+
+/**
+ * Create an app-owned plan assignment.
+ *
+ * Active assignments replace any existing active or scheduled app-plan
+ * assignment for the entity. Scheduled assignments are used by paid-to-free
+ * period-end changes and replace older scheduled assignments for the same
+ * subscription.
+ */
+export const assignAppPlan = mutation({
+  args: {
+    entityId: v.string(),
+    planId: v.string(),
+    status: v.optional(v.union(v.literal("active"), v.literal("scheduled"))),
+    startsAt: v.optional(v.string()),
+    endsAt: v.optional(v.union(v.string(), v.null())),
+    source: v.optional(v.string()),
+    subscriptionId: v.optional(v.string()),
+    assignedByUserId: v.optional(v.string()),
+  },
+  returns: schema.tables.appPlanAssignments.validator,
+  handler: async (ctx, args) => {
+    const now = new Date().toISOString();
+    const status = args.status ?? "active";
+    const startsAt = args.startsAt ?? now;
+
+    if (status === "active") {
+      const existing = await ctx.db
+        .query("appPlanAssignments")
+        .withIndex("entityId", (q) => q.eq("entityId", args.entityId))
+        .collect();
+      await asyncMap(
+        existing.filter(
+          (assignment) =>
+            assignment.status === "active" || assignment.status === "scheduled",
+        ),
+        async (assignment) => {
+          await ctx.db.patch(assignment._id, {
+            status: "ended",
+            endsAt: startsAt,
+            updatedAt: now,
+          });
+        },
+      );
+    } else {
+      const scheduled = await ctx.db
+        .query("appPlanAssignments")
+        .withIndex("entityId_status", (q) =>
+          q.eq("entityId", args.entityId).eq("status", "scheduled"),
+        )
+        .collect();
+      await asyncMap(
+        scheduled.filter(
+          (assignment) =>
+            !args.subscriptionId ||
+            assignment.subscriptionId === args.subscriptionId,
+        ),
+        async (assignment) => {
+          await ctx.db.patch(assignment._id, {
+            status: "ended",
+            endsAt: now,
+            updatedAt: now,
+          });
+        },
+      );
+    }
+
+    const assignment = {
+      entityId: args.entityId,
+      planId: args.planId,
+      status,
+      startsAt,
+      ...(args.endsAt !== undefined ? { endsAt: args.endsAt } : {}),
+      ...(args.source ? { source: args.source } : {}),
+      ...(args.subscriptionId ? { subscriptionId: args.subscriptionId } : {}),
+      ...(args.assignedByUserId
+        ? { assignedByUserId: args.assignedByUserId }
+        : {}),
+      createdAt: now,
+      updatedAt: now,
+    };
+    await ctx.db.insert("appPlanAssignments", assignment);
+    return assignment;
+  },
+});
+
+/**
+ * Promote a scheduled app-plan assignment to active.
+ *
+ * This is called when a paid subscription reaches the period boundary for a
+ * paid-to-free change. Any existing active app-plan assignment for the entity
+ * is ended before the scheduled target becomes active.
+ */
+export const activateScheduledAppPlanAssignment = mutation({
+  args: {
+    subscriptionId: v.string(),
+    planId: v.optional(v.string()),
+  },
+  returns: v.union(schema.tables.appPlanAssignments.validator, v.null()),
+  handler: async (ctx, args) => {
+    const scheduled = await ctx.db
+      .query("appPlanAssignments")
+      .withIndex("subscriptionId_status", (q) =>
+        q.eq("subscriptionId", args.subscriptionId).eq("status", "scheduled"),
+      )
+      .collect();
+    const assignment = scheduled.find(
+      (item) => !args.planId || item.planId === args.planId,
+    );
+    if (!assignment) return null;
+
+    const now = new Date().toISOString();
+    const active = await ctx.db
+      .query("appPlanAssignments")
+      .withIndex("entityId_status", (q) =>
+        q.eq("entityId", assignment.entityId).eq("status", "active"),
+      )
+      .collect();
+    await asyncMap(active, async (item) => {
+      await ctx.db.patch(item._id, {
+        status: "ended",
+        endsAt: now,
+        updatedAt: now,
+      });
+    });
+    const patch = {
+      status: "active" as const,
+      startsAt: now,
+      updatedAt: now,
+    };
+    await ctx.db.patch(assignment._id, patch);
+    return omitSystemFields({ ...assignment, ...patch });
+  },
+});
+
+/**
+ * End a scheduled app-plan assignment without activating it.
+ *
+ * This is used when the user undoes a pending paid-to-free period-end change;
+ * the Creem scheduled cancellation is resumed separately by the caller.
+ */
+export const cancelScheduledAppPlanAssignment = mutation({
+  args: {
+    subscriptionId: v.string(),
+    planId: v.optional(v.string()),
+  },
+  returns: v.union(schema.tables.appPlanAssignments.validator, v.null()),
+  handler: async (ctx, args) => {
+    const scheduled = await ctx.db
+      .query("appPlanAssignments")
+      .withIndex("subscriptionId_status", (q) =>
+        q.eq("subscriptionId", args.subscriptionId).eq("status", "scheduled"),
+      )
+      .collect();
+    const assignment = scheduled.find(
+      (item) => !args.planId || item.planId === args.planId,
+    );
+    if (!assignment) return null;
+
+    const now = new Date().toISOString();
+    const patch = {
+      status: "ended" as const,
+      endsAt: now,
+      updatedAt: now,
+    };
+    await ctx.db.patch(assignment._id, patch);
+    return omitSystemFields({ ...assignment, ...patch });
+  },
+});
+
+/**
+ * End all active app-owned plan assignments for an entity.
+ *
+ * Webhook handling calls this when a native Creem subscription becomes active,
+ * so app-owned free/trial access does not overlap with paid subscription
+ * access in the component snapshot.
+ */
+export const endActiveAppPlanAssignments = mutation({
+  args: {
+    entityId: v.string(),
+    endedAt: v.optional(v.string()),
+  },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const endedAt = args.endedAt ?? new Date().toISOString();
+    const active = await ctx.db
+      .query("appPlanAssignments")
+      .withIndex("entityId_status", (q) =>
+        q.eq("entityId", args.entityId).eq("status", "active"),
+      )
+      .collect();
+    await asyncMap(active, async (assignment) => {
+      await ctx.db.patch(assignment._id, {
+        status: "ended",
+        endsAt: endedAt,
+        updatedAt: endedAt,
+      });
+    });
+    return active.length;
+  },
+});
+
+/**
+ * Record activation history for an app-owned catalog plan.
+ *
+ * When `oncePerEntity` is true, a repeated activation throws a `ConvexError`.
+ * This function intentionally does not grant current access; use
+ * `assignAppPlan` for the current/scheduled assignment state.
+ */
+export const recordAppPlanActivation = mutation({
+  args: {
+    entityId: v.string(),
+    planId: v.string(),
+    activatedByUserId: v.optional(v.string()),
+    oncePerEntity: v.optional(v.boolean()),
+  },
+  returns: schema.tables.appPlanActivations.validator,
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const existing = await ctx.db
+      .query("appPlanActivations")
+      .withIndex("entityId_planId", (q) =>
+        q.eq("entityId", args.entityId).eq("planId", args.planId),
+      )
+      .unique();
+
+    if (existing) {
+      if (args.oncePerEntity) {
+        throw new ConvexError(`Plan "${args.planId}" was already activated`);
+      }
+      const patch = {
+        lastActivatedAt: now,
+        activationCount: existing.activationCount + 1,
+        ...(args.activatedByUserId
+          ? { activatedByUserId: args.activatedByUserId }
+          : {}),
+      };
+      await ctx.db.patch(existing._id, patch);
+      return {
+        ...omitSystemFields(existing),
+        ...patch,
+      };
+    }
+
+    const activation = {
+      entityId: args.entityId,
+      planId: args.planId,
+      firstActivatedAt: now,
+      lastActivatedAt: now,
+      activationCount: 1,
+      ...(args.activatedByUserId
+        ? { activatedByUserId: args.activatedByUserId }
+        : {}),
+    };
+    await ctx.db.insert("appPlanActivations", activation);
+    return activation;
+  },
+});
+
 export const getScheduledSubscriptionUpdate = query({
   args: {
     scheduledUpdateId: v.id("scheduledSubscriptionUpdates"),
@@ -899,9 +1222,10 @@ export const applyScheduledSubscriptionUpdate = action({
           seats: scheduledUpdate.targetUnits,
         });
       } else if (scheduledUpdate.targetPlanId) {
-        // App-owned/free-plan transitions are represented by app state. When the
-        // target is a free plan, Creem cancellation is scheduled when the intent
-        // is created so renewal is prevented before this marker runs.
+        await ctx.runMutation(api.lib.activateScheduledAppPlanAssignment, {
+          subscriptionId: scheduledUpdate.subscriptionId,
+          planId: scheduledUpdate.targetPlanId,
+        });
       }
 
       await ctx.runMutation(api.lib.markScheduledSubscriptionUpdateApplied, {

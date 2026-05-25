@@ -20,8 +20,8 @@ export interface CreemConvexContextValue {
   readonly onBeforePlanChange?: (
     intent: PlanChangeIntent,
   ) => Promise<boolean> | boolean;
-  readonly onBeforeFreePlanActivation?: (intent: {
-    freePlanId: string;
+  readonly onBeforePlanActivation?: (intent: {
+    planId: string;
   }) => Promise<boolean> | boolean;
   readonly i18n?: BillingI18n;
 }

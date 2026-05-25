@@ -1,14 +1,14 @@
 <script lang="ts">
   import BillingToggle from "./BillingToggle.svelte";
   import PricingCard from "./PricingCard.svelte";
-  import type { UIPlanEntry, RecurringCycle } from "../../core/types.js";
+  import type { UIPlanEntry, RecurringCycle, SupportedRecurringCycle } from "../../core/types.js";
   import {
     defaultBillingLabels,
     type BillingCurrencyFormatInput,
     type BillingLabels,
   } from "../../core/i18n.js";
   import type { ConnectedProduct } from "../widgets/types.js";
-    import { SvelteSet } from "svelte/reactivity";
+  import { SvelteSet } from "svelte/reactivity";
 
   interface Props {
     plans?: UIPlanEntry[];
@@ -21,7 +21,8 @@
     units?: number;
     showUnitPicker?: boolean;
     showCycleToggle?: boolean;
-    twoColumnLayout?: boolean;
+    cycleBadges?: Partial<Record<SupportedRecurringCycle, string>>;
+    columns?: "auto" | 1 | 2 | 3 | 4;
     subscribedUnits?: number | null;
     isGroupSubscribed?: boolean;
     disableCheckout?: boolean;
@@ -37,6 +38,7 @@
     onSwitchPlan?: (payload: {
       plan: UIPlanEntry;
       productId?: string;
+      appPlanId?: string;
       freePlanId?: string;
       units?: number;
     }) => Promise<void> | void;
@@ -58,7 +60,8 @@
     units = undefined,
     showUnitPicker = false,
     showCycleToggle = true,
-    twoColumnLayout = false,
+    cycleBadges = undefined,
+    columns = "auto",
     subscribedUnits = null,
     isGroupSubscribed = false,
     disableCheckout = false,
@@ -85,26 +88,48 @@
     return Array.from(set);
   };
 
-  const availableCycles = $derived(toUniqueCycles(plans));
-  const hasEnterprisePlan = $derived(plans.some((plan) => plan.category === "enterprise"));
+  const primaryPlans = $derived(plans.filter((plan) => plan.category !== "trial"));
+  const trialPlans = $derived(plans.filter((plan) => plan.category === "trial"));
+  const availableCycles = $derived(toUniqueCycles(primaryPlans));
+  const hasEnterprisePlan = $derived(primaryPlans.some((plan) => plan.category === "enterprise"));
   const effectiveCycle = $derived(selectedCycle ?? availableCycles[0]);
   const showToggle = $derived(showCycleToggle && availableCycles.length > 1);
+  const gridColumnsClass = $derived.by(() => {
+    switch (columns) {
+      case 1:
+        return "grid-cols-1";
+      case 2:
+        return "grid-cols-1 sm:grid-cols-2";
+      case 3:
+        return "grid-cols-1 sm:grid-cols-2 md:grid-cols-3";
+      case 4:
+        return "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4";
+      case "auto":
+        if (showUnitPicker || primaryPlans.length <= 2) {
+          return "grid-cols-1 sm:grid-cols-2";
+        }
+        return hasEnterprisePlan
+          ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4"
+          : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3";
+    }
+  });
 </script>
 
 <section class={className}>
   {#if showToggle}
-    <div class="mb-[6.5rem] flex justify-center">
+    <div class="mb-6 flex justify-center">
       <BillingToggle
         cycles={availableCycles}
         value={effectiveCycle}
+        {cycleBadges}
         onValueChange={onCycleChange}
         {labels}
       />
     </div>
   {/if}
 
-  <div class={`grid grid-cols-1 gap-1 ${showUnitPicker || twoColumnLayout ? "md:grid-cols-2" : hasEnterprisePlan ? "sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4" : "sm:grid-cols-2 md:grid-cols-3"}`}>
-    {#each plans as plan (plan.planId)}
+  <div class={`grid gap-1 ${gridColumnsClass}`}>
+    {#each primaryPlans as plan (plan.planId)}
       <PricingCard
         {plan}
         selectedCycle={effectiveCycle}
@@ -131,4 +156,35 @@
       />
     {/each}
   </div>
+
+  {#if trialPlans.length > 0}
+    <div class="mt-8 grid gap-1">
+      {#each trialPlans as plan (plan.planId)}
+        <PricingCard
+          {plan}
+          selectedCycle={effectiveCycle}
+          {activePlanId}
+          {subscriptionProductId}
+          {subscriptionStatus}
+          {subscriptionTrialEnd}
+          {products}
+          {units}
+          {showUnitPicker}
+          {subscribedUnits}
+          {isGroupSubscribed}
+          {disableCheckout}
+          {disableSwitch}
+          {disableUnits}
+          {onCheckout}
+          {onSwitchPlan}
+          {onUpdateUnits}
+          {onContactSales}
+          {onCancelSubscription}
+          {labels}
+          {formatCurrency}
+          className=""
+        />
+      {/each}
+    </div>
+  {/if}
 </section>

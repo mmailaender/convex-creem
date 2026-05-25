@@ -21,8 +21,8 @@ export interface CreemConvexContextValue {
   permissions?: BillingPermissions;
   onBeforeCheckout?: (intent: CheckoutIntent) => Promise<boolean> | boolean;
   onBeforePlanChange?: (intent: PlanChangeIntent) => Promise<boolean> | boolean;
-  onBeforeFreePlanActivation?: (intent: {
-    freePlanId: string;
+  onBeforePlanActivation?: (intent: {
+    planId: string;
   }) => Promise<boolean> | boolean;
   i18n?: BillingI18n;
 }
@@ -51,7 +51,7 @@ export const CreemConvexProvider = ({
   permissions,
   onBeforeCheckout,
   onBeforePlanChange,
-  onBeforeFreePlanActivation,
+  onBeforePlanActivation,
   i18n,
   children,
 }: PropsWithChildren<CreemConvexContextValue>) => {
@@ -63,7 +63,7 @@ export const CreemConvexProvider = ({
       permissions,
       onBeforeCheckout,
       onBeforePlanChange,
-      onBeforeFreePlanActivation,
+      onBeforePlanActivation,
       i18n,
     }),
     [
@@ -73,7 +73,7 @@ export const CreemConvexProvider = ({
       permissions,
       onBeforeCheckout,
       onBeforePlanChange,
-      onBeforeFreePlanActivation,
+      onBeforePlanActivation,
       i18n,
     ],
   );

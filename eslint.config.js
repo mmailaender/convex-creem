@@ -5,6 +5,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import sveltePlugin from "eslint-plugin-svelte";
 import svelteParser from "svelte-eslint-parser";
+import svelteConfig from "./svelte.config.js";
 
 export default [
   {
@@ -28,11 +29,7 @@ export default [
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
-        project: [
-          "./tsconfig.json",
-          "./example-react/tsconfig.json",
-          "./example-svelte/tsconfig.json",
-        ],
+        projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -74,12 +71,17 @@ export default [
     languageOptions: {
       parser: svelteParser,
       parserOptions: {
+        extraFileExtensions: [".svelte"],
         parser: tseslint.parser,
+        projectService: true,
+        svelteConfig,
+        tsconfigRootDir: import.meta.dirname,
       },
       globals: globals.browser,
     },
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unsafe-member-access": "error",
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": [
         "warn",

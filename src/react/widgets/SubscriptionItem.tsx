@@ -15,7 +15,7 @@ import {
   formatPriceWithInterval,
   formatUnitPriceBreakdown,
   resolveProductIdForPlan,
-} from "../shared.js";
+} from "../../core/display.js";
 
 type BaseProps = {
   planId?: string;
@@ -122,14 +122,16 @@ export const SubscriptionItem = ({
     productId != null;
   const isActiveFreePlan =
     !isActiveProduct &&
-    plan?.category === "free" &&
+    (plan?.category === "free" || plan?.category === "trial") &&
     rootContext?.activePlanId === plan.planId;
+  const isAppPlan = plan?.category === "free" || plan?.category === "trial";
   const isSiblingPlan =
     !isActiveProduct &&
     !isActivePlanOtherCycle &&
     rootContext?.isGroupSubscribed === true &&
     productId != null &&
     plan?.category !== "free" &&
+    plan?.category !== "trial" &&
     plan?.category !== "enterprise";
   const rootUnits = rootContext?.units ?? 1;
   const [checkoutUnitState, setCheckoutUnitState] = useState({
@@ -180,15 +182,19 @@ export const SubscriptionItem = ({
       plan.category === "free"
         ? (rootContext?.labels.subscription.free ??
           defaultBillingLabels.subscription.free)
-        : plan.category === "enterprise"
-          ? (rootContext?.labels.subscription.custom ??
-            defaultBillingLabels.subscription.custom)
-          : (unitPriceBreakdown?.total ??
-            formatPriceWithInterval(
-              productId,
-              rootContext?.products ?? [],
-              rootContext?.formatCurrency,
-            ));
+        : plan.category === "trial"
+          ? (rootContext?.labels.subscription.freeTrial ??
+            defaultBillingLabels.subscription.freeTrial)
+          : plan.category === "enterprise"
+            ? (rootContext?.labels.subscription.custom ??
+              defaultBillingLabels.subscription.custom)
+            : (unitPriceBreakdown?.total ??
+              formatPriceWithInterval(
+                productId,
+                rootContext?.products ?? [],
+                rootContext?.labels ?? defaultBillingLabels,
+                rootContext?.formatCurrency,
+              ));
 
     return {
       plan,
@@ -216,17 +222,31 @@ export const SubscriptionItem = ({
               rootContext.checkout({ plan, productId, units: effectiveUnits })
           : undefined,
       onSwitch:
-        rootContext && productId && (isSiblingPlan || isActivePlanOtherCycle)
+        rootContext &&
+        isAppPlan &&
+        !isActiveFreePlan &&
+        !rootContext.isGroupSubscribed
           ? () =>
               rootContext.switchPlan?.({
                 plan,
-                productId,
-                units:
-                  plan.pricingModel === "unit"
-                    ? (rootContext.subscribedUnits ?? effectiveUnits)
-                    : effectiveUnits,
+                appPlanId: plan.planId,
+                ...(plan.category === "free"
+                  ? { freePlanId: plan.planId }
+                  : {}),
               })
-          : undefined,
+          : rootContext &&
+              productId &&
+              (isSiblingPlan || isActivePlanOtherCycle)
+            ? () =>
+                rootContext.switchPlan?.({
+                  plan,
+                  productId,
+                  units:
+                    plan.pricingModel === "unit"
+                      ? (rootContext.subscribedUnits ?? effectiveUnits)
+                      : effectiveUnits,
+                })
+            : undefined,
       onUpdateUnits: rootContext?.updateUnits
         ? (units: number) => rootContext.updateUnits?.({ units })
         : undefined,
@@ -241,6 +261,7 @@ export const SubscriptionItem = ({
     rootContext,
     isActiveProduct,
     isActiveFreePlan,
+    isAppPlan,
     isSiblingPlan,
     isActivePlanOtherCycle,
     checkoutUnits,

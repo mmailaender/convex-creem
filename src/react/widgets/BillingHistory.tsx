@@ -10,7 +10,7 @@ import type {
   ConnectedTransaction,
   ConnectedTransactionList,
 } from "./types.js";
-import { formatPrice } from "../shared.js";
+import { formatPrice } from "../../core/display.js";
 import { resolveBillingI18n } from "../../core/i18n.js";
 import {
   requireCreemConvexApi,

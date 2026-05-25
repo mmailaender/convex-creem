@@ -1,73 +1,60 @@
 import type {
   AvailableAction,
   BillingSnapshot,
-  UIPlanEntry,
   RecurringCycle,
-} from "../core/types.js";
+  SupportedRecurringCycle,
+  UIPlanEntry,
+} from "./types.js";
 import {
   defaultBillingLabels,
-  type BillingLabels,
   type BillingCurrencyFormatInput,
-} from "../core/i18n.js";
-import type { ConnectedProduct } from "./widgets/types.js";
+  type BillingLabels,
+} from "./i18n.js";
 
-const CYCLE_KEY_ALIASES: Record<RecurringCycle, string[]> = {
-  "every-month": ["every-month", "monthly", "month"],
-  "every-three-months": ["every-three-months", "quarterly", "every-quarter"],
-  "every-six-months": ["every-six-months", "semiannual", "semi-annually"],
-  "every-year": ["every-year", "yearly", "annual"],
-  custom: ["custom"],
+export type PricedProduct = {
+  id: string;
+  price?: number;
+  currency?: string;
+  billingPeriod?: string;
 };
 
-/** Format a billing cycle enum value to a human-readable label (e.g. `"every-month"` → `"Monthly"`). */
+/** Format a canonical recurring cycle value to a localized billing-cycle label. */
 export const formatRecurringCycle = (
   cycle: RecurringCycle,
   labels: BillingLabels = defaultBillingLabels,
-) => {
-  return labels.billingCycle[cycle];
-};
+) => labels.billingCycle[cycle];
 
-/** Resolve the Creem product ID for a plan given the selected billing cycle. Handles cycle aliases and partial matches. */
+/**
+ * Resolve the Creem product ID for a catalog plan and canonical selected cycle.
+ *
+ * Catalog product maps are expected to use Creem-compatible keys such as
+ * `"every-month"`, `"every-year"`, or `"custom"`. Non-canonical aliases are
+ * intentionally not supported so invalid catalog keys fail visibly.
+ */
 export const resolveProductIdForPlan = (
   plan: UIPlanEntry,
   selectedCycle: RecurringCycle | undefined,
 ) => {
   const productIds = plan.creemProductIds;
-  if (!productIds) {
-    return undefined;
-  }
+  if (!productIds) return undefined;
 
-  const aliases = selectedCycle
-    ? CYCLE_KEY_ALIASES[selectedCycle]
-    : CYCLE_KEY_ALIASES.custom;
-  for (const alias of aliases) {
-    if (productIds[alias]) {
-      return productIds[alias];
-    }
-    const partial = Object.entries(productIds).find(([key]) =>
-      key.toLowerCase().includes(alias),
-    );
-    if (partial) {
-      return partial[1];
-    }
-  }
-
-  return Object.values(productIds)[0];
+  const cycle = selectedCycle ?? "custom";
+  return productIds[cycle] ?? Object.values(productIds)[0];
 };
 
-/** Local variant of `hasBillingAction` for use in shared UI code. */
+/** Local variant of `hasBillingAction` for shared UI code. */
 export const hasBillingActionLocal = (
   snapshot: Pick<BillingSnapshot, "availableBillingActions">,
   action: AvailableAction,
 ) => snapshot.availableBillingActions.includes(action);
 
-/** Format a price amount (in cents) to a localized currency string (e.g. `999` + `"USD"` → `"$9.99"`). */
+/** Format a minor-unit price amount such as cents into localized currency text. */
 export const formatPrice = (
   amount: number,
   currency: string,
   formatCurrency?: (input: BillingCurrencyFormatInput) => string,
-): string => {
-  return (
+): string =>
+  (
     formatCurrency ??
     ((input) =>
       new Intl.NumberFormat(input.locale, {
@@ -77,58 +64,62 @@ export const formatPrice = (
         maximumFractionDigits: 2,
       }).format(input.amount / 100))
   )({ amount, currency });
-};
 
-/** Resolve the formatted price and billing interval for a product by its ID. Returns `null` if not found. */
+/** Resolve a product's formatted price and raw billing interval. */
 export const resolveProductPrice = (
   productId: string | undefined,
-  products: ConnectedProduct[],
+  products: PricedProduct[],
   formatCurrency?: (input: BillingCurrencyFormatInput) => string,
 ): { formatted: string; interval?: string } | null => {
   if (!productId || !products.length) return null;
   const product = products.find((p) => p.id === productId);
   if (!product) return null;
   if (product.price == null || !product.currency) return null;
-  const formatted = formatPrice(
-    product.price,
-    product.currency,
-    formatCurrency,
-  );
-  return { formatted, interval: product.billingPeriod ?? undefined };
+  return {
+    formatted: formatPrice(product.price, product.currency, formatCurrency),
+    interval: product.billingPeriod,
+  };
 };
 
-const INTERVAL_LABELS: Record<string, string> = {
-  month: "/mo",
-  "every-month": "/mo",
-  "every-three-months": "/3mo",
-  "every-six-months": "/6mo",
-  year: "/yr",
-  "every-year": "/yr",
+const SUPPORTED_INTERVALS: ReadonlySet<string> = new Set([
+  "every-month",
+  "every-three-months",
+  "every-six-months",
+  "every-year",
+]);
+
+const isSupportedRecurringCycle = (
+  value: string,
+): value is SupportedRecurringCycle => SUPPORTED_INTERVALS.has(value);
+
+/** Format a canonical Creem billing interval as a compact suffix such as `/mo`. */
+export const formatIntervalSuffix = (
+  interval: string | undefined,
+  labels: BillingLabels = defaultBillingLabels,
+): string => {
+  if (!interval || !isSupportedRecurringCycle(interval)) return "";
+  return labels.priceInterval[interval];
 };
 
-/** Format the total price for a unit-based plan (e.g. `"$10/mo × 5 units"`). Returns `null` if product not found. */
+/** Format the effective price for a unit-based subscription plan. */
 export const formatUnitPrice = (
   productId: string | undefined,
-  products: ConnectedProduct[],
+  products: PricedProduct[],
   units: number,
   labels: BillingLabels = defaultBillingLabels,
   formatCurrency?: (input: BillingCurrencyFormatInput) => string,
 ): string | null => {
   const resolved = resolveProductPrice(productId, products, formatCurrency);
   if (!resolved) return null;
-  const suffix = resolved.interval
-    ? (INTERVAL_LABELS[resolved.interval] ?? "")
-    : "";
-  if (units <= 1) {
-    return `${resolved.formatted}${suffix}`;
-  }
+  const suffix = formatIntervalSuffix(resolved.interval, labels);
+  if (units <= 1) return `${resolved.formatted}${suffix}`;
   return `${resolved.formatted}${suffix} × ${labels.subscription.unitCount(units)}`;
 };
 
-/** Format unit pricing as total + calculation (e.g. `"$90/mo"` + `"$30/mo × 3 units"`). */
+/** Format unit pricing as total plus per-unit calculation text. */
 export const formatUnitPriceBreakdown = (
   productId: string | undefined,
-  products: ConnectedProduct[],
+  products: PricedProduct[],
   units: number,
   labels: BillingLabels = defaultBillingLabels,
   formatCurrency?: (input: BillingCurrencyFormatInput) => string,
@@ -137,9 +128,8 @@ export const formatUnitPriceBreakdown = (
   const product = products.find((p) => p.id === productId);
   if (!product) return null;
   if (product.price == null || !product.currency) return null;
-  const suffix = product.billingPeriod
-    ? (INTERVAL_LABELS[product.billingPeriod] ?? "")
-    : "";
+
+  const suffix = formatIntervalSuffix(product.billingPeriod, labels);
   const unit = `${formatPrice(product.price, product.currency, formatCurrency)}${suffix}`;
   const total = `${formatPrice(product.price * units, product.currency, formatCurrency)}${suffix}`;
   return {
@@ -152,21 +142,19 @@ export const formatUnitPriceBreakdown = (
   };
 };
 
-/** Format a product's price with its billing interval suffix (e.g. `"$10/mo"`). Returns `null` if product not found. */
+/** Format a product price with its canonical billing interval suffix. */
 export const formatPriceWithInterval = (
   productId: string | undefined,
-  products: ConnectedProduct[],
+  products: PricedProduct[],
+  labels: BillingLabels = defaultBillingLabels,
   formatCurrency?: (input: BillingCurrencyFormatInput) => string,
 ): string | null => {
   const resolved = resolveProductPrice(productId, products, formatCurrency);
   if (!resolved) return null;
-  const suffix = resolved.interval
-    ? (INTERVAL_LABELS[resolved.interval] ?? "")
-    : "";
-  return `${resolved.formatted}${suffix}`;
+  return `${resolved.formatted}${formatIntervalSuffix(resolved.interval, labels)}`;
 };
 
-/** Split a price label into main amount, interval suffix, and trailing text (e.g. `"$10/mo × 5 units"` → `{ main: "$10", suffix: "/mo", tail: "× 5 units" }`). */
+/** Split a formatted price label into amount, interval suffix, and trailing calculation text. */
 export const splitPriceLabel = (
   value: string | null,
 ): { main: string; suffix: string | null; tail: string } | null => {
@@ -180,6 +168,6 @@ export const splitPriceLabel = (
   };
 };
 
-/** Join CSS class tokens, filtering out falsy values. Lightweight alternative to `clsx`. */
+/** Join CSS class tokens, filtering out falsy values. */
 export const cx = (...tokens: Array<string | undefined | false>) =>
   tokens.filter(Boolean).join(" ");

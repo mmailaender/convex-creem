@@ -13,7 +13,7 @@ import {
   formatPriceWithInterval,
   formatUnitPriceBreakdown,
   splitPriceLabel,
-} from "../shared.js";
+} from "../../core/display.js";
 import { renderMarkdown } from "../../core/markdown.js";
 
 const computeTrialDays = (trialEnd: string): number => {
@@ -69,6 +69,7 @@ export const PricingCard = ({
   onSwitchPlan?: (payload: {
     plan: UIPlanEntry;
     productId?: string;
+    appPlanId?: string;
     freePlanId?: string;
     units?: number;
   }) => Promise<void> | void;
@@ -109,6 +110,7 @@ export const PricingCard = ({
   const priceLabel = formatPriceWithInterval(
     productId,
     products,
+    labels,
     formatCurrency,
   );
 
@@ -129,7 +131,7 @@ export const PricingCard = ({
   // Free plan is active when activePlanId matches and the plan has no product
   const isActiveFreePlan =
     !isActiveProduct &&
-    plan.category === "free" &&
+    (plan.category === "free" || plan.category === "trial") &&
     activePlanId === plan.planId;
   // Sibling plan in the same <Subscription> group that already has a subscription
   const isSiblingPlan =
@@ -138,9 +140,14 @@ export const PricingCard = ({
     isGroupSubscribed &&
     productId != null &&
     plan.category !== "free" &&
+    plan.category !== "trial" &&
     plan.category !== "enterprise";
   const isFreeDowngrade =
     !isActiveFreePlan && plan.category === "free" && isGroupSubscribed;
+  const isAppPlanActivation =
+    !isActiveFreePlan &&
+    (plan.category === "free" || plan.category === "trial") &&
+    !isGroupSubscribed;
 
   const showUnitCheckoutControls =
     isUnitPlan && showUnitPicker && !isActiveProduct && !isSiblingPlan;
@@ -173,9 +180,13 @@ export const PricingCard = ({
     ? labels.subscription.switchInterval
     : isSiblingPlan || isFreeDowngrade
       ? labels.subscription.switchPlan
-      : plan.billingType === "onetime"
-        ? labels.subscription.buyNow
-        : labels.subscription.subscribe;
+      : isAppPlanActivation
+        ? plan.category === "trial"
+          ? labels.subscription.startTrial
+          : labels.subscription.getStarted
+        : plan.billingType === "onetime"
+          ? labels.subscription.buyNow
+          : labels.subscription.subscribe;
 
   const handleCheckout = (payload: { productId: string }) => {
     if ((isSiblingPlan || isActivePlanOtherCycle) && onSwitchPlan) {
@@ -195,10 +206,11 @@ export const PricingCard = ({
     }
   };
 
-  const handleFreeDowngrade = () => {
+  const handleAppPlanSwitch = () => {
     onSwitchPlan?.({
       plan,
-      freePlanId: plan.planId,
+      appPlanId: plan.planId,
+      ...(plan.category === "free" ? { freePlanId: plan.planId } : {}),
     });
   };
 
@@ -246,6 +258,10 @@ export const PricingCard = ({
         {plan.category === "free" ? (
           <span className="heading-s text-foreground-default">
             {labels.subscription.free}
+          </span>
+        ) : plan.category === "trial" ? (
+          <span className="heading-s text-foreground-default">
+            {labels.subscription.freeTrial}
           </span>
         ) : plan.category === "enterprise" ? (
           <span className="heading-s text-foreground-default">
@@ -391,7 +407,16 @@ export const PricingCard = ({
             <button
               type="button"
               disabled={disableSwitch}
-              onClick={handleFreeDowngrade}
+              onClick={handleAppPlanSwitch}
+              className="button-faded w-full disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {checkoutLabel}
+            </button>
+          ) : isAppPlanActivation && onSwitchPlan ? (
+            <button
+              type="button"
+              disabled={disableSwitch}
+              onClick={handleAppPlanSwitch}
               className="button-faded w-full disabled:cursor-not-allowed disabled:opacity-50"
             >
               {checkoutLabel}
@@ -420,7 +445,7 @@ export const PricingCard = ({
             >
               {checkoutLabel}
             </CheckoutButton>
-          ) : plan.category !== "free" ? (
+          ) : plan.category !== "free" && plan.category !== "trial" ? (
             <span className="body-m text-foreground-muted">
               {labels.subscription.configureCheckout}
             </span>

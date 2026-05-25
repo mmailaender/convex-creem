@@ -1316,6 +1316,153 @@ describe("scheduled subscription update mutations", () => {
   });
 });
 
+describe("app plan activation history", () => {
+  let t: TestConvex<typeof schema>;
+
+  beforeEach(() => {
+    t = convexTest(schema, modules);
+  });
+
+  it("records the first activation for an app-owned plan", async () => {
+    const activation = await t.mutation(api.lib.recordAppPlanActivation, {
+      entityId: "org_1",
+      planId: "trial",
+      activatedByUserId: "user_1",
+      oncePerEntity: true,
+    });
+
+    expect(activation).toMatchObject({
+      entityId: "org_1",
+      planId: "trial",
+      activationCount: 1,
+      activatedByUserId: "user_1",
+    });
+
+    const stored = await t.query(api.lib.getAppPlanActivation, {
+      entityId: "org_1",
+      planId: "trial",
+    });
+    expect(stored?.firstActivatedAt).toBe(activation.firstActivatedAt);
+  });
+
+  it("rejects repeated activation when oncePerEntity is enabled", async () => {
+    await t.mutation(api.lib.recordAppPlanActivation, {
+      entityId: "org_1",
+      planId: "trial",
+      oncePerEntity: true,
+    });
+
+    await expect(
+      t.mutation(api.lib.recordAppPlanActivation, {
+        entityId: "org_1",
+        planId: "trial",
+        oncePerEntity: true,
+      }),
+    ).rejects.toThrow('Plan "trial" was already activated');
+  });
+
+  it("increments activation count when repeat activation is allowed", async () => {
+    await t.mutation(api.lib.recordAppPlanActivation, {
+      entityId: "org_1",
+      planId: "open",
+    });
+    const activation = await t.mutation(api.lib.recordAppPlanActivation, {
+      entityId: "org_1",
+      planId: "open",
+    });
+
+    expect(activation.activationCount).toBe(2);
+
+    const activations = await t.query(api.lib.listAppPlanActivations, {
+      entityId: "org_1",
+    });
+    expect(activations).toHaveLength(1);
+    expect(activations[0].activationCount).toBe(2);
+  });
+
+  it("stores a current app-owned plan assignment", async () => {
+    const assignment = await t.mutation(api.lib.assignAppPlan, {
+      entityId: "org_1",
+      planId: "free",
+      assignedByUserId: "user_1",
+      source: "manual",
+    });
+
+    expect(assignment).toMatchObject({
+      entityId: "org_1",
+      planId: "free",
+      status: "active",
+      assignedByUserId: "user_1",
+      source: "manual",
+    });
+
+    const assignments = await t.query(api.lib.listAppPlanAssignments, {
+      entityId: "org_1",
+    });
+    expect(assignments).toHaveLength(1);
+    expect(assignments[0].status).toBe("active");
+  });
+
+  it("replaces the previous active app-owned plan assignment", async () => {
+    await t.mutation(api.lib.assignAppPlan, {
+      entityId: "org_1",
+      planId: "trial",
+    });
+    await t.mutation(api.lib.assignAppPlan, {
+      entityId: "org_1",
+      planId: "free",
+    });
+
+    const assignments = await t.query(api.lib.listAppPlanAssignments, {
+      entityId: "org_1",
+    });
+    expect(assignments.filter((item) => item.status === "active")).toHaveLength(
+      1,
+    );
+    expect(assignments.find((item) => item.planId === "trial")?.status).toBe(
+      "ended",
+    );
+    expect(assignments.find((item) => item.planId === "free")?.status).toBe(
+      "active",
+    );
+  });
+
+  it("activates or cancels scheduled app-owned plan assignments", async () => {
+    await t.mutation(api.lib.assignAppPlan, {
+      entityId: "org_1",
+      planId: "free",
+      status: "scheduled",
+      startsAt: "2026-03-01T00:00:00.000Z",
+      subscriptionId: "sub_1",
+    });
+
+    const activated = await t.mutation(
+      api.lib.activateScheduledAppPlanAssignment,
+      {
+        subscriptionId: "sub_1",
+        planId: "free",
+      },
+    );
+    expect(activated?.status).toBe("active");
+
+    await t.mutation(api.lib.assignAppPlan, {
+      entityId: "org_1",
+      planId: "trial",
+      status: "scheduled",
+      startsAt: "2026-04-01T00:00:00.000Z",
+      subscriptionId: "sub_2",
+    });
+    const canceled = await t.mutation(
+      api.lib.cancelScheduledAppPlanAssignment,
+      {
+        subscriptionId: "sub_2",
+        planId: "trial",
+      },
+    );
+    expect(canceled?.status).toBe("ended");
+  });
+});
+
 describe("updateSubscription optimistic guard", () => {
   let t: TestConvex<typeof schema>;
 

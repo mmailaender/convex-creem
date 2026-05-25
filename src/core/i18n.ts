@@ -1,7 +1,8 @@
 import type {
   OneTimePaymentStatus,
   RecurringCycle,
-  UpdateBehavior,
+  ResolvedUpdateBehavior,
+  SupportedRecurringCycle,
 } from "./types.js";
 
 export type PartialDeep<T> = {
@@ -31,6 +32,7 @@ export type BillingLabels = {
     closeDialog: string;
   };
   billingCycle: Record<RecurringCycle, string>;
+  priceInterval: Record<SupportedRecurringCycle, string>;
   accessibility: {
     decreaseValue: string;
     increaseValue: string;
@@ -56,6 +58,7 @@ export type BillingLabels = {
     current: string;
     recommended: string;
     freeTrial: string;
+    startTrial: string;
     trialDaysLeft: (days: number) => string;
     free: string;
     custom: string;
@@ -91,9 +94,9 @@ export type BillingLabels = {
       updateUnitsTitle: string;
       confirmSwitch: string;
       confirmUpdate: string;
-      behaviorDescription: (behavior: UpdateBehavior) => string;
+      behaviorDescription: (behavior: ResolvedUpdateBehavior) => string;
       periodEndNote: (input: {
-        behavior: UpdateBehavior;
+        behavior: ResolvedUpdateBehavior;
         formattedDate: string;
       }) => string | null;
       trialEndNote: (formattedDate: string) => string;
@@ -171,7 +174,9 @@ export type ResolvedBillingI18n = {
   formatDate: (input: BillingDateFormatInput) => string;
 };
 
-const defaultBehaviorDescription = (behavior: UpdateBehavior): string => {
+const defaultBehaviorDescription = (
+  behavior: ResolvedUpdateBehavior,
+): string => {
   switch (behavior) {
     case "proration-charge-immediately":
       return "The price difference will be prorated and charged immediately.";
@@ -181,6 +186,8 @@ const defaultBehaviorDescription = (behavior: UpdateBehavior): string => {
       return "The new price will take effect at your next billing cycle.";
     case "period-end":
       return "The current plan stays active until the end of the billing period, then the change is applied.";
+    case "immediate":
+      return "The current paid subscription will be canceled immediately.";
   }
 };
 
@@ -197,6 +204,12 @@ export const defaultBillingLabels: BillingLabels = {
     "every-six-months": "Semi-annual",
     "every-year": "Yearly",
     custom: "Custom",
+  },
+  priceInterval: {
+    "every-month": "/mo",
+    "every-three-months": "/3mo",
+    "every-six-months": "/6mo",
+    "every-year": "/yr",
   },
   accessibility: {
     decreaseValue: "Decrease value",
@@ -223,6 +236,7 @@ export const defaultBillingLabels: BillingLabels = {
     current: "Current",
     recommended: "Recommended",
     freeTrial: "Free trial",
+    startTrial: "Start trial",
     trialDaysLeft: (days) => `${days} day${days === 1 ? "" : "s"} left`,
     free: "Free",
     custom: "Custom",

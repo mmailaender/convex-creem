@@ -48,6 +48,10 @@
   let loading = $state(false);
   let error = $state<string | null>(null);
 
+  type CreditsBalanceResult = {
+    balance?: string | null;
+  };
+
   async function refreshBalance() {
     if (!getBalanceRef) {
       error = i18n.labels.credits.apiNotConfigured;
@@ -56,8 +60,9 @@
     loading = true;
     error = null;
     try {
-      const result = await client.action(getBalanceRef, {});
-      balance = result?.balance ?? "0";
+      const result = (await client.action(getBalanceRef, {})) as unknown;
+      const balanceResult = result as CreditsBalanceResult;
+      balance = balanceResult.balance ?? "0";
     } catch (cause: unknown) {
       error = cause instanceof Error ? cause.message : i18n.labels.credits.loadFailed;
     } finally {

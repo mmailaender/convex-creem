@@ -1,6 +1,9 @@
 import { useContext } from "react";
 import { SegmentGroup } from "../primitives/SegmentGroup.js";
-import type { RecurringCycle } from "../../core/types.js";
+import type {
+  RecurringCycle,
+  SupportedRecurringCycle,
+} from "../../core/types.js";
 import { SubscriptionContext } from "./subscriptionContext.js";
 
 /**
@@ -20,11 +23,13 @@ export const SubscriptionIntervalSelector = ({
   cycles,
   value,
   onValueChange,
+  cycleBadges,
   className = "",
 }: {
   cycles?: RecurringCycle[];
   value?: RecurringCycle;
   onValueChange?: (cycle: RecurringCycle) => void;
+  cycleBadges?: Partial<Record<SupportedRecurringCycle, string>>;
   className?: string;
 }) => {
   const rootContext = useContext(SubscriptionContext);
@@ -38,6 +43,7 @@ export const SubscriptionIntervalSelector = ({
   const handleValueChange = onValueChange ?? rootContext?.setCycle;
   const unstyled = rootContext?.unstyled ?? false;
   const labels = rootContext?.labels;
+  const resolvedCycleBadges = cycleBadges ?? rootContext?.cycleBadges;
 
   if (resolvedCycles.length <= 1 || !resolvedValue || !handleValueChange) {
     return null;
@@ -46,6 +52,7 @@ export const SubscriptionIntervalSelector = ({
   const items = resolvedCycles.map((cycle) => ({
     value: cycle,
     label: labels?.billingCycle[cycle] ?? cycle,
+    badge: cycle === "custom" ? undefined : resolvedCycleBadges?.[cycle],
   }));
 
   return (

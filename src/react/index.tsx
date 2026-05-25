@@ -80,6 +80,14 @@ export type {
   BillingSnapshotOrder,
   BillingSnapshot,
   PlanChangeIntent as PlanChangeIntentCore,
+  FreePlanUpdateBehavior,
+  FreePlanUpdateBehaviorIntent,
+  FreePlanUpdateBehaviorSetting,
+  PaidSubscriptionUpdateBehavior,
+  ResolvedUpdateBehavior,
+  UpdateBehavior,
+  UpdateBehaviorIntent,
+  UpdateBehaviorSetting,
 } from "../core/types.js";
 export type {
   BillingI18n,

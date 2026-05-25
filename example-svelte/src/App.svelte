@@ -24,6 +24,7 @@
     type CreditsContextValue,
     type PlanChangeIntent,
     type Transition,
+    type UpdateBehaviorIntent,
   } from "@mmailaender/convex-creem/svelte";
   import { api } from "../../convex/_generated/api.js";
   import creemLogoUrl from "./assets/creem.svg";
@@ -121,6 +122,9 @@
       debit: api.billing.creditsDebit,
       listEntries: api.billing.creditsListEntries,
     },
+    plans: {
+      activate: api.billing.plansActivate,
+    },
   };
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -131,6 +135,19 @@
     version: "example",
     defaultPlanId: "free",
     plans: [
+      {
+        planId: "trial",
+        category: "trial",
+        billingType: "custom",
+        title: "Starter Trial",
+        description:
+          "No-card app trial. Hidden after it has been used once.",
+        eligibility: {
+          oncePerEntity: true,
+          hideWhenIneligible: true,
+        },
+        limits: { aiMessages: 5, projects: 1 },
+      },
       {
         planId: "free",
         category: "free",
@@ -411,7 +428,7 @@
   const onBeforePlanChange = async (_intent: PlanChangeIntent) =>
     ensureConsentAccepted();
 
-  const onBeforeFreePlanActivation = async (_intent: { freePlanId: string }) =>
+  const onBeforePlanActivation = async (_intent: { planId: string }) =>
     ensureConsentAccepted();
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -504,12 +521,19 @@
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
                   >01</span
                 >
-                <a href="#sub-one-plan" class="link-inline">Minimal One Plan</a>
+                <a href="#sub-app-trial" class="link-inline">App Trial</a>
               </div>
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
                   >02</span
+                >
+                <a href="#sub-one-plan" class="link-inline">Minimal One Plan</a>
+              </div>
+              <div class="flex items-center gap-3">
+                <span
+                  class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
+                  >03</span
                 >
                 <a href="#sub-two-plans" class="link-inline"
                   >Minimal Two Plans</a
@@ -518,14 +542,14 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >03</span
+                  >04</span
                 >
                 <a href="#sub-multi-cycle" class="link-inline">Multi-Cycle</a>
               </div>
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >04</span
+                  >05</span
                 >
                 <a href="#sub-catalog-driven" class="link-inline"
                   >Individual / Teams</a
@@ -534,14 +558,14 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >05</span
+                  >06</span
                 >
                 <a href="#sub-unit-auto" class="link-inline">Unit-Based</a>
               </div>
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >06</span
+                  >07</span
                 >
                 <a href="#sub-grouped-cycles" class="link-inline"
                   >Grouped Multi-Cycle</a
@@ -550,7 +574,7 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >07</span
+                  >08</span
                 >
                 <a href="#sub-consent-gates" class="link-inline"
                   >Consent Gates</a
@@ -559,7 +583,7 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >08</span
+                  >09</span
                 >
                 <a href="#sub-custom-composition" class="link-inline"
                   >Custom Composition</a
@@ -568,7 +592,7 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >09</span
+                  >10</span
                 >
                 <a href="#sub-typed-binding" class="link-inline"
                   >Typed Binding API</a
@@ -577,7 +601,7 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >10</span
+                  >11</span
                 >
                 <a href="#sub-period-end" class="link-inline"
                   >Period-End Change</a
@@ -591,14 +615,14 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >11</span
+                  >12</span
                 >
                 <a href="#onetime-single" class="link-inline">Single Product</a>
               </div>
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >12</span
+                  >13</span
                 >
                 <a href="#onetime-group" class="link-inline"
                   >Product Group + Upgrade</a
@@ -607,7 +631,7 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >13</span
+                  >14</span
                 >
                 <a href="#onetime-repeat" class="link-inline"
                   >Consumable (Repeating)</a
@@ -621,7 +645,7 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >14</span
+                  >15</span
                 >
                 <a href="#payment-recovery" class="link-inline"
                   >Payment Recovery</a
@@ -630,7 +654,7 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >15</span
+                  >16</span
                 >
                 <a href="#billing-history" class="link-inline"
                   >Billing History</a
@@ -639,7 +663,7 @@
               <div class="flex items-center gap-3">
                 <span
                   class="label-m text-foreground-placeholder inline-block w-6 shrink-0"
-                  >16</span
+                  >17</span
                 >
                 <a href="#feature-usage-gate" class="link-inline"
                   >Feature / Usage Gate</a
@@ -680,7 +704,40 @@
       </div>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 01: Minimal — one catalog plan
+       VARIANT 01: App-owned no-card trial with once-per-entity eligibility
+       ═══════════════════════════════════════════════════════════════════════════ -->
+      <section
+        id="sub-app-trial"
+        class="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[104px]"
+      >
+        <div class="mx-auto w-full max-w-[1280px] px-4 lg:px-16 pt-[104px]">
+          <div class="mx-auto grid grid-cols-12">
+            <h2
+              class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
+            >
+              <span class="text-foreground-placeholder">01 — Subscription</span
+              ><br />
+              App Trial + Free + Paid
+            </h2>
+            <p
+              class="body-l col-span-12 mt-6 text-center text-foreground-muted lg:col-start-4 lg:col-span-6"
+            >
+              A no-card trial is an app-owned plan. The widget activates it via
+              your Convex mutation, records once-per-entity history in the
+              component, and hides it after it has already been used.
+            </p>
+          </div>
+
+          <div class="mt-10">
+            <Subscription.Root
+              plans={plansOf(billingCatalog, ["trial", "free", "pro"])}
+            />
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════════════════════
+       VARIANT 02: Minimal — one catalog plan
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="sub-one-plan"
@@ -691,7 +748,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">01 — Subscription</span
+              <span class="text-foreground-placeholder">02 — Subscription</span
               ><br />
               Minimal One Plan
             </h2>
@@ -711,7 +768,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 02: Minimal — two catalog plans
+       VARIANT 03: Minimal — two catalog plans
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="sub-two-plans"
@@ -722,7 +779,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">02 — Subscription</span
+              <span class="text-foreground-placeholder">03 — Subscription</span
               ><br />
               Minimal Two Plans
             </h2>
@@ -744,7 +801,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 03: Multi-Cycle — 4 billing intervals, free + enterprise tiers
+       VARIANT 04: Multi-Cycle — 4 billing intervals, free + enterprise tiers
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="sub-multi-cycle"
@@ -755,7 +812,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">03 — Subscription</span
+              <span class="text-foreground-placeholder">04 — Subscription</span
               ><br />
               Multi-Cycle (4 Intervals)
             </h2>
@@ -786,7 +843,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 04: Catalog-Driven with Groups — individual vs teams
+       VARIANT 05: Catalog-Driven with Groups — individual vs teams
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="sub-catalog-driven"
@@ -797,7 +854,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">04 — Subscription</span
+              <span class="text-foreground-placeholder">05 — Subscription</span
               ><br />
               Catalog-Driven with Groups
             </h2>
@@ -841,7 +898,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 05: Unit-Based (Auto-Derived) — no unit picker, programmatic qty
+       VARIANT 06: Unit-Based (Auto-Derived) — no unit picker, programmatic qty
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="sub-unit-auto"
@@ -852,7 +909,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">05 — Subscription</span
+              <span class="text-foreground-placeholder">06 — Subscription</span
               ><br />
               Unit-Based (Auto-Derived)
             </h2>
@@ -861,8 +918,8 @@
             >
               Unit-based pricing with a fixed quantity derived from your app
               data. No picker shown — the unit count is set programmatically.
-              Hardcoded to 5 in this demo. Uses <code>twoColumnLayout</code> for a
-              compact display.
+              Hardcoded to 5 in this demo. Uses <code>columns={2}</code> for a
+              fixed two-column display.
             </p>
           </div>
 
@@ -870,14 +927,14 @@
             <Subscription.Root
               plans={plansOf(billingCatalog, ["basic-team", "premium-team"])}
               units={5}
-              twoColumnLayout
+              columns={2}
             />
           </div>
         </div>
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 06: Multi-cycle subscription plans with groups
+       VARIANT 07: Multi-cycle subscription plans with groups
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="sub-grouped-cycles"
@@ -888,7 +945,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">06 — Subscription</span
+              <span class="text-foreground-placeholder">07 — Subscription</span
               ><br />
               Grouped Multi-Cycle
             </h2>
@@ -928,7 +985,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 07: Consent Gates — checkbox policy gate before checkout or plan changes
+       VARIANT 08: Consent Gates — checkbox policy gate before checkout or plan changes
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="sub-consent-gates"
@@ -939,7 +996,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">07 — Subscription</span
+              <span class="text-foreground-placeholder">08 — Subscription</span
               ><br />
               Consent Gates
             </h2>
@@ -948,7 +1005,7 @@
             >
               Demonstrates <code>onBeforeCheckout</code>,
               <code>onBeforePlanChange</code>, and
-              <code>onBeforeFreePlanActivation</code> with an app-owned policy
+              <code>onBeforePlanActivation</code> with an app-owned policy
               checkbox. Checkout and plan changes continue only after consent is
               accepted.
             </p>
@@ -976,14 +1033,14 @@
               plans={plansOf(billingCatalog, ["free", "basic", "premium"])}
               {onBeforeCheckout}
               {onBeforePlanChange}
-              {onBeforeFreePlanActivation}
+              {onBeforePlanActivation}
             />
           </div>
         </div>
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 08: Custom composition — app-owned layout and copy
+       VARIANT 09: Custom composition — app-owned layout and copy
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="sub-custom-composition"
@@ -994,7 +1051,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">08 — Subscription</span
+              <span class="text-foreground-placeholder">09 — Subscription</span
               ><br />
               Custom Composition
             </h2>
@@ -1215,7 +1272,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 09: Typed Binding API — createCreemSvelte with typed planIds
+       VARIANT 10: Typed Binding API — createCreemSvelte with typed planIds
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="sub-typed-binding"
@@ -1226,7 +1283,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">09 — Subscription</span
+              <span class="text-foreground-placeholder">10 — Subscription</span
               ><br />
               Typed Binding API
             </h2>
@@ -1257,7 +1314,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 10: Subscription — period-end scheduled update
+       VARIANT 11: Subscription — period-end scheduled update
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="sub-period-end"
@@ -1268,7 +1325,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">10 — Subscription</span
+              <span class="text-foreground-placeholder">11 — Subscription</span
               ><br />
               Period-End Plan Change
             </h2>
@@ -1276,15 +1333,15 @@
               class="body-l col-span-12 mt-6 text-center text-foreground-muted lg:col-start-4 lg:col-span-6"
             >
               Uses dedicated products and an <code>updateBehavior</code> resolver.
-              Downgrades stay active until period end, while upgrades use Creem
+              Paid downgrades stay active until period end, free-plan switches
+              use the dedicated cancellation behavior, and upgrades use Creem
               proration on the next invoice.
             </p>
           </div>
 
           <div class="mt-[6.5rem]">
             <Subscription.Root
-              updateBehavior={(intent) => {
-                if (intent.toPlan?.category === "free") return "period-end";
+              updateBehavior={(intent: UpdateBehaviorIntent) => {
                 if (
                   intent.fromPrice != null &&
                   intent.toPrice != null &&
@@ -1294,6 +1351,7 @@
                 }
                 return "proration-charge";
               }}
+              freePlanUpdateBehavior="period-end"
               plans={plansOf(billingCatalog, [
                 "period-end-free",
                 "period-end-basic",
@@ -1309,7 +1367,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 11: One-Time Purchase — single product
+       VARIANT 12: One-Time Purchase — single product
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="onetime-single"
@@ -1321,7 +1379,7 @@
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
               <span class="text-foreground-placeholder"
-                >11 — One Time Purchase</span
+                >12 — One Time Purchase</span
               ><br />
               Single Product
             </h2>
@@ -1352,7 +1410,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 12: One-Time Purchase — mutually exclusive group with upgrade
+       VARIANT 13: One-Time Purchase — mutually exclusive group with upgrade
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="onetime-group"
@@ -1364,7 +1422,7 @@
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
               <span class="text-foreground-placeholder"
-                >12 — One Time Purchase</span
+                >13 — One Time Purchase</span
               ><br />
               Product Group + Upgrade
             </h2>
@@ -1406,7 +1464,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 13: One-Time Purchase — repeating (consumable)
+       VARIANT 14: One-Time Purchase — repeating (consumable)
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="onetime-repeat"
@@ -1418,7 +1476,7 @@
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
               <span class="text-foreground-placeholder"
-                >13 — One Time Purchase</span
+                >14 — One Time Purchase</span
               ><br />
               Consumable (Repeating)
             </h2>
@@ -1490,7 +1548,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 14: Payment Recovery — banner + button
+       VARIANT 15: Payment Recovery — banner + button
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="payment-recovery"
@@ -1501,7 +1559,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">14 — Account</span><br
+              <span class="text-foreground-placeholder">15 — Account</span><br
               />
               Payment Recovery
             </h2>
@@ -1529,7 +1587,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 15: Billing History
+       VARIANT 16: Billing History
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="billing-history"
@@ -1540,7 +1598,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">15 — Account</span><br
+              <span class="text-foreground-placeholder">16 — Account</span><br
               />
               Billing History
             </h2>
@@ -1559,7 +1617,7 @@
       </section>
 
       <!-- ═══════════════════════════════════════════════════════════════════════════
-       VARIANT 16: Feature / Usage Gate
+       VARIANT 17: Feature / Usage Gate
        ═══════════════════════════════════════════════════════════════════════════ -->
       <section
         id="feature-usage-gate"
@@ -1570,7 +1628,7 @@
             <h2
               class="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6"
             >
-              <span class="text-foreground-placeholder">16 — Account</span><br
+              <span class="text-foreground-placeholder">17 — Account</span><br
               />
               Feature / Usage Gate
             </h2>

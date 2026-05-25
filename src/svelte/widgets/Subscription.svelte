@@ -14,7 +14,7 @@
     formatPriceWithInterval,
     formatUnitPriceBreakdown,
     resolveProductIdForPlan,
-  } from "../primitives/shared.js";
+  } from "../../core/display.js";
   import type { UIPlanEntry } from "../../core/types.js";
   import { defaultBillingLabels } from "../../core/i18n.js";
 
@@ -111,15 +111,17 @@
   );
   const isActiveFreePlan = $derived(
     !isActiveProduct &&
-      plan?.category === "free" &&
+      (plan?.category === "free" || plan?.category === "trial") &&
       rootContext?.getActivePlanId() === plan.planId,
   );
+  const isAppPlan = $derived(plan?.category === "free" || plan?.category === "trial");
   const isSiblingPlan = $derived(
     !isActiveProduct &&
       !isActivePlanOtherCycle &&
       rootContext?.getIsGroupSubscribed() === true &&
       productId != null &&
       plan?.category !== "free" &&
+      plan?.category !== "trial" &&
       plan?.category !== "enterprise",
   );
   let checkoutUnits = $derived(rootContext?.getUnits() ?? 1);
@@ -138,6 +140,9 @@
     if (plan.category === "free") {
       return rootContext?.getLabels().subscription.free ?? defaultBillingLabels.subscription.free;
     }
+    if (plan.category === "trial") {
+      return rootContext?.getLabels().subscription.freeTrial ?? defaultBillingLabels.subscription.freeTrial;
+    }
     if (plan.category === "enterprise") {
       return rootContext?.getLabels().subscription.custom ?? defaultBillingLabels.subscription.custom;
     }
@@ -154,12 +159,14 @@
       )?.total ?? formatPriceWithInterval(
         productId,
         rootContext?.getProducts() ?? [],
+        rootContext?.getLabels() ?? defaultBillingLabels,
         rootContext?.formatCurrency,
       );
     }
     return formatPriceWithInterval(
       productId,
       rootContext?.getProducts() ?? [],
+      rootContext?.getLabels() ?? defaultBillingLabels,
       rootContext?.formatCurrency,
     );
   });
@@ -188,7 +195,18 @@
     return () => rootContext.checkout({ plan, productId, units: effectiveUnits });
   });
   const onSwitch = $derived.by(() => {
-    if (!rootContext || !plan || !productId || !(isSiblingPlan || isActivePlanOtherCycle)) {
+    if (!rootContext || !plan) {
+      return undefined;
+    }
+    if (isAppPlan && !isActiveFreePlan && !rootContext.getIsGroupSubscribed()) {
+      return () =>
+        rootContext.switchPlan?.({
+          plan,
+          appPlanId: plan.planId,
+          ...(plan.category === "free" ? { freePlanId: plan.planId } : {}),
+        });
+    }
+    if (!productId || !(isSiblingPlan || isActivePlanOtherCycle)) {
       return undefined;
     }
     return () =>

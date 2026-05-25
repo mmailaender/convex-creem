@@ -3,6 +3,7 @@ import { SegmentGroup as ArkSegmentGroup } from "@ark-ui/react/segment-group";
 export type SegmentGroupItem = {
   label: string;
   value: string;
+  badge?: string;
   disabled?: boolean;
 };
 
@@ -57,6 +58,17 @@ export const SegmentGroup = ({
             }
           >
             {item.label}
+            {item.badge ? (
+              <span
+                className={
+                  unstyled
+                    ? ""
+                    : "creem-base:ml-2 creem-base:rounded-full creem-base:bg-blue-950 creem-base:px-2 creem-base:py-0.5 creem-base:text-xs creem-base:font-medium creem-base:text-blue-100 dark:creem-base:bg-blue-900/70 dark:creem-base:text-blue-100"
+                }
+              >
+                {item.badge}
+              </span>
+            ) : null}
           </ArkSegmentGroup.ItemText>
           <ArkSegmentGroup.ItemControl
             className={unstyled ? "" : "creem-base:segment-group-item-control"}

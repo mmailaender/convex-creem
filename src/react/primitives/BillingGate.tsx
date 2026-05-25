@@ -1,6 +1,6 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import type { AvailableAction, BillingSnapshot } from "../../core/types.js";
-import { hasBillingActionLocal } from "../shared.js";
+import { hasBillingActionLocal } from "../../core/display.js";
 
 export const BillingGate = ({
   snapshot,

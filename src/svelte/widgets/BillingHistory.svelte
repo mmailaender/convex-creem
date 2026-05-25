@@ -11,7 +11,7 @@
     ConnectedTransaction,
     ConnectedTransactionList,
   } from "./types.js";
-  import { formatPrice } from "../primitives/shared.js";
+  import { formatPrice } from "../../core/display.js";
   import { resolveBillingI18n } from "../../core/i18n.js";
   import {
     CREEM_CONVEX_CONTEXT_KEY,
@@ -19,9 +19,13 @@
   } from "../creemConvexContext.js";
 
   interface Props {
+    /** Transactions per page. */
     pageSize?: number;
+    /** Optional product filter passed to the transaction search action. */
     productId?: string;
+    /** Optional order filter passed to the transaction search action. */
     orderId?: string;
+    /** Wrapper CSS class. */
     class?: string;
   }
 
@@ -104,15 +108,27 @@
 
   const transactions = $derived(result?.items ?? []);
   const pagination = $derived(result?.pagination);
+
+  type PaginationPageItem =
+    | { type: "page"; value: number }
+    | { type: "ellipsis" };
+  type PaginationApi = {
+    page: number;
+    pages: PaginationPageItem[];
+  };
+
+  const getPaginationApi = (api: UsePaginationContext): PaginationApi =>
+    api() as unknown as PaginationApi;
 </script>
 
 {#snippet paginationItems(api: UsePaginationContext)}
-  {#each api().pages as page, index (`${page.type}-${page.type === "page" ? page.value : index}`)}
+  {@const paginationApi = getPaginationApi(api)}
+  {#each paginationApi.pages as page, index (`${page.type}-${page.type === "page" ? page.value : index}`)}
     {#if page.type === "page"}
       <Pagination.Item
         type="page"
         value={page.value}
-        class={paginationItemClassName(page.value === api().page)}
+        class={paginationItemClassName(page.value === paginationApi.page)}
       >
         {page.value}
       </Pagination.Item>

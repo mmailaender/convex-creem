@@ -318,6 +318,51 @@ API and optional catalog from context.
 </CreemConvexProvider>
 ```
 
+Convex-Creem distinguishes two trial paths:
+
+- Creem-managed paid subscription trials are configured on paid Creem products.
+  In the catalog they remain `category: "paid"` recurring plans, and Creem owns
+  checkout, card collection, subscription state, and `subscription.trialing`.
+- App-owned no-card trials use `category: "trial"` with `billingType: "custom"`.
+  They do not create a Creem subscription. Convex-Creem records activation
+  history and the current app-plan assignment so the billing UI can show,
+  activate, and hide the offer.
+
+App-owned catalog plans such as `category: "free"` and `category: "trial"` are
+rendered by `Subscription.Root` alongside paid plans. Default styled pricing
+cards treat app-owned trials as a secondary full-width offer below the main
+comparison grid, because no-card trials are usually an entry path rather than a
+long-term destination plan. If users can actively pick one, expose
+`api.plans.activate` with an app mutation that accepts `{ planId: string }`. Use
+`onBeforePlanActivation` for sign-in or consent gates.
+
+App-owned no-card trials can be limited to once per billing entity from the
+catalog:
+
+```ts
+{
+  planId: "trial",
+  category: "trial",
+  billingType: "custom",
+  eligibility: { oncePerEntity: true, hideWhenIneligible: true },
+}
+```
+
+In the app mutation, activate the plan through the component:
+
+```ts
+await creem.appPlans.activate(ctx, {
+  entityId,
+  planId: "trial",
+  activatedByUserId,
+});
+```
+
+The component enforces the once-per-entity rule and the default widget hides an
+ineligible trial card when `hideWhenIneligible` is enabled. Your app still owns
+quota enforcement and lock states; Convex-Creem owns the app-plan assignment row
+used by the billing UI and snapshot.
+
 You can also pass `i18n` at the provider level to replace default UI labels and
 format dates/currency. This covers default cards, dialogs, billing history,
 portal buttons, recovery banners, credits, and accessibility labels. Product
@@ -337,6 +382,10 @@ catalog or with composition slots.
         switchPlan: "Tarif wechseln",
         cancelSubscription: "Abo beenden",
         unitCount: (units) => `${units} Einheit${units === 1 ? "" : "en"}`,
+      },
+      priceInterval: {
+        "every-month": "/Monat",
+        "every-year": "/Jahr",
       },
       billingHistory: {
         title: "Rechnungsverlauf",
@@ -444,14 +493,14 @@ intervals from only the active group:
         planId: "basic-individual",
         category: "paid",
         billingType: "recurring",
-        products: { "every-month": env.CREEM_BASIC_INDIVIDUAL_MONTHLY },
+        creemProductIds: { "every-month": env.CREEM_BASIC_INDIVIDUAL_MONTHLY },
       },
       {
         planId: "basic-team",
         category: "paid",
         billingType: "recurring",
         pricingModel: "unit",
-        products: { "every-month": env.CREEM_BASIC_TEAM_MONTHLY },
+        creemProductIds: { "every-month": env.CREEM_BASIC_TEAM_MONTHLY },
       },
     ],
   } as const);
@@ -565,10 +614,10 @@ Example: the customer bought 100 credits.
 Use this when your app wants to handle refund reversals manually, or when
 granted credits should never be revoked automatically.
 
-For deployed Convex functions, set the server-side product ID as a Convex env
-var, for example `CREEM_ONETIME_CREDITS=prod_...`. Vite `VITE_*` variables are
-for the browser demo and should not be the trusted source for webhook
-fulfillment.
+For deployed Convex functions, set the server-side product ID with Convex, for
+example `npx convex env set CREEM_ONETIME_CREDITS prod_...`. Vite `VITE_*`
+variables are for the browser demo and should not be the trusted source for
+webhook fulfillment.
 
 #### 2.3 Credit balance composition
 
@@ -980,16 +1029,16 @@ functions, or let `creem.api({ resolve })` generate ready-to-export wrappers.
 
 **`creem.subscriptions.*`**
 
-| Method                                                                                          | Data source                  | Description                                                                                                                                                                                                         |
-| ----------------------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.getCurrent(ctx, { entityId })`                                                                | Convex DB                    | Current active subscription with product join                                                                                                                                                                       |
-| `.list(ctx, { entityId })`                                                                      | Convex DB                    | Active subscriptions (excludes ended + expired trials)                                                                                                                                                              |
-| `.listAll(ctx, { entityId })`                                                                   | Convex DB                    | All subscriptions including ended                                                                                                                                                                                   |
-| `.update(ctx, { entityId, subscriptionId?, productId?, freePlanId?, units?, updateBehavior? })` | Creem API / Convex scheduler | Unified plan switch (`productId`), paid-to-free switch (`freePlanId`), or unit update (`units`). Pass `subscriptionId` for multiple active subscriptions. `updateBehavior: "period-end"` stores a scheduled update. |
-| `.cancelScheduledUpdate(ctx, { entityId, subscriptionId? })`                                    | Convex DB / Creem API        | Undo a pending app-side period-end update. If the pending update was a paid-to-free switch, the Creem scheduled cancellation is resumed.                                                                            |
-| `.cancel(ctx, { entityId, revokeImmediately? })`                                                | Creem API                    | Cancel subscription                                                                                                                                                                                                 |
-| `.pause(ctx, { entityId })`                                                                     | Creem API                    | Pause an active subscription                                                                                                                                                                                        |
-| `.resume(ctx, { entityId })`                                                                    | Creem API                    | Resume a paused or scheduled-cancel subscription                                                                                                                                                                    |
+| Method                                                                                          | Data source                  | Description                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.getCurrent(ctx, { entityId })`                                                                | Convex DB                    | Current active subscription with product join                                                                                                                                                                                                      |
+| `.list(ctx, { entityId })`                                                                      | Convex DB                    | Active subscriptions (excludes ended + expired trials)                                                                                                                                                                                             |
+| `.listAll(ctx, { entityId })`                                                                   | Convex DB                    | All subscriptions including ended                                                                                                                                                                                                                  |
+| `.update(ctx, { entityId, subscriptionId?, productId?, freePlanId?, units?, updateBehavior? })` | Creem API / Convex scheduler | Unified plan switch (`productId`), paid-to-free switch (`freePlanId`), or unit update (`units`). Pass `subscriptionId` for multiple active subscriptions. Paid-to-free defaults to `updateBehavior: "period-end"` and also supports `"immediate"`. |
+| `.cancelScheduledUpdate(ctx, { entityId, subscriptionId? })`                                    | Convex DB / Creem API        | Undo a pending app-side period-end update. If the pending update was a paid-to-free switch, the Creem scheduled cancellation is resumed.                                                                                                           |
+| `.cancel(ctx, { entityId, revokeImmediately? })`                                                | Creem API                    | Cancel subscription                                                                                                                                                                                                                                |
+| `.pause(ctx, { entityId })`                                                                     | Creem API                    | Pause an active subscription                                                                                                                                                                                                                       |
+| `.resume(ctx, { entityId })`                                                                    | Creem API                    | Resume a paused or scheduled-cancel subscription                                                                                                                                                                                                   |
 
 Set `new Creem(components.creem, { cancelMode: "scheduled" })` to make normal
 cancel actions end at the paid period boundary and surface
@@ -1024,10 +1073,10 @@ cancel call when you need to override that default.
 
 **Composite helpers (top-level methods)**
 
-| Method                                            | Description                                                                                                                        |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `creem.getBillingModel(ctx, { entityId, user? })` | Aggregates the widget model into a single object for connected UI. Graceful when `entityId` is null (returns public catalog only). |
-| `creem.getBillingSnapshot(ctx, { entityId })`     | Billing state with `subscriptions[]`, `orders[]`, `paymentRecoveryState`, and `availableBillingActions`.                           |
+| Method                                            | Description                                                                                                                                          |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `creem.getBillingModel(ctx, { entityId, user? })` | Aggregates the widget model into a single object for connected UI. Graceful when `entityId` is null (returns public catalog only).                   |
+| `creem.getBillingSnapshot(ctx, { entityId })`     | Billing state with `subscriptions[]`, `orders[]`, `appPlanAssignments[]`, derived `access[]`, `paymentRecoveryState`, and `availableBillingActions`. |
 
 ### `creem.api({ resolve })` — convenience exports
 
@@ -1080,11 +1129,54 @@ snapshot:
       status: "paid",
     },
   ],
+  appPlanAssignments: [
+    {
+      entityId: "org_123",
+      planId: "free",
+      status: "scheduled",
+      startsAt: "2026-06-18T00:00:00.000Z",
+      source: "paid_to_free",
+      subscriptionId: "sub_123",
+      createdAt: "2026-05-18T00:00:00.000Z",
+      updatedAt: "2026-05-18T00:00:00.000Z",
+    },
+  ],
+  access: [
+    {
+      source: "creem_subscription",
+      kind: "subscription",
+      planId: "private",
+      productId: "prod_20GpOqRYWpSpU1pv1KCPet",
+      subscriptionId: "sub_123",
+      status: "active",
+      recurringCycle: "every-year",
+    },
+    {
+      source: "creem_order",
+      kind: "one_time",
+      planId: "lifetime-export",
+      productId: "prod_7kP3mAqR9xT2vB6nLwY8Cs",
+      orderId: "ord_123",
+      status: "paid",
+    },
+  ],
   paymentRecoveryState: "none",
   availableBillingActions: ["portal", "cancel"],
   resolvedAt: "2026-05-18T00:00:00.000Z",
 }
 ```
+
+Mental model:
+
+- `subscriptions` mirrors Creem recurring subscriptions and supports multiple
+  simultaneous rows, such as a base subscription plus add-ons.
+- `orders` mirrors Creem orders. Subscription checkouts also create orders, but
+  the snapshot only exposes one-time orders as owned one-time access.
+- `appPlanAssignments` stores Convex-Creem-owned current or scheduled app-owned
+  plans such as free plans, no-card trials, and custom internal plans.
+- `access` is a derived read model that combines active subscriptions, paid
+  one-time orders, and active app-plan assignments. It is not a separate table
+  and should not be treated as the source of truth.
 
 ### Infrastructure
 
@@ -1152,28 +1244,61 @@ complete integrations.
 
 These query Convex directly and manage billing state end-to-end.
 
+#### `<CreemConvexProvider>`
+
+Required context boundary for connected widgets. Render it around any
+`Subscription`, `Product`, `BillingPortal`, `BillingHistory`, or `Credits`
+widgets.
+
+| Prop                     | Type                                                          | Default | Description                                                                |
+| ------------------------ | ------------------------------------------------------------- | ------- | -------------------------------------------------------------------------- |
+| `api`                    | `ConnectedBillingApi`                                         | —       | **Required.** Connected Convex function references                         |
+| `catalog`                | `PlanCatalog`                                                 | —       | App-owned billing catalog used by subscription widgets and plan helpers    |
+| `defaultCycle`           | `RecurringCycle`                                              | —       | Default billing cycle for subscription widgets                             |
+| `permissions`            | `BillingPermissions`                                          | enabled | Provider-level UI permission flags. Enforce real authorization server-side |
+| `onBeforeCheckout`       | `(intent: CheckoutIntent) => Promise<boolean> \| boolean`     | —       | Provider-level checkout guard. Return `false` to abort                     |
+| `onBeforePlanChange`     | `(intent: PlanChangeIntent) => Promise<boolean> \| boolean`   | —       | Provider-level paid plan switch/unit update guard. Return `false` to abort |
+| `onBeforePlanActivation` | `(intent: { planId: string }) => Promise<boolean> \| boolean` | —       | Provider-level app-owned plan activation guard. Return `false` to abort    |
+| `i18n`                   | `BillingI18n`                                                 | default | Locale, label, date, and currency formatter overrides                      |
+| `children`               | `Snippet` / `ReactNode`                                       | —       | Connected billing UI                                                       |
+
+Connected widgets no longer accept direct `api={...}` props. Pass the API to
+`CreemConvexProvider` once.
+
 #### `<Subscription.Root>`
 
 Container for subscription plan cards. Handles billing cycle toggle, checkout,
 plan switching, cancellation, and unit management.
 
-| Prop                         | Type                                                                   | Default                                      | Description                                                                                                                                                |
-| ---------------------------- | ---------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api`                        | `ConnectedBillingApi`                                                  | —                                            | **Required.** Backend function references                                                                                                                  |
-| `permissions`                | `BillingPermissions`                                                   | all enabled                                  | Disable actions based on user role                                                                                                                         |
-| `class`/`className`          | `string`                                                               | `""`                                         | Wrapper CSS class                                                                                                                                          |
-| `successUrl`                 | `string`                                                               | product's `defaultSuccessUrl` → current page | Override redirect after checkout. When omitted, uses the product's `defaultSuccessUrl` from Creem; if that is also unset, falls back to the current page.  |
-| `units`                      | `number`                                                               | —                                            | Auto-derived unit count for unit-based plans                                                                                                               |
-| `showUnitPicker`             | `boolean`                                                              | `false`                                      | Show quantity picker on unit-based cards                                                                                                                   |
-| `twoColumnLayout`            | `boolean`                                                              | `false`                                      | Use two-column card layout                                                                                                                                 |
-| `updateBehavior`             | `UpdateBehavior \| ((intent: UpdateBehaviorIntent) => UpdateBehavior)` | `"proration-charge-immediately"`             | How plan switches and unit updates are billed. Pass a function to choose different behavior for upgrades, downgrades, free-plan switches, or unit changes. |
-| `unstyled`                   | `boolean`                                                              | `false`                                      | Remove built-in visual classes from compound subscription pieces so custom children own their styling.                                                     |
-| `labels`                     | `BillingLabelOverrides`                                                | provider labels                              | Override subscription labels locally for this root.                                                                                                        |
-| `i18n`                       | `BillingI18n`                                                          | provider i18n                                | Override locale, labels, or formatters locally for this root.                                                                                              |
-| `onBeforeCheckout`           | `(intent: CheckoutIntent) => Promise<boolean> \| boolean`              | —                                            | Gate checkout (auth, terms, etc.). Return `false` to abort.                                                                                                |
-| `onBeforePlanChange`         | `(intent: PlanChangeIntent) => Promise<boolean> \| boolean`            | —                                            | Gate paid plan switches. Return `false` to abort.                                                                                                          |
-| `onBeforeFreePlanActivation` | `(intent: { freePlanId: string }) => Promise<boolean> \| boolean`      | —                                            | Gate free-plan activation. Return `false` to abort.                                                                                                        |
-| `children`                   | `Snippet` / `ReactNode`                                                | —                                            | `<Subscription.Item>` children                                                                                                                             |
+| Prop                     | Type                                                                                           | Default                                      | Description                                                                                                                                               |
+| ------------------------ | ---------------------------------------------------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `catalog`                | `PlanCatalog`                                                                                  | provider catalog                             | Local catalog override                                                                                                                                    |
+| `plans`                  | `readonly string[]`                                                                            | —                                            | Catalog plan IDs rendered by the default pricing layout                                                                                                   |
+| `groups`                 | `SubscriptionGroupRegistration[]`                                                              | —                                            | Grouped plan definitions for audience selectors, e.g. Individual vs Teams                                                                                 |
+| `defaultGroup`           | `string`                                                                                       | first group                                  | Initial uncontrolled group value                                                                                                                          |
+| `group`                  | `string`                                                                                       | —                                            | Controlled group value                                                                                                                                    |
+| `onGroupChange`          | `(group: string) => void`                                                                      | —                                            | Called when the active group changes                                                                                                                      |
+| `groupSelector`          | `"auto" \| "hidden" \| "external"`                                                             | `"auto"`                                     | Group selector placement                                                                                                                                  |
+| `defaultCycle`           | `RecurringCycle`                                                                               | provider default → `"every-month"`           | Initial uncontrolled billing cycle                                                                                                                        |
+| `cycle`                  | `RecurringCycle`                                                                               | —                                            | Controlled billing cycle                                                                                                                                  |
+| `onCycleChange`          | `(cycle: RecurringCycle) => void`                                                              | —                                            | Called when the active billing cycle changes                                                                                                              |
+| `intervalSelector`       | `"auto" \| "hidden" \| "external"`                                                             | `"auto"`                                     | Interval selector placement                                                                                                                               |
+| `cycleBadges`            | `Partial<Record<SupportedRecurringCycle, string>>`                                             | —                                            | Optional badges next to billing interval labels, e.g. `{ "every-year": "-20%" }`                                                                          |
+| `permissions`            | `BillingPermissions`                                                                           | provider permissions                         | Local UI permission overrides                                                                                                                             |
+| `class`/`className`      | `string`                                                                                       | `""`                                         | Wrapper CSS class                                                                                                                                         |
+| `successUrl`             | `string`                                                                                       | product's `defaultSuccessUrl` → current page | Override redirect after checkout. When omitted, uses the product's `defaultSuccessUrl` from Creem; if that is also unset, falls back to the current page. |
+| `units`                  | `number`                                                                                       | —                                            | Auto-derived unit count for unit-based plans                                                                                                              |
+| `showUnitPicker`         | `boolean`                                                                                      | `false`                                      | Show quantity picker on unit-based cards                                                                                                                  |
+| `columns`                | `"auto" \| 1 \| 2 \| 3 \| 4`                                                                   | `"auto"`                                     | Preferred pricing card columns. `"auto"` derives the layout from visible plan count and plan type.                                                        |
+| `updateBehavior`         | `UpdateBehavior \| ((intent: UpdateBehaviorIntent) => UpdateBehavior)`                         | `"proration-charge-immediately"`             | Paid subscription update behavior for paid-to-paid plan switches and unit changes.                                                                        |
+| `freePlanUpdateBehavior` | `FreePlanUpdateBehavior \| ((intent: FreePlanUpdateBehaviorIntent) => FreePlanUpdateBehavior)` | `"period-end"`                               | Cancellation behavior for paid-to-free or paid-to-app-owned plan switches.                                                                                |
+| `unstyled`               | `boolean`                                                                                      | `false`                                      | Remove built-in visual classes from compound subscription pieces so custom children own their styling.                                                    |
+| `onBeforeCheckout`       | `(intent: CheckoutIntent) => Promise<boolean> \| boolean`                                      | provider guard                               | Local checkout guard. Return `false` to abort                                                                                                             |
+| `onBeforePlanChange`     | `(intent: PlanChangeIntent) => Promise<boolean> \| boolean`                                    | provider guard                               | Local paid plan switch/unit update guard. Return `false` to abort                                                                                         |
+| `onBeforePlanActivation` | `(intent: { planId: string }) => Promise<boolean> \| boolean`                                  | provider guard                               | Local app-owned plan activation guard. Return `false` to abort                                                                                            |
+| `labels`                 | `BillingLabelOverrides`                                                                        | provider labels                              | Override subscription labels locally for this root                                                                                                        |
+| `i18n`                   | `BillingI18n`                                                                                  | provider i18n                                | Override locale, labels, or formatters locally for this root                                                                                              |
+| `children`               | `Snippet` / `ReactNode`                                                                        | default cards                                | Compound subscription markup. When omitted, default pricing cards render                                                                                  |
 
 Use `unstyled` when composing your own pricing cards with `Subscription.Grid`,
 `Subscription.ItemTitle`, `Subscription.ItemPrice`,
@@ -1188,7 +1313,7 @@ places library defaults in the base cascade layer. Consumer `class`/`className`
 utilities like `font-bold`, `text-xl`, or `bg-emerald-600` therefore override
 the built-in defaults without `tailwind-merge`.
 
-**`UpdateBehavior`** controls how plan switches and unit changes are applied:
+**`UpdateBehavior`** controls paid subscription updates:
 
 - `"proration-charge-immediately"` — prorate and charge the difference now
   (default)
@@ -1198,19 +1323,30 @@ the built-in defaults without `tailwind-merge`.
   `currentPeriodEnd`, then apply the target plan or unit count from a scheduled
   Convex job
 
-The first three values map directly to Creem's subscription update behavior.
-`"period-end"` is currently implemented by `convex-creem`: it stores a pending
-scheduled update and applies it at the current billing period boundary with
-Creem's no-proration update path. Until Creem supports native scheduled
-subscription updates, the Creem customer portal will still show the current
-subscription as active and will not know about the pending app-side downgrade.
+The first three values map directly to Creem's paid subscription update
+behavior. `updateBehavior` intentionally does not include `"immediate"` because
+Creem paid-to-paid switches cannot be immediate cancellation.
+
+**`FreePlanUpdateBehavior`** controls paid-to-free/app-owned target switches:
+
+- `"period-end"` — schedule Creem cancellation for the billing period boundary,
+  then activate the app-owned target plan at that time (default)
+- `"immediate"` — call Creem cancellation with `mode: "immediate"` and assign
+  the app-owned plan immediately
+
+Paid-to-free is a cancellation flow because Creem does not have native free
+subscriptions yet. Use `freePlanUpdateBehavior`, not `updateBehavior`, when you
+want to choose between period-end and immediate cancellation.
+
+Until Creem supports native scheduled subscription updates, the Creem customer
+portal will still show the current subscription as active and will not know
+about pending app-side paid-to-free assignment.
 
 Use a resolver function when upgrades and downgrades should behave differently:
 
 ```tsx
 <Subscription.Root
   updateBehavior={(intent) => {
-    if (intent.toPlan?.category === "free") return "period-end";
     if (
       intent.fromPrice != null &&
       intent.toPrice != null &&
@@ -1220,6 +1356,7 @@ Use a resolver function when upgrades and downgrades should behave differently:
     }
     return "proration-charge";
   }}
+  freePlanUpdateBehavior="period-end"
 />
 ```
 
@@ -1246,11 +1383,64 @@ root component renders the pricing cards.
 `Subscription` and `Subscription.Item` are aliases — use whichever reads better
 in your markup.
 
+#### `<Subscription.Grid>`
+
+Layout wrapper for custom composed subscription cards.
+
+| Prop                | Type                    | Default | Description        |
+| ------------------- | ----------------------- | ------- | ------------------ |
+| `class`/`className` | `string`                | `""`    | Grid CSS class     |
+| `children`          | `Snippet` / `ReactNode` | —       | Subscription items |
+
+#### `<Subscription.Group>`
+
+Conditional group wrapper for custom composed subscription sections.
+
+| Prop       | Type                    | Default | Description                        |
+| ---------- | ----------------------- | ------- | ---------------------------------- |
+| `value`    | `string`                | —       | Group ID this block renders for    |
+| `label`    | `string`                | —       | Group label, retained for symmetry |
+| `children` | `Snippet` / `ReactNode` | —       | Rendered when this group is active |
+
+#### `<Subscription.GroupSelector>`
+
+Group selector for `groupSelector="external"` composition.
+
+| Prop                | Type                                 | Default           | Description               |
+| ------------------- | ------------------------------------ | ----------------- | ------------------------- |
+| `items`             | `{ value: string; label: string }[]` | root groups       | Selector items            |
+| `value`             | `string \| null`                     | root active group | Controlled selected group |
+| `onValueChange`     | `(value: string) => void`            | root group setter | Group change handler      |
+| `class`/`className` | `string`                             | `""`              | Wrapper CSS class         |
+
+#### `<Subscription.IntervalSelector>`
+
+Billing-cycle selector for `intervalSelector="external"` composition.
+
+| Prop                | Type                                               | Default             | Description                             |
+| ------------------- | -------------------------------------------------- | ------------------- | --------------------------------------- |
+| `cycles`            | `RecurringCycle[]`                                 | root active cycles  | Available billing cycles                |
+| `value`             | `RecurringCycle`                                   | root selected cycle | Controlled selected cycle               |
+| `onValueChange`     | `(cycle: RecurringCycle) => void`                  | root cycle setter   | Cycle change handler                    |
+| `cycleBadges`       | `Partial<Record<SupportedRecurringCycle, string>>` | root badges         | Optional badges next to interval labels |
+| `class`/`className` | `string`                                           | `""`                | Wrapper CSS class                       |
+
 #### `<Subscription.ItemPriceCaption>`
 
 Secondary price text for inherited unit quantities, such as `$30/mo × 3 units`.
 Pair it with `<Subscription.ItemPrice>` when a custom card should show the total
 bill as the primary price and the unit calculation as supporting text.
+
+#### `<Subscription.ItemTitle>`, `<Subscription.ItemPrice>`, and `<Subscription.ItemDescription>`
+
+Text slots for custom subscription cards. Each resolves its value from the
+current `Subscription.Item` context.
+
+| Prop                | Type     | Default | Description    |
+| ------------------- | -------- | ------- | -------------- |
+| `class`/`className` | `string` | `""`    | Text CSS class |
+
+`Subscription.ItemPriceCaption` accepts the same `class`/`className` prop.
 
 #### `<Subscription.UnitPicker>`
 
@@ -1267,11 +1457,52 @@ In `unstyled` mode, pass `class`/`className` plus slot classes such as
 `numberInputClass` in Svelte. React uses the same names with `Name` suffixes,
 for example `rowClassName` and `primaryClassName`.
 
+| Prop                                      | Type      | Default | Description                                     |
+| ----------------------------------------- | --------- | ------- | ----------------------------------------------- |
+| `class`/`className`                       | `string`  | `""`    | Wrapper CSS class                               |
+| `rowClass`/`rowClassName`                 | `string`  | `""`    | Label/input row class                           |
+| `labelClass`/`labelClassName`             | `string`  | `""`    | Unit label class                                |
+| `actionsClass`/`actionsClassName`         | `string`  | `""`    | Edit action row class                           |
+| `secondaryClass`/`secondaryClassName`     | `string`  | `""`    | Secondary button class                          |
+| `primaryClass`/`primaryClassName`         | `string`  | `""`    | Primary update button class                     |
+| `numberInputClass`/`numberInputClassName` | `string`  | `""`    | Number input class                              |
+| `label`                                   | `string`  | i18n    | Unit label override                             |
+| `changeLabel`                             | `string`  | i18n    | Change button label override                    |
+| `updateLabel`                             | `string`  | i18n    | Update button label override                    |
+| `cancelLabel`                             | `string`  | i18n    | Cancel button label override                    |
+| `detailed`                                | `boolean` | `false` | Show current subscribed quantity before editing |
+
+#### `<Subscription.ItemCTA>`
+
+Composable subscription action button.
+
+| Prop                | Type     | Default | Description                 |
+| ------------------- | -------- | ------- | --------------------------- |
+| `class`/`className` | `string` | `""`    | Button CSS class            |
+| `activeLabel`       | `string` | i18n    | Current-plan label override |
+| `checkoutLabel`     | `string` | i18n    | Checkout label override     |
+| `switchLabel`       | `string` | i18n    | Switch-plan label override  |
+
+#### `<Subscription.ItemBadge>`
+
+Composable badge for current/recommended/custom plan labels.
+
+| Prop                | Type                    | Default             | Description          |
+| ------------------- | ----------------------- | ------------------- | -------------------- |
+| `label`             | `string`                | current/recommended | Badge label override |
+| `class`/`className` | `string`                | `""`                | Badge CSS class      |
+| `children`          | `Snippet` / `ReactNode` | —                   | Custom badge content |
+
 #### `<Subscription.Cancel>`
 
 Composable cancel button for the active subscription card. It opens the same
 root-owned confirmation dialog as the default pricing card, and renders nothing
 when the card is not active or cancellation is unavailable.
+
+| Prop                | Type     | Default | Description                  |
+| ------------------- | -------- | ------- | ---------------------------- |
+| `class`/`className` | `string` | `""`    | Button CSS class             |
+| `label`             | `string` | i18n    | Cancel button label override |
 
 #### `<Product.Root>`
 
@@ -1280,8 +1511,7 @@ upgrade transitions, and checkout.
 
 | Prop                | Type                                                      | Default                                      | Description                                                                                                                                               |
 | ------------------- | --------------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api`               | `ConnectedBillingApi`                                     | —                                            | **Required.** Backend function references                                                                                                                 |
-| `permissions`       | `BillingPermissions`                                      | all enabled                                  | Disable actions based on user role                                                                                                                        |
+| `permissions`       | `BillingPermissions`                                      | provider permissions                         | Local UI permission overrides                                                                                                                             |
 | `transition`        | `Transition[]`                                            | `[]`                                         | Upgrade path rules between products                                                                                                                       |
 | `class`/`className` | `string`                                                  | `""`                                         | Wrapper CSS class                                                                                                                                         |
 | `layout`            | `"default" \| "single"`                                   | `"default"`                                  | Card layout mode                                                                                                                                          |
@@ -1318,12 +1548,11 @@ Registers a product inside `<Product.Root>`.
 Button that opens the Creem customer billing portal. Auto-hides when the billing
 entity has no Creem customer record, or when `canAccessPortal` is `false`.
 
-| Prop                | Type                    | Default            | Description                                               |
-| ------------------- | ----------------------- | ------------------ | --------------------------------------------------------- |
-| `api`               | `ConnectedBillingApi`   | —                  | **Required.** Backend function references                 |
-| `permissions`       | `BillingPermissions`    | all enabled        | Control portal access (e.g. `{ canAccessPortal: false }`) |
-| `class`/`className` | `string`                | `""`               | Button CSS class                                          |
-| `children`          | `Snippet` / `ReactNode` | `"Manage billing"` | Custom button label                                       |
+| Prop                | Type                    | Default              | Description                                               |
+| ------------------- | ----------------------- | -------------------- | --------------------------------------------------------- |
+| `permissions`       | `BillingPermissions`    | provider permissions | Control portal access (e.g. `{ canAccessPortal: false }`) |
+| `class`/`className` | `string`                | `""`                 | Button CSS class                                          |
+| `children`          | `Snippet` / `ReactNode` | `"Manage billing"`   | Custom button label                                       |
 
 #### `<BillingHistory>`
 
@@ -1331,13 +1560,12 @@ Paginated transaction history backed by Creem's transaction search endpoint.
 This renders transaction rows only. Invoice and receipt documents are not
 included in this component.
 
-| Prop                | Type                  | Default | Description                               |
-| ------------------- | --------------------- | ------- | ----------------------------------------- |
-| `api`               | `ConnectedBillingApi` | —       | **Required.** Backend function references |
-| `pageSize`          | `number`              | `10`    | Transactions per page                     |
-| `productId`         | `string`              | —       | Optional product filter                   |
-| `orderId`           | `string`              | —       | Optional order filter                     |
-| `class`/`className` | `string`              | `""`    | Wrapper CSS class                         |
+| Prop                | Type     | Default | Description             |
+| ------------------- | -------- | ------- | ----------------------- |
+| `pageSize`          | `number` | `10`    | Transactions per page   |
+| `productId`         | `string` | —       | Optional product filter |
+| `orderId`           | `string` | —       | Optional order filter   |
+| `class`/`className` | `string` | `""`    | Wrapper CSS class       |
 
 Add the generated transaction action to your connected API:
 
@@ -1348,6 +1576,48 @@ const billingApi: ConnectedBillingApi = {
   transactions: { search: api.billing.transactionsSearch },
 };
 ```
+
+#### `<Credits.Root>`
+
+Credit balance widget backed by the provider's `credits.getBalance` action.
+
+| Prop                | Type                                    | Default     | Description                           |
+| ------------------- | --------------------------------------- | ----------- | ------------------------------------- |
+| `unitLabel`         | `string`                                | `"credits"` | Unit label shown next to the balance  |
+| `class`/`className` | `string`                                | `""`        | Wrapper CSS class                     |
+| `children`          | `(credits: CreditsContextValue) => ...` | default UI  | Custom balance UI snippet/render prop |
+
+#### `<Credits.Title>`
+
+| Prop                | Type                    | Default            | Description          |
+| ------------------- | ----------------------- | ------------------ | -------------------- |
+| `class`/`className` | `string`                | title classes      | Title CSS class      |
+| `children`          | `Snippet` / `ReactNode` | `"Credit Balance"` | Custom title content |
+
+#### `<Credits.Amount>`
+
+| Prop                            | Type     | Default | Description          |
+| ------------------------------- | -------- | ------- | -------------------- |
+| `class`/`className`             | `string` | layout  | Amount wrapper class |
+| `amountClass`/`amountClassName` | `string` | amount  | Numeric amount class |
+| `unitClass`/`unitClassName`     | `string` | unit    | Unit label class     |
+
+#### `<Credits.Refresh>`
+
+| Prop                | Type     | Default     | Description              |
+| ------------------- | -------- | ----------- | ------------------------ |
+| `class`/`className` | `string` | icon button | Button CSS class         |
+| `label`             | `string` | i18n        | Accessible refresh label |
+
+#### `<Credits.Error>` and `<Credits.Status>`
+
+Display credit API errors or loading/status text. Both accept
+`class`/`className`.
+
+| Component        | Extra props                                   |
+| ---------------- | --------------------------------------------- |
+| `Credits.Error`  | none                                          |
+| `Credits.Status` | `loadingLabel?: string`, `idleLabel?: string` |
 
 ### Presentational components
 
@@ -1387,12 +1657,13 @@ A single plan card with price, description, and action button. Same props as
 
 Billing cycle segment control (e.g. Monthly / Yearly).
 
-| Prop            | Type               | Description      |
-| --------------- | ------------------ | ---------------- |
-| `cycles`        | `RecurringCycle[]` | Available cycles |
-| `value`         | `RecurringCycle`   | Selected cycle   |
-| `onValueChange` | `(cycle) => void`  | Change handler   |
-| `className`     | `string`           | CSS class        |
+| Prop            | Type                                               | Description                             |
+| --------------- | -------------------------------------------------- | --------------------------------------- |
+| `cycles`        | `RecurringCycle[]`                                 | Available cycles                        |
+| `value`         | `RecurringCycle`                                   | Selected cycle                          |
+| `onValueChange` | `(cycle) => void`                                  | Change handler                          |
+| `cycleBadges`   | `Partial<Record<SupportedRecurringCycle, string>>` | Optional badges next to interval labels |
+| `className`     | `string`                                           | CSS class                               |
 
 #### `<CheckoutButton>`
 
@@ -1461,19 +1732,22 @@ Shows a trial expiration notice.
 
 #### `<ScheduledChangeBanner>`
 
-Shows a scheduled cancellation or app-side period-end update notice. Scheduled
-updates can include the target plan/unit label and can expose an undo action.
+Shows a scheduled cancellation or app-side period-end update notice. In a
+connected provider, pass `subscriptionId` and the widget derives the current
+period, scheduled update, target label, undo/resume handlers, and i18n from the
+billing model.
 
-| Prop                   | Type                                | Description                                         |
-| ---------------------- | ----------------------------------- | --------------------------------------------------- |
-| `cancelAtPeriodEnd`    | `boolean`                           | Whether cancellation is scheduled                   |
-| `currentPeriodEnd`     | `string \| null`                    | Current billing period end                          |
-| `scheduledUpdate`      | `{ effectiveAt?: unknown } \| null` | App-side period-end update intent                   |
-| `isLoading`            | `boolean`                           | Loading state for resume/undo buttons               |
-| `onResume`             | `() => void`                        | Resume handler (shows "Undo cancellation" button)   |
-| `onUndoUpdate`         | `() => void`                        | Undo handler for app-side scheduled updates         |
-| `scheduledUpdateLabel` | `string \| null`                    | Human-readable target plan, price, or unit quantity |
-| `className`            | `string`                            | CSS class                                           |
+| Prop                   | Type                                | Description                                    |
+| ---------------------- | ----------------------------------- | ---------------------------------------------- |
+| `subscriptionId`       | `string`                            | Subscription to derive banner state for        |
+| `cancelAtPeriodEnd`    | `boolean`                           | Override whether cancellation is scheduled     |
+| `currentPeriodEnd`     | `string \| null`                    | Override current billing period end            |
+| `scheduledUpdate`      | `{ effectiveAt?: unknown } \| null` | Override app-side period-end update intent     |
+| `isLoading`            | `boolean`                           | Override loading state for resume/undo buttons |
+| `onResume`             | `() => void`                        | Override resume handler                        |
+| `onUndoUpdate`         | `() => void`                        | Override undo handler for app-side updates     |
+| `scheduledUpdateLabel` | `string \| null`                    | Override target plan, price, or unit label     |
+| `className`            | `string`                            | CSS class                                      |
 
 #### `<PaymentWarningBanner>`
 
@@ -1533,22 +1807,45 @@ The `units` prop remains the quantity passed to checkout and subscription
 updates. A unit can still represent a seat, but the public API no longer assumes
 that seats are the only unit-based pricing use case.
 
+### Pricing columns
+
+`twoColumnLayout` was removed. Use `columns={2}` for a fixed two-column pricing
+grid, or omit it for automatic layout.
+
+### App-owned plans and i18n
+
+`freePlans.activate` and `onBeforeFreePlanActivation` were removed:
+
+| Previous API                                 | New API                                 |
+| -------------------------------------------- | --------------------------------------- |
+| `freePlans.activate({ freePlanId })`         | `plans.activate({ planId })`            |
+| `onBeforeFreePlanActivation({ freePlanId })` | `onBeforePlanActivation({ planId })`    |
+| `api.freePlans.activate` in provider config  | `api.plans.activate` in provider config |
+
+Use the new plan-based API for free, trial, or other app-owned catalog plans.
+Convex-Creem writes `snapshot.appPlanAssignments` for the current app-owned
+plan; host apps only need a custom `activePlanId` projection when they
+intentionally want to override the component-managed assignment. Price interval
+suffixes now come from `labels.priceInterval`, so override those labels instead
+of formatting `/mo` or `/yr` in application code.
+
 ### Billing Snapshot Contract
 
 `creem.getBillingSnapshot(...)` and the generated
 `creem.api({ resolve }).snapshot` query return the canonical `BillingSnapshot`
-shape with explicit arrays for subscriptions and one-time orders.
+shape with explicit arrays for subscriptions, one-time orders, and app-owned
+plan assignments, plus a derived `access` projection.
 
-| Previous flat field         | Current source                                                              |
-| --------------------------- | --------------------------------------------------------------------------- |
-| `activePlanId`              | Derive from `snapshot.subscriptions`, usually the active `kind: "base"` row |
-| `subscriptionProductId`     | `snapshot.subscriptions[n].productId`                                       |
-| `subscriptionState`         | `snapshot.subscriptions[n].status`                                          |
-| `recurringCycle`            | `snapshot.subscriptions[n].recurringCycle`                                  |
-| `availableActions`          | `snapshot.availableBillingActions`                                          |
-| `payment`                   | Use payment/order-specific queries or `snapshot.orders` for paid orders     |
-| `ownedProductIds`           | Derive from paid rows in `snapshot.orders`                                  |
-| primary subscription fields | Derive from the relevant `snapshot.subscriptions` row                       |
+| Previous flat field         | Current source                                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `activePlanId`              | Derive from `snapshot.access` or the relevant row in `snapshot.subscriptions` / `snapshot.appPlanAssignments` |
+| `subscriptionProductId`     | `snapshot.subscriptions[n].productId`                                                                         |
+| `subscriptionState`         | `snapshot.subscriptions[n].status`                                                                            |
+| `recurringCycle`            | `snapshot.subscriptions[n].recurringCycle`                                                                    |
+| `availableActions`          | `snapshot.availableBillingActions`                                                                            |
+| `payment`                   | Use payment/order-specific queries or `snapshot.orders` for paid orders                                       |
+| `ownedProductIds`           | Derive from paid rows in `snapshot.orders`                                                                    |
+| primary subscription fields | Derive from the relevant `snapshot.subscriptions` row                                                         |
 
 The generated `uiModel` used by connected widgets exposes the same canonical
 snapshot as `uiModel.snapshot`.

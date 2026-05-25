@@ -1104,6 +1104,41 @@ Impact on `convex-creem`:
 - Reduce stale catalog/product mismatch risk for plan cards, checkout buttons,
   feature grants, credit grants, and free-product detection.
 
+### Webhook CRUD API support
+
+Feature Request:
+
+- [Add webhook CRUD API support](https://creem.featurebase.app/p/add-webhook-crud-api-support)
+
+Current behavior:
+
+- Webhook endpoints are configured manually in the Creem dashboard.
+- Agents, CLIs, templates, and app setup scripts can create Convex functions,
+  register the HTTP route, set Convex environment variables, and sync products,
+  but they cannot finish Creem webhook endpoint setup through an API.
+- The integration guide therefore still contains a manual dashboard step even
+  when every local and Convex-side task is automatable.
+
+Desired platform behavior:
+
+- Expose webhook endpoint create, read, update, delete, list, and rotate-secret
+  APIs.
+- Support selecting subscribed event types, environment/test-mode scope,
+  endpoint URL, enabled/disabled state, signing secret management, and delivery
+  status metadata.
+- Provide SDK and CLI parity so a setup agent can configure webhooks without
+  browser automation or dashboard scraping.
+
+Impact on `convex-creem`:
+
+- An agent could follow `INTEGRATION.md` end-to-end: install the package,
+  register the Convex component, set Convex env vars, deploy/register the Convex
+  HTTP route, create the Creem webhook endpoint, and run validation.
+- Project templates and bootstrap scripts could offer a one-command billing
+  setup flow for new apps.
+- Documentation could replace the manual dashboard webhook step with an optional
+  automated setup path when Creem exposes the API.
+
 ### Stable product identity and developer slugs across environments
 
 Feature request:

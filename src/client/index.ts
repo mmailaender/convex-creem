@@ -44,9 +44,13 @@ import type { ComponentApi } from "../component/_generated/component.js";
 import { resolveBillingSnapshot } from "../core/resolver.js";
 import {
   findCreditGrantByProductId,
+  findPlanById,
+  isAppOwnedPlan,
   normalizePlanCatalog,
 } from "../core/catalog.js";
 import type {
+  AppPlanActivation,
+  AppPlanAssignment,
   CreditGrant,
   BillingSnapshot,
   PlanCatalog,
@@ -113,6 +117,7 @@ export const subscriptionUpdateArgs = {
       v.literal("proration-charge"),
       v.literal("proration-none"),
       v.literal("period-end"),
+      v.literal("immediate"),
     ),
   ),
 };
@@ -144,6 +149,15 @@ export const subscriptionCancelScheduledUpdateArgs = {
  */
 export const subscriptionPauseArgs = {
   subscriptionId: v.optional(v.string()),
+};
+
+/**
+ * Convex arg validator for app-owned plan activation.
+ * Matches the args sent by `<Subscription.Root>` for `category: "free"`,
+ * `category: "trial"`, and other custom app-owned plans.
+ */
+export const appPlanActivateArgs = {
+  planId: v.string(),
 };
 
 /**
@@ -276,6 +290,8 @@ export type ApiResolver = (ctx: RunQueryCtx) => Promise<{
   userId: string;
   email: string;
   entityId: string;
+  activePlanId?: string | null;
+  activeFreePlanId?: string | null;
 }>;
 
 /**
@@ -500,6 +516,22 @@ export class Creem {
   private getProduct(ctx: RunQueryCtx, { productId }: { productId: string }) {
     return ctx.runQuery(this.component.lib.getProduct, { id: productId });
   }
+  private listAppPlanActivations(
+    ctx: RunQueryCtx,
+    { entityId }: { entityId: string },
+  ) {
+    return ctx.runQuery(this.component.lib.listAppPlanActivations, {
+      entityId,
+    });
+  }
+  private listAppPlanAssignments(
+    ctx: RunQueryCtx,
+    { entityId }: { entityId: string },
+  ) {
+    return ctx.runQuery(this.component.lib.listAppPlanAssignments, {
+      entityId,
+    });
+  }
   private toSubscriptionSnapshot(
     subscription: Subscription,
   ): SubscriptionSnapshot {
@@ -512,6 +544,75 @@ export class Creem {
       cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
       currentPeriodEnd: subscription.currentPeriodEnd,
       trialEnd: subscription.trialEnd ?? null,
+    };
+  }
+
+  /**
+   * App-owned plan activation namespace.
+   *
+   * The component records activation history for eligibility and current
+   * app-plan assignments for free, trial, or custom app-owned plans.
+   */
+  get appPlans() {
+    return {
+      /** List activation-history rows used for app-owned plan eligibility. */
+      listActivations: (ctx: RunQueryCtx, { entityId }: { entityId: string }) =>
+        this.listAppPlanActivations(ctx, { entityId }),
+      /** List current, scheduled, and ended app-owned plan assignments. */
+      listAssignments: (ctx: RunQueryCtx, { entityId }: { entityId: string }) =>
+        this.listAppPlanAssignments(ctx, { entityId }),
+      /** Return activation history for one app-owned plan. */
+      getActivation: (
+        ctx: RunQueryCtx,
+        { entityId, planId }: { entityId: string; planId: string },
+      ) =>
+        ctx.runQuery(this.component.lib.getAppPlanActivation, {
+          entityId,
+          planId,
+        }),
+      /**
+       * Activate an app-owned plan for the entity.
+       *
+       * This records activation history first, then writes an active
+       * assignment. If the plan or explicit option is once-per-entity, repeated
+       * activation throws a `ConvexError` before assignment state changes.
+       */
+      activate: async (
+        ctx: RunMutationCtx,
+        {
+          entityId,
+          planId,
+          activatedByUserId,
+          oncePerEntity,
+        }: {
+          entityId: string;
+          planId: string;
+          activatedByUserId?: string;
+          oncePerEntity?: boolean;
+        },
+      ): Promise<AppPlanAssignment> => {
+        const plan = findPlanById(this.billingCatalog, planId);
+        if (this.billingCatalog && !plan) {
+          throw new ConvexError(`Unknown app-owned plan: ${planId}`);
+        }
+        if (plan && !isAppOwnedPlan(plan)) {
+          throw new ConvexError(`Plan "${planId}" is not an app-owned plan`);
+        }
+
+        await ctx.runMutation(this.component.lib.recordAppPlanActivation, {
+          entityId,
+          planId,
+          activatedByUserId,
+          oncePerEntity: oncePerEntity ?? plan?.eligibility?.oncePerEntity,
+        });
+        return await ctx.runMutation(this.component.lib.assignAppPlan, {
+          entityId,
+          planId,
+          status: "active",
+          source: plan?.category ?? "manual",
+          assignedByUserId: activatedByUserId,
+        });
+      },
     };
   }
 
@@ -530,9 +631,10 @@ export class Creem {
       entityId: string;
     },
   ): Promise<BillingSnapshot> {
-    const [subscriptions, orders] = await Promise.all([
+    const [subscriptions, orders, appPlanAssignments] = await Promise.all([
       this.listAllUserSubscriptions(ctx, { entityId }),
       this.listUserOrders(ctx, { entityId }),
+      this.listAppPlanAssignments(ctx, { entityId }),
     ]);
 
     return resolveBillingSnapshot({
@@ -546,6 +648,7 @@ export class Creem {
         productId: order.productId,
         status: order.status,
       })),
+      appPlanAssignments: appPlanAssignments ?? [],
     });
   }
 
@@ -849,6 +952,17 @@ export class Creem {
       },
     );
 
+    if (args.freePlanId) {
+      await ctx.runMutation(this.component.lib.assignAppPlan, {
+        entityId: args.entityId,
+        planId: args.freePlanId,
+        status: "scheduled",
+        startsAt: args.subscription.currentPeriodEnd,
+        source: "paid_to_free",
+        subscriptionId: args.subscription.id,
+      });
+    }
+
     const scheduledFunctionId = await ctx.scheduler.runAt(
       effectiveAt,
       this.component.lib.applyScheduledSubscriptionUpdate,
@@ -911,7 +1025,8 @@ export class Creem {
       | "proration-charge-immediately"
       | "proration-charge"
       | "proration-none"
-      | "period-end";
+      | "period-end"
+      | "immediate";
     return {
       getCurrent: (ctx: RunQueryCtx, { entityId }: { entityId: string }) =>
         this.getCurrentSubscription(ctx, { entityId }),
@@ -939,9 +1054,20 @@ export class Creem {
             "Provide exactly one update target: productId, freePlanId, or units",
           );
         }
-        if (args.freePlanId && args.updateBehavior !== "period-end") {
+        const updateBehavior =
+          args.updateBehavior ?? (args.freePlanId ? "period-end" : undefined);
+        if (
+          args.freePlanId &&
+          updateBehavior !== "period-end" &&
+          updateBehavior !== "immediate"
+        ) {
           throw new ConvexError(
-            'freePlanId updates currently require updateBehavior: "period-end"',
+            'freePlanId updates support updateBehavior: "period-end" or "immediate"',
+          );
+        }
+        if (!args.freePlanId && updateBehavior === "immediate") {
+          throw new ConvexError(
+            'updateBehavior: "immediate" is only supported for freePlanId updates',
           );
         }
 
@@ -955,7 +1081,7 @@ export class Creem {
             });
         if (!subscription) throw new ConvexError("Subscription not found");
 
-        if (args.updateBehavior === "period-end") {
+        if (updateBehavior === "period-end") {
           await this.schedulePeriodEndSubscriptionUpdate(ctx, {
             entityId: args.entityId,
             subscription,
@@ -963,6 +1089,36 @@ export class Creem {
             freePlanId: args.freePlanId,
             units: args.units,
           });
+          return;
+        }
+
+        if (args.freePlanId && updateBehavior === "immediate") {
+          await ctx.runMutation(this.component.lib.patchSubscription, {
+            subscriptionId: subscription.id,
+            status: "canceled",
+            cancelAtPeriodEnd: false,
+          });
+          await ctx.runMutation(this.component.lib.assignAppPlan, {
+            entityId: args.entityId,
+            planId: args.freePlanId,
+            status: "active",
+            source: "paid_to_free",
+            subscriptionId: subscription.id,
+          });
+          await ctx.scheduler.runAfter(
+            0,
+            this.component.lib.executeSubscriptionLifecycle,
+            {
+              apiKey: this.apiKey,
+              serverIdx: this.serverIdx,
+              serverURL: this.serverURL,
+              subscriptionId: subscription.id,
+              operation: "cancel",
+              cancelMode: "immediate",
+              previousStatus: subscription.status,
+              previousCancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+            },
+          );
           return;
         }
 
@@ -987,7 +1143,7 @@ export class Creem {
             subscriptionId: subscription.id,
             productId: args.productId,
             units: args.units,
-            updateBehavior: args.updateBehavior,
+            updateBehavior,
             previousSeats: subscription.seats ?? undefined,
             previousProductId: subscription.productId,
           },
@@ -1156,6 +1312,13 @@ export class Creem {
         if (!canceledUpdate) return { canceled: false };
 
         if (canceledUpdate.targetPlanId) {
+          await ctx.runMutation(
+            this.component.lib.cancelScheduledAppPlanAssignment,
+            {
+              subscriptionId: subscription.id,
+              planId: canceledUpdate.targetPlanId,
+            },
+          );
           await ctx.runMutation(this.component.lib.patchSubscription, {
             subscriptionId: subscription.id,
             status:
@@ -1221,27 +1384,11 @@ export class Creem {
           throw new ConvexError("Subscription is not active");
         }
 
-        // Always schedule cancellation (not immediate), so the user keeps access until period end
-        await ctx.runMutation(this.component.lib.patchSubscription, {
-          subscriptionId: subscription.id,
-          cancelAtPeriodEnd: true,
+        await this.schedulePeriodEndSubscriptionUpdate(ctx, {
+          entityId: args.entityId,
+          subscription,
+          freePlanId: args.freePlanId,
         });
-
-        // Schedule the Creem API call for scheduled cancellation
-        await ctx.scheduler.runAfter(
-          0,
-          this.component.lib.executeSubscriptionLifecycle,
-          {
-            apiKey: this.apiKey,
-            serverIdx: this.serverIdx,
-            serverURL: this.serverURL,
-            subscriptionId: subscription.id,
-            operation: "cancel",
-            cancelMode: "scheduled",
-            previousStatus: subscription.status,
-            previousCancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-          },
-        );
 
         return { freePlanId: args.freePlanId };
       },
@@ -1426,19 +1573,28 @@ export class Creem {
     {
       entityId,
       user,
+      activePlanId,
+      activeFreePlanId,
     }: {
       entityId: string | null;
       user?: { _id: string; email: string } | null;
+      activePlanId?: string | null;
+      activeFreePlanId?: string | null;
     },
   ) {
     const products = await this.listProducts(ctx);
     if (!entityId) {
       return {
         user: user ?? null,
+        catalog: this.billingCatalog ?? null,
         snapshot: null as BillingSnapshot | null,
         allProducts: products,
         ownedProductIds: [] as string[],
         subscriptionProductId: null as string | null,
+        activePlanId: activePlanId ?? activeFreePlanId ?? null,
+        activeFreePlanId: activeFreePlanId ?? null,
+        appPlanActivations: [] as AppPlanActivation[],
+        appPlanAssignments: [] as AppPlanAssignment[],
         activeSubscriptions: [] as Array<{
           id: string;
           productId: string;
@@ -1462,6 +1618,8 @@ export class Creem {
       activeSubscriptions,
       customer,
       scheduledSubscriptionUpdates,
+      appPlanActivations,
+      appPlanAssignments,
     ] = await Promise.all([
       this.getBillingSnapshot(ctx, { entityId }),
       this.getCurrentSubscription(ctx, { entityId }),
@@ -1470,6 +1628,8 @@ export class Creem {
       ctx.runQuery(this.component.lib.listPendingScheduledSubscriptionUpdates, {
         entityId,
       }),
+      this.listAppPlanActivations(ctx, { entityId }),
+      this.listAppPlanAssignments(ctx, { entityId }),
     ]);
     const ownedProductIds = [
       ...new Set(
@@ -1478,12 +1638,21 @@ export class Creem {
           .map((order) => order.productId),
       ),
     ];
+    const activeAssignedPlanId =
+      (appPlanAssignments ?? []).find(
+        (assignment) => assignment.status === "active",
+      )?.planId ?? null;
     return {
       user: user ?? null,
+      catalog: this.billingCatalog ?? null,
       snapshot,
       allProducts: products,
       ownedProductIds,
       subscriptionProductId: subscription?.productId ?? null,
+      activePlanId: activePlanId ?? activeFreePlanId ?? activeAssignedPlanId,
+      activeFreePlanId: activeFreePlanId ?? null,
+      appPlanActivations: appPlanActivations ?? [],
+      appPlanAssignments: appPlanAssignments ?? [],
       activeSubscriptions: activeSubscriptions.map((s) => ({
         id: s.id,
         productId: s.productId,
@@ -1532,6 +1701,8 @@ export class Creem {
             userId: string;
             email: string;
             entityId: string;
+            activePlanId?: string | null;
+            activeFreePlanId?: string | null;
           } | null = null;
           try {
             resolved = await resolve(ctx);
@@ -1543,6 +1714,8 @@ export class Creem {
             user: resolved
               ? { _id: resolved.userId, email: resolved.email }
               : null,
+            activeFreePlanId: resolved?.activeFreePlanId,
+            activePlanId: resolved?.activePlanId,
           });
         },
       }),
@@ -1591,9 +1764,21 @@ export class Creem {
                 "Provide exactly one update target: productId, freePlanId, or units",
               );
             }
-            if (args.freePlanId && args.updateBehavior !== "period-end") {
+            const updateBehavior =
+              args.updateBehavior ??
+              (args.freePlanId ? "period-end" : undefined);
+            if (
+              args.freePlanId &&
+              updateBehavior !== "period-end" &&
+              updateBehavior !== "immediate"
+            ) {
               throw new ConvexError(
-                'freePlanId updates currently require updateBehavior: "period-end"',
+                'freePlanId updates support updateBehavior: "period-end" or "immediate"',
+              );
+            }
+            if (!args.freePlanId && updateBehavior === "immediate") {
+              throw new ConvexError(
+                'updateBehavior: "immediate" is only supported for freePlanId updates',
               );
             }
 
@@ -1607,7 +1792,7 @@ export class Creem {
                 });
             if (!subscription) throw new ConvexError("Subscription not found");
 
-            if (args.updateBehavior === "period-end") {
+            if (updateBehavior === "period-end") {
               await this.schedulePeriodEndSubscriptionUpdate(ctx, {
                 entityId,
                 subscription,
@@ -1615,6 +1800,36 @@ export class Creem {
                 freePlanId: args.freePlanId,
                 units: args.units,
               });
+              return;
+            }
+
+            if (args.freePlanId && updateBehavior === "immediate") {
+              await ctx.runMutation(this.component.lib.patchSubscription, {
+                subscriptionId: subscription.id,
+                status: "canceled",
+                cancelAtPeriodEnd: false,
+              });
+              await ctx.runMutation(this.component.lib.assignAppPlan, {
+                entityId,
+                planId: args.freePlanId,
+                status: "active",
+                source: "paid_to_free",
+                subscriptionId: subscription.id,
+              });
+              await ctx.scheduler.runAfter(
+                0,
+                this.component.lib.executeSubscriptionLifecycle,
+                {
+                  apiKey: this.apiKey,
+                  serverIdx: this.serverIdx,
+                  serverURL: this.serverURL,
+                  subscriptionId: subscription.id,
+                  operation: "cancel",
+                  cancelMode: "immediate",
+                  previousStatus: subscription.status,
+                  previousCancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+                },
+              );
               return;
             }
 
@@ -1640,7 +1855,7 @@ export class Creem {
                 subscriptionId: subscription.id,
                 productId: args.productId,
                 units: args.units,
-                updateBehavior: args.updateBehavior,
+                updateBehavior,
                 previousSeats: subscription.seats ?? undefined,
                 previousProductId: subscription.productId,
               },
@@ -1770,6 +1985,13 @@ export class Creem {
             if (!canceledUpdate) return { canceled: false };
 
             if (canceledUpdate.targetPlanId) {
+              await ctx.runMutation(
+                this.component.lib.cancelScheduledAppPlanAssignment,
+                {
+                  subscriptionId: subscription.id,
+                  planId: canceledUpdate.targetPlanId,
+                },
+              );
               await ctx.runMutation(this.component.lib.patchSubscription, {
                 subscriptionId: subscription.id,
                 status:
@@ -1923,6 +2145,21 @@ export class Creem {
               args.pageNumber,
               args.pageSize,
             );
+          },
+        }),
+      },
+      plans: {
+        activate: mutationGeneric({
+          args: appPlanActivateArgs,
+          returns: v.object({ success: v.boolean() }),
+          handler: async (ctx, args) => {
+            const { entityId, userId } = await resolve(ctx);
+            await this.appPlans.activate(ctx, {
+              entityId,
+              planId: args.planId,
+              activatedByUserId: userId,
+            });
+            return { success: true };
           },
         }),
       },
@@ -2120,6 +2357,20 @@ export class Creem {
                 await ctx.runMutation(this.component.lib.createSubscription, {
                   subscription,
                 });
+                if (
+                  entityId &&
+                  (subscription.status === "active" ||
+                    subscription.status === "trialing")
+                ) {
+                  await ctx.runMutation(
+                    this.component.lib.endActiveAppPlanAssignments,
+                    {
+                      entityId,
+                      endedAt:
+                        subscription.startedAt ?? new Date().toISOString(),
+                    },
+                  );
+                }
               }
 
               // Store the order (present for both one-time and subscription checkouts)
@@ -2212,6 +2463,19 @@ export class Creem {
                 entityId,
                 customerEntity,
               );
+              if (
+                entityId &&
+                (subscription.status === "active" ||
+                  subscription.status === "trialing")
+              ) {
+                await ctx.runMutation(
+                  this.component.lib.endActiveAppPlanAssignments,
+                  {
+                    entityId,
+                    endedAt: subscription.startedAt ?? new Date().toISOString(),
+                  },
+                );
+              }
             } else {
               // Fallback: SDK parsing failed (e.g., unknown status)
               // Still try to extract subscription ID for update events

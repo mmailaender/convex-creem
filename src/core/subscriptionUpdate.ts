@@ -1,4 +1,7 @@
-import type { UpdateBehavior } from "./types.js";
+import type {
+  FreePlanUpdateBehavior,
+  ResolvedUpdateBehavior,
+} from "./types.js";
 import {
   defaultBillingLabels,
   type BillingLabels,
@@ -7,7 +10,7 @@ import {
 
 export type UpdateSummaryInput = {
   kind: "plan-switch" | "unit-update";
-  updateBehavior: UpdateBehavior;
+  updateBehavior: ResolvedUpdateBehavior;
   currentLabel: string;
   newLabel: string;
   currentCaption?: string | null;
@@ -30,9 +33,23 @@ export type UpdateSummary = {
   confirmLabel: string;
 };
 
+export const resolveTargetUpdateBehavior = (
+  updateBehavior: ResolvedUpdateBehavior | undefined,
+  target: { freePlanId?: string | null },
+): ResolvedUpdateBehavior => {
+  return (
+    updateBehavior ??
+    (target.freePlanId ? "period-end" : "proration-charge-immediately")
+  );
+};
+
+export const resolveFreePlanUpdateBehavior = (
+  updateBehavior: FreePlanUpdateBehavior | undefined,
+): FreePlanUpdateBehavior => updateBehavior ?? "period-end";
+
 const formatPeriodEnd = (
   iso: string,
-  updateBehavior: UpdateBehavior,
+  updateBehavior: ResolvedUpdateBehavior,
   labels: BillingLabels,
   formatDate?: (input: BillingDateFormatInput) => string,
 ): string | null => {

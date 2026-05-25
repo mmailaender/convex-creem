@@ -43,7 +43,9 @@ export const insertFakeUser = internalMutation({
       console.log("User already exists");
       return;
     }
-    await ctx.db.insert("users", { email: "user@example.com" });
+    await ctx.db.insert("users", {
+      email: "user@example.com",
+    });
   },
 });
 

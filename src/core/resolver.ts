@@ -5,7 +5,9 @@ import {
 } from "./catalog.js";
 import { derivePaymentRecoveryState } from "./selectors.js";
 import type {
+  AppPlanAssignment,
   AvailableAction,
+  BillingAccessItem,
   BillingSnapshotOrder,
   BillingSnapshotSubscription,
   BillingSnapshot,
@@ -28,6 +30,8 @@ export type BillingSnapshotResolverInput = {
     productId: string;
     status: string;
   }>;
+  /** App-owned plan assignment rows for the entity. */
+  appPlanAssignments?: AppPlanAssignment[];
   /** Override for the current timestamp (ISO string). */
   now?: string;
 };
@@ -82,6 +86,9 @@ export const resolveBillingSnapshot = (
     };
   });
 
+  const appPlanAssignments = input.appPlanAssignments ?? [];
+  const access = buildBillingAccess(subscriptions, orders, appPlanAssignments);
+
   // Derive payment recovery from all subscriptions
   const paymentRecoveryState: PaymentRecoveryState =
     derivePaymentRecoveryState(subscriptions);
@@ -94,11 +101,62 @@ export const resolveBillingSnapshot = (
     catalogVersion: catalog?.version,
     subscriptions,
     orders,
+    appPlanAssignments,
+    access,
     paymentRecoveryState,
     availableBillingActions: actions,
     resolvedAt: now,
   };
 };
+
+const buildBillingAccess = (
+  subscriptions: BillingSnapshotSubscription[],
+  orders: BillingSnapshotOrder[],
+  appPlanAssignments: AppPlanAssignment[],
+): BillingAccessItem[] => [
+  ...subscriptions
+    .filter((subscription) => ACTIVE_STATUSES.has(subscription.status))
+    .map(
+      (subscription): BillingAccessItem => ({
+        source: "creem_subscription",
+        kind: "subscription",
+        planId: subscription.planId,
+        productId: subscription.productId,
+        subscriptionId: subscription.subscriptionId,
+        status: subscription.status,
+        recurringCycle: subscription.recurringCycle,
+        units: subscription.units,
+        currentPeriodEnd: subscription.currentPeriodEnd,
+        trialEnd: subscription.trialEnd,
+      }),
+    ),
+  ...orders
+    .filter((order) => order.status === "paid")
+    .map(
+      (order): BillingAccessItem => ({
+        source: "creem_order",
+        kind: "one_time",
+        planId: order.planId,
+        productId: order.productId,
+        orderId: order.orderId,
+        status: order.status,
+      }),
+    ),
+  ...appPlanAssignments
+    .filter((assignment) => assignment.status === "active")
+    .map(
+      (assignment): BillingAccessItem => ({
+        source: "app_plan_assignment",
+        kind: "app_plan",
+        planId: assignment.planId,
+        status: assignment.status,
+        startsAt: assignment.startsAt,
+        endsAt: assignment.endsAt,
+        assignmentSource: assignment.source,
+        subscriptionId: assignment.subscriptionId,
+      }),
+    ),
+];
 
 const buildBillingActions = (
   subscriptions: BillingSnapshotSubscription[],

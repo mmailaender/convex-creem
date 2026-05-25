@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildUpdateSummary,
+  resolveTargetUpdateBehavior,
   type UpdateSummaryInput,
 } from "./subscriptionUpdate.js";
 
@@ -178,5 +179,35 @@ describe("buildUpdateSummary", () => {
       });
       expect(result.confirmLabel).toBe("Confirm update");
     });
+  });
+});
+
+describe("resolveTargetUpdateBehavior", () => {
+  it("defaults paid-to-free switches to period-end", () => {
+    expect(
+      resolveTargetUpdateBehavior(undefined, {
+        freePlanId: "free",
+      }),
+    ).toBe("period-end");
+  });
+
+  it("keeps explicit immediate behavior for paid-to-free switches", () => {
+    expect(
+      resolveTargetUpdateBehavior("immediate", {
+        freePlanId: "free",
+      }),
+    ).toBe("immediate");
+  });
+
+  it("defaults paid targets and unit updates to immediate proration", () => {
+    expect(resolveTargetUpdateBehavior(undefined, {})).toBe(
+      "proration-charge-immediately",
+    );
+  });
+
+  it("keeps the requested behavior for paid targets and unit updates", () => {
+    expect(
+      resolveTargetUpdateBehavior("proration-charge-immediately", {}),
+    ).toBe("proration-charge-immediately");
   });
 });

@@ -1,59 +1,280 @@
-# Integration Guide — `@mmailaender/convex-creem`
+# Integration Guide - `@mmailaender/convex-creem`
 
-Step-by-step guide for integrating the Convex Creem billing system into your
-React or Svelte application.
+This guide walks through a complete Convex Creem integration for React or
+Svelte. The Svelte example in `example-svelte/src/App.svelte` is a single-page
+Vite app: it does not define SvelteKit routes. Its navigation links are anchor
+paths to in-page billing variants, such as `#sub-one-plan` and
+`#onetime-single`.
+
+Use this order:
+
+1. Set up the Convex component and webhook route.
+2. Export the connected Convex billing API.
+3. Define the browser-side billing catalog.
+4. Wrap your billing UI in `CreemConvexProvider`.
+5. Choose the billing path you need: subscriptions, one-time products, credits,
+   account tools, or usage gates.
 
 ---
 
 ## 1. Install
 
+Install the package plus the peer dependencies for the frontend framework you
+use.
+
 ```bash
-npm install @mmailaender/convex-creem
+npm install @mmailaender/convex-creem convex creem
+```
+
+For Svelte widgets:
+
+```bash
+npm install svelte @mmailaender/convex-svelte @ark-ui/svelte
+```
+
+For React widgets:
+
+```bash
+npm install react react-dom @ark-ui/react
 ```
 
 ---
 
-## 2. Configure the Convex backend
+## 2. Register the Convex component
 
-Create `convex/billing.ts`:
+Create or update `convex/convex.config.ts`:
 
 ```ts
-import { Creem } from "@mmailaender/convex-creem";
+import { defineApp } from "convex/server";
+import creem from "@mmailaender/convex-creem/convex.config";
 
-const creem = new Creem(components.creem, {
-  cancelMode: "scheduled", // or "immediate"
+const app = defineApp();
+app.use(creem);
+
+export default app;
+```
+
+Set Creem secrets in Convex:
+
+```bash
+npx convex env set CREEM_API_KEY <your_creem_api_key>
+npx convex env set CREEM_WEBHOOK_SECRET <your_creem_webhook_signing_secret>
+```
+
+If you use credit packs, also set a server-side product ID. Do not trust a
+browser-exposed product ID for webhook fulfillment:
+
+```bash
+npx convex env set CREEM_ONETIME_CREDITS prod_...
+```
+
+---
+
+## 3. Export the Convex billing API
+
+Create `convex/billing.ts`. Replace the resolver with your real auth and entity
+logic. `entityId` is the billing owner; use the user ID for user billing or the
+org/team ID for organization billing. The repo's demo resolver reads the first
+row from a `users` table via `getUserInfo`; that is only demo auth, not the
+recommended production boundary.
+
+```ts
+import {
+  Creem,
+  defineBillingCatalog,
+  type ApiResolver,
+} from "@mmailaender/convex-creem";
+import { api, components } from "./_generated/api";
+import { action, internalAction, query } from "./_generated/server";
+
+const creditsProductId = process.env.CREEM_ONETIME_CREDITS;
+const serverBillingCatalog = creditsProductId
+  ? defineBillingCatalog({
+      version: "server",
+      plans: [
+        {
+          planId: "ai-credits-100",
+          category: "paid",
+          billingType: "onetime",
+          creemProductIds: {
+            custom: creditsProductId,
+          },
+          creditGrant: {
+            amount: "100",
+            accountName: "credits",
+            unitLabel: "credits",
+            refundBehavior: "revoke_on_full_refund",
+          },
+        },
+      ],
+    } as const)
+  : undefined;
+
+export const creem = new Creem(components.creem, {
+  ...(serverBillingCatalog ? { billingCatalog: serverBillingCatalog } : {}),
+  cancelMode: "scheduled",
 });
 
-const resolve = async (ctx) => {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new Error("Not authenticated");
+export const currentUser = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    return {
+      id: identity.subject,
+      email: identity.email!,
+    };
+  },
+});
+
+const resolve: ApiResolver = async (ctx) => {
+  const user = await ctx.runQuery(api.billing.currentUser);
   return {
-    userId: identity.subject,
-    email: identity.email!,
-    entityId: identity.subject, // or your org/team ID
+    userId: user.id,
+    email: user.email,
+    entityId: user.id,
   };
 };
 
-const { uiModel, checkouts, subscriptions, customers, transactions } =
-  creem.api({ resolve });
+const {
+  uiModel,
+  snapshot,
+  checkouts,
+  subscriptions,
+  products,
+  customers,
+  transactions,
+  orders,
+  credits,
+} = creem.api({ resolve });
 
-export { uiModel };
+export { uiModel, snapshot };
 export const checkoutsCreate = checkouts.create;
 export const subscriptionsUpdate = subscriptions.update;
 export const subscriptionsCancel = subscriptions.cancel;
 export const subscriptionsResume = subscriptions.resume;
+export const subscriptionsCancelScheduledUpdate =
+  subscriptions.cancelScheduledUpdate;
+export const subscriptionsPause = subscriptions.pause;
+export const subscriptionsList = subscriptions.list;
+export const subscriptionsListAll = subscriptions.listAll;
+export const productsList = products.list;
+export const productsGet = products.get;
+export const customersRetrieve = customers.retrieve;
 export const customersPortalUrl = customers.portalUrl;
 export const transactionsSearch = transactions.search;
+export const ordersList = orders.list;
+export const creditsCreateAccount = credits.createAccount;
+export const creditsGetBalance = credits.getBalance;
+export const creditsCredit = credits.credit;
+export const creditsDebit = credits.debit;
+export const creditsListEntries = credits.listEntries;
+
+export const generateImage = action({
+  args: {},
+  handler: async (ctx) => {
+    await ctx.runAction(api.billing.creditsDebit, {
+      amount: "10",
+      reference: "generate_image",
+      idempotencyKey: `generate_image_${Date.now()}`,
+    });
+    return { creditsConsumed: "10" };
+  },
+});
+
+export const syncBillingProducts = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    await creem.syncProducts(ctx);
+    return { synced: true };
+  },
+});
 ```
+
+What to consider:
+
+- Export only capabilities your UI needs. If you omit `subscriptions.cancel`,
+  cancel buttons disappear.
+- Use `cancelMode: "scheduled"` when canceling should keep access until the
+  current period ends. Use `"immediate"` when cancellation should end access
+  immediately.
+- Put credit grants in the server catalog because webhooks run on the server.
+- `syncBillingProducts` is intentionally an `internalAction`, matching the
+  example app. Trigger it from the Convex CLI, dashboard, or another trusted
+  internal function, not from browser UI.
+- App-owned credit spending, such as `generateImage`, should call `creditsDebit`
+  on the server. The credits widget only displays and refreshes balance state.
 
 ---
 
-## 3. Define your plan catalog
+## 4. Register the webhook route
+
+Create or update `convex/http.ts`:
 
 ```ts
-import { defineBillingCatalog } from "@mmailaender/convex-creem/react";
+import { httpRouter } from "convex/server";
+import { creem } from "./billing";
 
-export const catalog = defineBillingCatalog({
+const http = httpRouter();
+
+creem.registerRoutes(http, {
+  path: "/creem/events",
+  events: {
+    "checkout.completed": async (_ctx, event) => {
+      console.log("Checkout completed", event);
+    },
+    "subscription.update": async (_ctx, event) => {
+      console.log("Subscription updated", event);
+    },
+  },
+});
+
+export default http;
+```
+
+In Creem, set the webhook endpoint to:
+
+```text
+https://<your-convex-site-url>/creem/events
+```
+
+The component stores customers, subscriptions, orders, refunds, disputes, and
+credit grants from supported Creem events.
+
+After products exist in Creem, sync them into Convex:
+
+```bash
+npx convex run billing:syncBillingProducts
+```
+
+This works with the internal action in the example. If you expose your own
+admin-only public action instead, protect it server-side and keep it out of
+client-facing billing pages.
+
+---
+
+## 5. Add CSS
+
+Import the package CSS in your app CSS entry point:
+
+```css
+@import "tailwindcss";
+@import "@mmailaender/convex-creem/styles";
+```
+
+The Svelte example uses this in `example-svelte/src/app.css`.
+
+---
+
+## 6. Define the browser billing catalog
+
+Create a shared catalog file in your frontend. Import from the framework entry
+you are using (`/svelte` or `/react`).
+
+```ts
+import { defineBillingCatalog } from "@mmailaender/convex-creem/svelte";
+
+export const billingCatalog = defineBillingCatalog({
   version: "1",
   defaultPlanId: "free",
   plans: [
@@ -62,21 +283,29 @@ export const catalog = defineBillingCatalog({
       category: "free",
       title: "Free",
       description: "For individuals getting started",
-      limits: { projects: 3, members: 1 },
+      limits: { projects: 1, aiMessages: 50 },
     },
     {
-      planId: "pro",
+      planId: "basic",
       category: "paid",
       billingType: "recurring",
-      billingCycles: ["every-month", "every-year"],
-      title: "Pro",
-      description: "For growing teams",
+      title: "Basic",
+      creemProductIds: {
+        "every-month": import.meta.env.VITE_CREEM_SUB_BASIC_MONTHLY,
+      },
+      limits: { projects: 5, aiMessages: 250 },
+    },
+    {
+      planId: "premium",
+      category: "paid",
+      billingType: "recurring",
+      title: "Premium",
       recommended: true,
       creemProductIds: {
-        "every-month": "prod_monthly_xxx",
-        "every-year": "prod_yearly_xxx",
+        "every-month": import.meta.env.VITE_CREEM_SUB_PREMIUM_MONTHLY,
+        "every-year": import.meta.env.VITE_CREEM_SUB_PREMIUM_ANNUAL,
       },
-      limits: { projects: 50, members: 10 },
+      limits: { projects: 100, aiMessages: 2500 },
     },
     {
       planId: "enterprise",
@@ -88,243 +317,497 @@ export const catalog = defineBillingCatalog({
 } as const);
 ```
 
+What to consider:
+
+- `creemProductIds` maps billing cycles to Creem product IDs.
+- Supported recurring cycles are `every-month`, `every-three-months`,
+  `every-six-months`, and `every-year`.
+- If a plan has multiple cycles, the interval selector appears automatically.
+- Product IDs used only by frontend widgets may live in your framework's public
+  client env namespace, such as Vite `VITE_*`, Next.js `NEXT_PUBLIC_*`, or
+  SvelteKit `PUBLIC_*`. Trusted webhook fulfillment data must live in Convex env
+  vars.
+
 ---
 
-## 4. Create a typed binding (optional but recommended)
+## 7. Connect Svelte
 
-### React
+In Svelte, initialize Convex once with `setupConvex`, create a
+`ConnectedBillingApi`, and wrap widgets in `CreemConvexProvider`. The provider
+is the required integration boundary. `ConvexCreemProvider` is not an exported
+component name; the package exports `CreemConvexProvider`.
 
-```tsx
-import { createCreemReact } from "@mmailaender/convex-creem/react";
-import { api } from "../convex/_generated/api";
-import { catalog } from "./billing-catalog";
+```svelte
+<script lang="ts">
+  import { setupConvex } from "@mmailaender/convex-svelte";
+  import {
+    CreemConvexProvider,
+    Subscription,
+    BillingPortal,
+    plansOf,
+    type ConnectedBillingApi,
+  } from "@mmailaender/convex-creem/svelte";
+  import { api } from "../convex/_generated/api.js";
+  import { billingCatalog } from "./billingCatalog";
 
-export const billing = createCreemReact({
-  catalog,
-  api: {
+  const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
+  if (!convexUrl) throw new Error("VITE_CONVEX_URL is required");
+  setupConvex(convexUrl);
+
+  const connectedApi: ConnectedBillingApi = {
     uiModel: api.billing.uiModel,
     checkouts: { create: api.billing.checkoutsCreate },
     subscriptions: {
       update: api.billing.subscriptionsUpdate,
       cancel: api.billing.subscriptionsCancel,
       resume: api.billing.subscriptionsResume,
+      cancelScheduledUpdate: api.billing.subscriptionsCancelScheduledUpdate,
     },
     customers: { portalUrl: api.billing.customersPortalUrl },
     transactions: { search: api.billing.transactionsSearch },
-  },
-});
+    credits: {
+      createAccount: api.billing.creditsCreateAccount,
+      getBalance: api.billing.creditsGetBalance,
+      credit: api.billing.creditsCredit,
+      debit: api.billing.creditsDebit,
+      listEntries: api.billing.creditsListEntries,
+    },
+  };
+</script>
 
-// billing.planIds → ["free", "pro", "enterprise"] (typed)
+<CreemConvexProvider api={connectedApi} catalog={billingCatalog}>
+  <Subscription.Root plans={plansOf(billingCatalog, ["free", "premium"])} />
+  <BillingPortal />
+</CreemConvexProvider>
 ```
 
-### Svelte
+Important: connected widgets must be rendered inside `CreemConvexProvider`. Do
+not pass `api={...}` directly to `Subscription.Root`, `Product.Root`,
+`BillingPortal`, or `BillingHistory`.
 
-```ts
-import { createCreemSvelte } from "@mmailaender/convex-creem/svelte";
-// Same pattern as React
+The provider-level `ConnectedBillingApi` decides which paths are available:
+
+| API field                             | Used by                                         | If omitted                                             |
+| ------------------------------------- | ----------------------------------------------- | ------------------------------------------------------ |
+| `uiModel`                             | All connected widgets                           | Widgets cannot load billing state.                     |
+| `checkouts.create`                    | `Subscription.Root`, `Product.Root`             | Subscribe/buy buttons cannot create checkout sessions. |
+| `subscriptions.update`                | Plan switches, unit changes, period-end updates | Switch and unit update controls are unavailable.       |
+| `subscriptions.cancel`                | Subscription cancel buttons                     | Cancel controls are unavailable.                       |
+| `subscriptions.resume`                | Scheduled-cancel resume controls                | Resume/undo cancel controls are unavailable.           |
+| `subscriptions.cancelScheduledUpdate` | App-side period-end update undo                 | Pending period-end update undo is unavailable.         |
+| `customers.portalUrl`                 | `BillingPortal`, `PaymentRecoveryButton`        | Portal buttons cannot open the Creem customer portal.  |
+| `transactions.search`                 | `BillingHistory`                                | Billing history cannot render.                         |
+| `credits.*`                           | `Credits.Root` and app credit actions           | Credit balance and ledger UI cannot work.              |
+
+Use `createCreemSvelte` when you want one typed binding object, as shown in the
+example's `#sub-typed-binding` section:
+
+```svelte
+<script lang="ts">
+  import {
+    CreemConvexProvider,
+    Subscription,
+    BillingPortal,
+    createCreemSvelte,
+  } from "@mmailaender/convex-creem/svelte";
+
+  const billing = createCreemSvelte({
+    catalog: billingCatalog,
+    api: connectedApi,
+    defaultCycle: "every-month",
+  });
+</script>
+
+<CreemConvexProvider
+  api={billing.api}
+  catalog={billing.catalog}
+  defaultCycle={billing.defaultCycle}
+>
+  <Subscription.Root plans={billing.planIds} />
+  <BillingPortal />
+</CreemConvexProvider>
+```
+
+The example also reads `uiModel` directly once for account-level UI such as
+payment recovery and usage gates:
+
+```svelte
+<script lang="ts">
+  import { useQuery } from "@mmailaender/convex-svelte";
+  import { CheckoutSuccessSummary } from "@mmailaender/convex-creem/svelte";
+  import { api } from "../convex/_generated/api.js";
+
+  const billingModelQuery = useQuery(api.billing.uiModel, {});
+  const snapshot = $derived(billingModelQuery.data?.snapshot ?? null);
+  const checkoutSearch =
+    typeof window === "undefined" ? "" : window.location.search;
+</script>
+
+<CheckoutSuccessSummary search={checkoutSearch} />
 ```
 
 ---
 
-## 5. Wire up widgets
+## 8. Connect React
 
-### React — Subscription widget
+React uses the same `ConnectedBillingApi` shape. The difference is your normal
+Convex React client setup.
 
 ```tsx
-import { Subscription } from "@mmailaender/convex-creem/react";
-import { billing } from "./billing";
+import {
+  CreemConvexProvider,
+  Subscription,
+  BillingPortal,
+  createCreemReact,
+  plansOf,
+  type ConnectedBillingApi,
+} from "@mmailaender/convex-creem/react";
+import { api } from "../convex/_generated/api";
+import { billingCatalog } from "./billingCatalog";
+
+const connectedApi: ConnectedBillingApi = {
+  uiModel: api.billing.uiModel,
+  checkouts: { create: api.billing.checkoutsCreate },
+  subscriptions: {
+    update: api.billing.subscriptionsUpdate,
+    cancel: api.billing.subscriptionsCancel,
+    resume: api.billing.subscriptionsResume,
+    cancelScheduledUpdate: api.billing.subscriptionsCancelScheduledUpdate,
+  },
+  customers: { portalUrl: api.billing.customersPortalUrl },
+  transactions: { search: api.billing.transactionsSearch },
+  credits: {
+    createAccount: api.billing.creditsCreateAccount,
+    getBalance: api.billing.creditsGetBalance,
+    credit: api.billing.creditsCredit,
+    debit: api.billing.creditsDebit,
+    listEntries: api.billing.creditsListEntries,
+  },
+};
+
+const billing = createCreemReact({
+  catalog: billingCatalog,
+  api: connectedApi,
+  defaultCycle: "every-month",
+});
 
 export function PricingPage() {
   return (
-    <Subscription.Root
+    <CreemConvexProvider
       api={billing.api}
       catalog={billing.catalog}
-      plans={billing.planIds}
-      defaultCycle="every-month"
+      defaultCycle={billing.defaultCycle}
     >
-      <Subscription.Item planId="free" type="free" />
-      <Subscription.Item planId="pro" type="single" />
-      <Subscription.Item planId="enterprise" type="enterprise" />
-    </Subscription.Root>
+      <Subscription.Root
+        plans={plansOf(billing.catalog, ["free", "premium"])}
+      />
+      <BillingPortal />
+    </CreemConvexProvider>
   );
 }
 ```
 
-### Svelte — Subscription widget
+---
+
+## 9. Choose your billing path
+
+The Svelte example exposes these paths as in-page anchors. Use the closest path
+as your starting point.
+
+| Example anchor            | Use this when                                    | Main API to configure                                              | Considerations                                                                                    |
+| ------------------------- | ------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `#sub-one-plan`           | You have one paid plan                           | `Subscription.Root plans={["pro"]}`                                | Smallest catalog-driven subscription setup.                                                       |
+| `#sub-two-plans`          | You have a simple upgrade choice                 | `plans={["basic", "premium"]}`                                     | Good default for most SaaS pricing pages.                                                         |
+| `#sub-multi-cycle`        | Plans support monthly/yearly or more cycles      | `creemProductIds` with several cycle keys                          | The interval selector appears only when multiple cycles exist.                                    |
+| `#sub-catalog-driven`     | You split plans by audience                      | `groups={[...]}`                                                   | Group selector controls visible plans; unit plans can show a picker.                              |
+| `#sub-unit-auto`          | Quantity comes from app state                    | `units={memberCount}`                                              | Keep Creem quantity synced when the app count changes.                                            |
+| `#sub-grouped-cycles`     | Groups also have different intervals             | `groups` plus multi-cycle products                                 | The active group controls available billing cycles.                                               |
+| `#sub-app-trial`          | No-card trial before choosing free or paid       | `category: "trial"` plus `plans.activate`                          | Component records once-per-entity history and app-plan assignments; your app owns quotas.         |
+| `#sub-consent-gates`      | Checkout requires terms, auth, or policy consent | `onBeforeCheckout`, `onBeforePlanChange`, `onBeforePlanActivation` | Return `false` to stop the billing action. Enforce real permissions server-side too.              |
+| `#sub-custom-composition` | You need app-owned card markup                   | `unstyled`, `Subscription.Grid`, `Subscription.Item`, slots        | The root still owns checkout, switch, cancel, units, and active state.                            |
+| `#sub-typed-binding`      | You want typed plan IDs and one binding object   | `createCreemSvelte` or `createCreemReact`                          | Recommended for production apps.                                                                  |
+| `#sub-period-end`         | Downgrades should apply at period end            | `updateBehavior` resolver and `cancelScheduledUpdate` export       | App-side scheduled updates are tracked in Convex until applied.                                   |
+| `#onetime-single`         | You sell a one-time product once                 | `Product.Root` with `Product.Item type="one-time"`                 | Shows "Owned" after purchase.                                                                     |
+| `#onetime-group`          | One-time products are mutually exclusive         | `Product.Root transition={[...]}`                                  | Use `via_product` for delta-priced upgrades.                                                      |
+| `#onetime-repeat`         | You sell repeatable packs or consumables         | `Product.Item type="recurring"` and optional `Credits.Root`        | Repeating products do not show "Owned"; credit grants should be server-owned.                     |
+| `#payment-recovery`       | You need past-due or failed-payment UI           | `PaymentRecoveryBanner`, `PaymentRecoveryButton`                   | Button needs `customers.portalUrl`; banners can derive from snapshot or accept an explicit state. |
+| `#billing-history`        | Users need transaction history                   | `BillingHistory` and `transactions.search`                         | This is transaction history, not full invoice rendering.                                          |
+| `#feature-usage-gate`     | Features depend on plan or payment state         | `BillingGate`, `evaluateUsageLimits`                               | Billing state gates access; your app still measures usage.                                        |
+
+The external paths are:
+
+- `/creem/events` - Convex HTTP webhook endpoint for Creem.
+- Creem checkout URL - opened by `checkouts.create`.
+- Creem customer portal URL - opened by `customers.portalUrl`.
+- Your checkout success URL - defaults to the current page path when
+  `successUrl` is not passed.
+
+---
+
+## 10. Subscription widgets
+
+Fast catalog-driven setup:
 
 ```svelte
-<script>
-  import { Subscription } from "@mmailaender/convex-creem/svelte";
-  import { billing } from "./billing";
-</script>
-
-<Subscription.Root
-  api={billing.api}
-  catalog={billing.catalog}
-  plans={billing.planIds}
-  defaultCycle="every-month"
->
-  <Subscription.Item planId="free" type="free" />
-  <Subscription.Item planId="pro" type="single" />
-  <Subscription.Item planId="enterprise" type="enterprise" />
-</Subscription.Root>
+<Subscription.Root plans={plansOf(billingCatalog, ["free", "basic", "premium"])} />
 ```
 
----
+No-card app trial setup:
 
-## 6. Groups and intervals
+```ts
+export const billingCatalog = defineBillingCatalog({
+  plans: [
+    {
+      planId: "trial",
+      category: "trial",
+      billingType: "custom",
+      eligibility: { oncePerEntity: true, hideWhenIneligible: true },
+      limits: { aiMessages: 5 },
+    },
+    { planId: "free", category: "free", billingType: "custom" },
+    {
+      planId: "premium",
+      category: "paid",
+      billingType: "recurring",
+      creemProductIds: { "every-month": "prod_..." },
+    },
+  ],
+});
+```
 
-Use `groups` to segment plans by audience:
+```svelte
+<Subscription.Root plans={plansOf(billingCatalog, ["trial", "free", "premium"])} />
+```
 
-```tsx
+Expose `plans.activate` with an app mutation that calls
+`creem.appPlans.activate(ctx, { entityId, planId, activatedByUserId })`. The
+component stores trial history, enforces `oncePerEntity`, and writes the current
+app-plan assignment used by the widgets and snapshot; the app still owns feature
+quotas and lock states.
+
+Grouped setup:
+
+```svelte
 <Subscription.Root
-  api={billing.api}
-  catalog={billing.catalog}
+  showUnitPicker
   groups={[
-    { value: "individual", label: "Individual", plans: ["free", "pro"] },
-    { value: "teams", label: "Teams", plans: ["team-pro", "enterprise"] },
+    {
+      value: "individual",
+      label: "Individual",
+      plans: plansOf(billingCatalog, ["basic-individual", "premium-individual"]),
+    },
+    {
+      value: "teams",
+      label: "Teams",
+      plans: plansOf(billingCatalog, ["basic-team", "premium-team"]),
+    },
   ]}
-  groupSelector="auto" // or "hidden" / "external"
-  intervalSelector="auto" // or "hidden" / "external"
 />
 ```
 
-For external selector placement:
+Period-end downgrade setup:
 
-```tsx
-<Subscription.Root groupSelector="external" intervalSelector="external">
-  <Subscription.GroupSelector />
-  <Subscription.IntervalSelector />
-  <Subscription.Grid>
-    <Subscription.Item planId="free" type="free" />
-    <Subscription.Item planId="pro" type="single" />
-  </Subscription.Grid>
-</Subscription.Root>
-```
-
----
-
-## 7. Consent gates
-
-Block checkout or plan changes until the user accepts terms:
-
-```tsx
+```svelte
 <Subscription.Root
-  api={billing.api}
-  catalog={billing.catalog}
-  plans={billing.planIds}
-  onBeforeCheckout={async ({ productId }) => {
-    return await showTermsDialog();
+  plans={plansOf(billingCatalog, ["free", "basic", "premium"])}
+  updateBehavior={(intent) => {
+    if (
+      intent.fromPrice != null &&
+      intent.toPrice != null &&
+      intent.toPrice < intent.fromPrice
+    ) {
+      return "period-end";
+    }
+    return "proration-charge";
   }}
-  onBeforePlanChange={async ({ fromPlanId, toPlanId, productId }) => {
-    return await confirmPlanChange(fromPlanId, toPlanId);
-  }}
-  onBeforeFreePlanActivation={async ({ freePlanId }) => {
-    return await confirmDowngrade();
-  }}
+  freePlanUpdateBehavior="period-end"
 />
 ```
 
+What to consider:
+
+- `subscriptions.update` enables plan switches and unit updates.
+- Paid-to-free is a cancellation flow, not Creem proration. Configure it with
+  `freePlanUpdateBehavior`, which defaults to `"period-end"` and also supports
+  `"immediate"` when you want to cancel the paid subscription and assign the
+  app-owned free plan right away.
+- `subscriptions.cancel` enables cancel UI.
+- `subscriptions.resume` enables undo/resume UI for scheduled cancellation.
+- `subscriptions.cancelScheduledUpdate` enables undo for app-side period-end
+  changes.
+- UI permissions are cosmetic. Server functions must still check real access.
+
 ---
 
-## 8. Usage limits
+## 11. One-time products and credits
 
-Check feature usage against plan limits:
+Single owned product:
 
-```ts
-import { evaluateUsageLimits } from "@mmailaender/convex-creem/react";
-
-const result = evaluateUsageLimits(catalog, "pro", {
-  projects: 45,
-  members: 8,
-});
-// result.projects → { used: 45, limit: 50, exceeded: false }
-// result.members → { used: 8, limit: 10, exceeded: false }
+```svelte
+<Product.Root layout="single" styleVariant="pricing">
+  <Product.Item
+    type="one-time"
+    title="Lifetime Access"
+    productId={import.meta.env.VITE_CREEM_ONETIME_SINGLE}
+  />
+</Product.Root>
 ```
 
+Mutually exclusive products with an upgrade product:
+
+```svelte
+<Product.Root
+  transition={[
+    {
+      from: import.meta.env.VITE_CREEM_ONETIME_BASIC,
+      to: import.meta.env.VITE_CREEM_ONETIME_PREMIUM,
+      kind: "via_product",
+      viaProductId: import.meta.env.VITE_CREEM_ONETIME_UPGRADE_DELTA,
+    },
+  ]}
+>
+  <Product.Item
+    type="one-time"
+    title="Basic"
+    productId={import.meta.env.VITE_CREEM_ONETIME_BASIC}
+  />
+  <Product.Item
+    type="one-time"
+    title="Premium"
+    productId={import.meta.env.VITE_CREEM_ONETIME_PREMIUM}
+  />
+</Product.Root>
+```
+
+Repeatable credit pack:
+
+```svelte
+<Product.Root layout="single" styleVariant="pricing">
+  <Product.Item
+    type="recurring"
+    title="100 AI Credits"
+    productId={import.meta.env.VITE_CREEM_ONETIME_CREDITS}
+  />
+</Product.Root>
+
+<Credits.Root unitLabel="credits">
+  {#snippet children(credits)}
+    <Credits.Title />
+    <Credits.Refresh />
+    <Credits.Amount />
+    <Credits.Error />
+    <button onclick={() => credits.refresh()}>Refresh</button>
+  {/snippet}
+</Credits.Root>
+```
+
+What to consider:
+
+- `type="one-time"` suppresses repeat checkout after ownership is detected.
+- `type="recurring"` allows repeat purchases and is the right path for
+  consumables.
+- Credit spending should happen in your own Convex action; refresh the widget
+  afterward.
+
 ---
 
-## 9. Payment recovery
+## 12. Account widgets
 
-Show recovery UI when subscriptions are past due:
+Billing portal:
 
-```tsx
-import {
-  PaymentRecoveryBanner,
-  PaymentRecoveryButton,
-  derivePaymentRecoveryState,
-} from "@mmailaender/convex-creem/react";
+```svelte
+<BillingPortal />
+```
 
-// Auto-detect from the billing snapshot
+Billing history:
+
+```svelte
+<BillingHistory pageSize={5} />
+```
+
+Payment recovery:
+
+```svelte
 <PaymentRecoveryBanner snapshot={snapshot} />
-
-// With explicit portal button
-<PaymentRecoveryButton portalUrl={api.billing.customersPortalUrl}>
-  Update payment method
-</PaymentRecoveryButton>
+<PaymentRecoveryButton portalUrl={connectedApi.customers!.portalUrl!} />
 ```
+
+What to consider:
+
+- `BillingPortal` requires `customers.portalUrl`.
+- `BillingHistory` requires `transactions.search`.
+- `PaymentRecoveryButton` opens the portal so the user can update payment
+  methods.
 
 ---
 
-## 10. Free plan transition (workaround)
+## 13. Usage gates
 
-Until Creem supports native free plans, use `cancelToFreePlan` to schedule
-cancellation and activate the app-owned free plan:
+Use catalog limits for app-owned usage decisions:
 
 ```ts
-// In your Convex function:
-const { freePlanId } = await creem.subscriptions.cancelToFreePlan(ctx, {
-  entityId,
-  freePlanId: "free",
+import { evaluateUsageLimits } from "@mmailaender/convex-creem/svelte";
+
+const usageLimits = evaluateUsageLimits({
+  catalog: billingCatalog,
+  planId: "premium",
+  usage: {
+    projects: 3,
+    aiMessages: 72,
+  },
 });
+```
 
-// In your webhook handler for subscription.canceled:
-// Activate the free plan in your app's user/org record
+Use billing state for UI access:
+
+```svelte
+<BillingGate snapshot={snapshot} requiredActions="portal">
+  <BillingSettings />
+  {#snippet fallback()}
+    <UpgradePrompt />
+  {/snippet}
+</BillingGate>
+```
+
+What to consider:
+
+- The library can evaluate limits, but your app owns the actual usage counters.
+- Do not rely on UI gates alone for protected backend actions.
+
+---
+
+## 14. Environment placement checklist
+
+Use your app framework's public client env namespace only for values the browser
+needs to render widgets or start checkout, such as product IDs referenced by the
+frontend catalog. The exact prefix depends on the framework:
+
+```text
+Vite:       VITE_CREEM_SUB_BASIC_MONTHLY=prod_...
+Next.js:    NEXT_PUBLIC_CREEM_SUB_BASIC_MONTHLY=prod_...
+SvelteKit:  PUBLIC_CREEM_SUB_BASIC_MONTHLY=prod_...
+```
+
+Trusted server values are set with Convex, not in `.env.example`:
+
+```bash
+npx convex env set CREEM_API_KEY <your_creem_api_key>
+npx convex env set CREEM_WEBHOOK_SECRET <your_creem_webhook_signing_secret>
+npx convex env set CREEM_ONETIME_CREDITS prod_...
 ```
 
 ---
 
-## 11. Billing portal and transaction history
+## 15. Validation
 
-```tsx
-import { BillingPortal, BillingHistory } from "@mmailaender/convex-creem/react";
+Before shipping an integration:
 
-<BillingPortal api={billing.api} />
-<BillingHistory api={billing.api} />
+```bash
+pnpm check
+pnpm test
+pnpm lint
+timeout 30 npx convex dev --once 2>&1 || true
 ```
 
----
-
-## 12. Billing snapshot (advanced)
-
-For apps with multiple subscriptions (base + add-ons):
-
-```ts
-import { resolveBillingSnapshot } from "@mmailaender/convex-creem/react";
-
-const snapshot = resolveBillingSnapshot({
-  entityId: "user_123",
-  catalog,
-  subscriptions: [...],
-  orders: [...],
-});
-
-// snapshot.subscriptions → typed subscription rows with planId, productId, status
-// snapshot.orders → typed order rows
-// snapshot.paymentRecoveryState → "none" | "warning" | "blocked"
-```
-
----
-
-## Architecture overview
-
-```
-@mmailaender/convex-creem
-├── /react       — React components, hooks, typed binding
-├── /svelte      — Svelte components, context helpers, typed binding
-├── /core        — Framework-agnostic types, selectors, resolver
-└── /client      — Convex backend integration (Creem class)
-```
-
-All React and Svelte components are shipped via the single npm package. Import
-from `@mmailaender/convex-creem/react` or `@mmailaender/convex-creem/svelte`.
+For documentation-only edits, a targeted Markdown format check is usually
+enough.

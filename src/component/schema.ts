@@ -126,6 +126,36 @@ export default defineSchema(
     })
       .index("entityId_status", ["entityId", "status"])
       .index("subscriptionId_status", ["subscriptionId", "status"]),
+    appPlanActivations: defineTable({
+      entityId: v.string(),
+      planId: v.string(),
+      firstActivatedAt: v.number(),
+      lastActivatedAt: v.number(),
+      activationCount: v.number(),
+      activatedByUserId: v.optional(v.string()),
+    })
+      .index("entityId", ["entityId"])
+      .index("entityId_planId", ["entityId", "planId"]),
+    appPlanAssignments: defineTable({
+      entityId: v.string(),
+      planId: v.string(),
+      status: v.union(
+        v.literal("active"),
+        v.literal("scheduled"),
+        v.literal("ended"),
+      ),
+      startsAt: v.string(),
+      endsAt: v.optional(v.union(v.string(), v.null())),
+      source: v.optional(v.string()),
+      subscriptionId: v.optional(v.string()),
+      assignedByUserId: v.optional(v.string()),
+      createdAt: v.string(),
+      updatedAt: v.string(),
+    })
+      .index("entityId", ["entityId"])
+      .index("entityId_status", ["entityId", "status"])
+      .index("entityId_planId_status", ["entityId", "planId", "status"])
+      .index("subscriptionId_status", ["subscriptionId", "status"]),
   },
   {
     schemaValidation: true,

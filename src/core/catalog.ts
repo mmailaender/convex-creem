@@ -8,6 +8,7 @@ import type {
   PlanCategory,
   RecurringCycle,
   SupportedRecurringCycle,
+  AppPlanActivation,
 } from "./types.js";
 
 /** All billing cycles supported by the Creem API, in display order. */
@@ -152,6 +153,44 @@ export const findCreditGrantByProductId = (
   productId: string | undefined,
 ): CreditGrant | undefined =>
   findPlanByProductId(catalog, productId)?.creditGrant;
+
+/** Whether a catalog plan is owned by the host app rather than a Creem checkout. */
+export const isAppOwnedPlan = (plan: PlanCatalogEntry): boolean =>
+  plan.billingType === "custom" ||
+  plan.category === "free" ||
+  plan.category === "trial" ||
+  plan.category === "custom";
+
+/** Whether an app-owned plan has already been activated for this billing entity. */
+export const hasAppPlanActivation = (
+  activations: readonly AppPlanActivation[] | undefined,
+  planId: string,
+): boolean =>
+  (activations ?? []).some((activation) => activation.planId === planId);
+
+/** Whether an app-owned plan is currently eligible under its catalog policy. */
+export const isAppPlanEligible = (
+  plan: PlanCatalogEntry,
+  activations: readonly AppPlanActivation[] | undefined,
+  activePlanId?: string | null,
+): boolean => {
+  if (activePlanId === plan.planId) {
+    return true;
+  }
+  if (!plan.eligibility?.oncePerEntity) {
+    return true;
+  }
+  return !hasAppPlanActivation(activations, plan.planId);
+};
+
+/** Whether the default composed pricing widgets should render this plan. */
+export const shouldShowPlan = (
+  plan: PlanCatalogEntry,
+  activations: readonly AppPlanActivation[] | undefined,
+  activePlanId?: string | null,
+): boolean =>
+  isAppPlanEligible(plan, activations, activePlanId) ||
+  !plan.eligibility?.hideWhenIneligible;
 
 export const resolvePlanProductId = (
   catalog: PlanCatalog | undefined,

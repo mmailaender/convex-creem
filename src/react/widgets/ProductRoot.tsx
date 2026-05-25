@@ -9,7 +9,10 @@ import {
 import { useQuery, useConvex } from "convex/react";
 
 import { CheckoutButton } from "../primitives/CheckoutButton.js";
-import { formatPriceWithInterval, splitPriceLabel } from "../shared.js";
+import {
+  formatPriceWithInterval,
+  splitPriceLabel,
+} from "../../core/display.js";
 import { ProductGroupContext } from "./productGroupContext.js";
 import { renderMarkdown } from "../../core/markdown.js";
 import { pendingCheckout } from "../../core/pendingCheckout.js";
@@ -264,6 +267,7 @@ export const ProductRoot = ({
             const resolvedPrice = formatPriceWithInterval(
               item.productId,
               allProducts,
+              i18n.labels,
               i18n.formatCurrency,
             );
             const splitPrice = splitPriceLabel(resolvedPrice);

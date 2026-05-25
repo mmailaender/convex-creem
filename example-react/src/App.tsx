@@ -46,11 +46,35 @@ const connectedApi: ConnectedBillingApi = {
     debit: api.billing.creditsDebit,
     listEntries: api.billing.creditsListEntries,
   },
+  plans: {
+    activate: api.billing.plansActivate,
+  },
 };
 
 const billingCatalog = defineBillingCatalog({
   version: "example",
+  defaultPlanId: "free",
   plans: [
+    {
+      planId: "trial",
+      category: "trial",
+      billingType: "custom",
+      title: "Starter Trial",
+      description: "No-card app trial. Hidden after it has been used once.",
+      eligibility: {
+        oncePerEntity: true,
+        hideWhenIneligible: true,
+      },
+      limits: { aiMessages: 5, projects: 1 },
+    },
+    {
+      planId: "free",
+      category: "free",
+      billingType: "custom",
+      title: "Free",
+      description: "For individuals getting started",
+      limits: { aiMessages: 50, projects: 1 },
+    },
     {
       planId: "basic-individual",
       category: "paid",
@@ -266,13 +290,21 @@ export default function App() {
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
                       01
                     </span>
+                    <a href="#subscription-app-trial" className="link-inline">
+                      App Trial
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
+                      02
+                    </span>
                     <a href="#subscription-with-trial" className="link-inline">
                       With Trial (4 Cycles)
                     </a>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      02
+                      03
                     </span>
                     <a
                       href="#subscription-without-trial"
@@ -283,7 +315,7 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      03
+                      04
                     </span>
                     <a
                       href="#subscription-unit-selectable"
@@ -294,7 +326,7 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      04
+                      05
                     </span>
                     <a href="#subscription-unit-auto" className="link-inline">
                       Unit-Based (Auto-Derived)
@@ -302,7 +334,7 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      05
+                      06
                     </span>
                     <a
                       href="#subscription-custom-composition"
@@ -313,7 +345,7 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      06
+                      07
                     </span>
                     <a href="#subscription-period-end" className="link-inline">
                       Period-End Change
@@ -328,7 +360,7 @@ export default function App() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      07
+                      08
                     </span>
                     <a href="#onetime-single" className="link-inline">
                       Single One-Time Product
@@ -336,7 +368,7 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      08
+                      09
                     </span>
                     <a href="#onetime-group" className="link-inline">
                       Mutually Exclusive Product Group
@@ -344,7 +376,7 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      09
+                      10
                     </span>
                     <a href="#onetime-repeat" className="link-inline">
                       Repeating Product (Consumable)
@@ -359,7 +391,7 @@ export default function App() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      10
+                      11
                     </span>
                     <a href="#billing-history" className="link-inline">
                       Billing History
@@ -367,7 +399,7 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="label-m text-foreground-placeholder inline-block w-6 shrink-0">
-                      11
+                      12
                     </span>
                     <a href="#feature-usage-gate" className="link-inline">
                       Feature / Usage Gate
@@ -404,7 +436,40 @@ export default function App() {
             </span>
           </div>
 
-          {/* ─── Section 1: Subscriptions with trial (all 4 billing cycles) ─── */}
+          {/* ─── Section 1: App-owned no-card trial ─── */}
+          <section
+            id="subscription-app-trial"
+            className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[104px]"
+          >
+            <div className="mx-auto w-full max-w-[1280px] px-4 lg:px-16 pt-[104px]">
+              <div className="mx-auto grid grid-cols-12">
+                <h2 className="heading-l col-span-12 text-center text-foreground-default lg:col-start-4 lg:col-span-6">
+                  <span className="text-foreground-placeholder">
+                    Subscription
+                  </span>
+                  <br />
+                  App Trial + Free + Paid
+                </h2>
+                <p className="body-l col-span-12 mt-6 text-center text-foreground-muted lg:col-start-4 lg:col-span-6">
+                  A no-card trial is an app-owned plan. The widget activates it
+                  via your Convex mutation, records once-per-entity history in
+                  the component, and hides it after it has already been used.
+                </p>
+              </div>
+
+              <div className="mt-10">
+                <Subscription.Root
+                  plans={plansOf(billingCatalog, [
+                    "trial",
+                    "free",
+                    "basic-individual",
+                  ])}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* ─── Section 2: Subscriptions with trial (all 4 billing cycles) ─── */}
           <section
             id="subscription-with-trial"
             className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[104px]"
@@ -470,7 +535,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* ─── Section 2: Subscriptions without trial (monthly only) ─── */}
+          {/* ─── Section 3: Subscriptions without trial (monthly only) ─── */}
           <section
             id="subscription-without-trial"
             className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
@@ -523,7 +588,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* ─── Section 3: Unit-based subscriptions ─── */}
+          {/* ─── Section 4: Unit-based subscriptions ─── */}
           <section
             id="subscription-unit-selectable"
             className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
@@ -575,7 +640,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* ─── Section 3b: Unit-based with auto-derived units ─── */}
+          {/* ─── Section 5: Unit-based with auto-derived units ─── */}
           <section
             id="subscription-unit-auto"
             className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
@@ -603,13 +668,13 @@ export default function App() {
                     "premium-unit-auto",
                   ])}
                   units={5}
-                  twoColumnLayout
+                  columns={2}
                 />
               </div>
             </div>
           </section>
 
-          {/* ─── Section 4: Custom subscription composition ─── */}
+          {/* ─── Section 6: Custom subscription composition ─── */}
           <section
             id="subscription-custom-composition"
             className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
@@ -778,7 +843,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* ─── Section 6: Period-end scheduled subscription update ─── */}
+          {/* ─── Section 7: Period-end scheduled subscription update ─── */}
           <section
             id="subscription-period-end"
             className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
@@ -794,15 +859,15 @@ export default function App() {
                 </h2>
                 <p className="body-l col-span-12 mt-6 text-center text-foreground-muted lg:col-start-4 lg:col-span-6">
                   Uses dedicated products and an <code>updateBehavior</code>{" "}
-                  resolver. Downgrades stay active until period end, while
-                  upgrades use Creem proration on the next invoice.
+                  resolver. Paid downgrades stay active until period end,
+                  free-plan switches use the dedicated cancellation behavior,
+                  and upgrades use Creem proration on the next invoice.
                 </p>
               </div>
 
               <div className="mt-[6.5rem]">
                 <Subscription.Root
                   updateBehavior={(intent) => {
-                    if (intent.toPlan?.category === "free") return "period-end";
                     if (
                       intent.fromPrice != null &&
                       intent.toPrice != null &&
@@ -812,6 +877,7 @@ export default function App() {
                     }
                     return "proration-charge";
                   }}
+                  freePlanUpdateBehavior="period-end"
                   plans={plansOf(billingCatalog, [
                     "period-end-free",
                     "period-end-basic",
@@ -826,7 +892,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* ─── Section 7: Standalone one-time product ─── */}
+          {/* ─── Section 8: Standalone one-time product ─── */}
           <section
             id="onetime-single"
             className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
@@ -859,7 +925,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* ─── Section 8: Mutually exclusive product group with upgrade ─── */}
+          {/* ─── Section 9: Mutually exclusive product group with upgrade ─── */}
           <section
             id="onetime-group"
             className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
@@ -905,7 +971,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* ─── Section 9: Repeating (consumable) product ─── */}
+          {/* ─── Section 10: Repeating (consumable) product ─── */}
           <section
             id="onetime-repeat"
             className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
@@ -980,7 +1046,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* ─── Section 10: Billing history ─── */}
+          {/* ─── Section 11: Billing history ─── */}
           <section
             id="billing-history"
             className="relative left-1/2 -translate-x-1/2 w-screen border-b border-border-subtle pb-[6.5rem]"
@@ -1005,7 +1071,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* ─── Section 11: Feature and usage gate ─── */}
+          {/* ─── Section 12: Feature and usage gate ─── */}
           <section
             id="feature-usage-gate"
             className="relative left-1/2 -translate-x-1/2 w-screen pb-[6.5rem]"

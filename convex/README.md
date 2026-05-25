@@ -1,90 +1,121 @@
-# Welcome to your Convex functions directory!
+# Convex Backend - `convex-creem`
 
-Write your Convex functions here. See https://docs.convex.dev/functions for
-more.
+This directory contains the Convex app used by the examples and by the Creem
+billing component integration.
 
-A query function that takes two arguments looks like:
+## Files
 
-```ts
-// convex/myFunctions.ts
-import { query } from "./_generated/server";
-import { v } from "convex/values";
+- `convex.config.ts` registers the `@mmailaender/convex-creem` component.
+- `billing.ts` creates the `Creem` client, resolves the billing entity, exports
+  generated billing functions, and contains demo credit actions.
+- `http.ts` registers the Creem webhook route at `/creem/events`.
+- `schema.ts` contains demo app tables. Replace the demo `users` lookup with
+  your real auth or organization model.
 
-export const myQueryFunction = query({
-  // Validators for arguments.
-  args: {
-    first: v.number(),
-    second: v.string(),
-  },
+## Required Convex Env Vars
 
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Read the database as many times as you need here.
-    // See https://docs.convex.dev/database/reading-data.
-    const documents = await ctx.db.query("tablename").collect();
-
-    // Arguments passed from the client are properties of the args object.
-    console.log(args.first, args.second);
-
-    // Write arbitrary JavaScript here: filter, aggregate, build derived data,
-    // remove non-public properties, or create new objects.
-    return documents;
-  },
-});
+```bash
+npx convex env set CREEM_API_KEY <your_creem_api_key>
+npx convex env set CREEM_WEBHOOK_SECRET <your_creem_webhook_signing_secret>
 ```
 
-Using this query function in a React component looks like:
+For the credit-pack demo, keep the trusted product ID in Convex env:
 
-```ts
-const data = useQuery(api.myFunctions.myQueryFunction, {
-  first: 10,
-  second: "hello",
-});
+```bash
+npx convex env set CREEM_ONETIME_CREDITS prod_...
 ```
 
-A mutation function looks like:
+Browser `VITE_*` variables are only for frontend widgets. Webhook fulfillment
+must use server-side Convex env values.
+
+## Billing API Exports
+
+`billing.ts` uses:
 
 ```ts
-// convex/myFunctions.ts
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
-
-export const myMutationFunction = mutation({
-  // Validators for arguments.
-  args: {
-    first: v.string(),
-    second: v.string(),
-  },
-
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Insert or modify documents in the database here.
-    // Mutations can also read from the database like queries.
-    // See https://docs.convex.dev/database/writing-data.
-    const message = { body: args.first, author: args.second };
-    const id = await ctx.db.insert("messages", message);
-
-    // Optionally, return a value from your mutation.
-    return await ctx.db.get("messages", id);
-  },
-});
+const {
+  uiModel,
+  snapshot,
+  checkouts,
+  subscriptions,
+  products,
+  customers,
+  transactions,
+  orders,
+  credits,
+} = creem.api({ resolve });
 ```
 
-Using this mutation function in a React component looks like:
+The public exports are then passed to frontend `ConnectedBillingApi` objects:
+
+- `uiModel`
+- `checkoutsCreate`
+- `subscriptionsUpdate`
+- `subscriptionsCancel`
+- `subscriptionsResume`
+- `subscriptionsCancelScheduledUpdate`
+- `plansActivate`
+- `customersPortalUrl`
+- `transactionsSearch`
+- `creditsCreateAccount`
+- `creditsGetBalance`
+- `creditsCredit`
+- `creditsDebit`
+- `creditsListEntries`
+
+Additional SDK-mirrored exports such as product, customer, order, pause, and
+list functions are available for app-specific admin or backend flows.
+
+## Product Sync
+
+Creem product metadata must be synced into Convex before pricing widgets can
+show product names, prices, descriptions, and images.
+
+```bash
+npx convex run billing:syncBillingProducts
+```
+
+`syncBillingProducts` is an `internalAction`. It is meant for the Convex CLI,
+Convex dashboard, scheduled jobs, or trusted internal functions, not direct
+browser calls.
+
+## Webhooks
+
+`http.ts` calls `creem.registerRoutes(http, { path: "/creem/events" })`.
+
+Configure Creem to send webhooks to:
+
+```text
+https://<your-convex-site-url>/creem/events
+```
+
+The component handles supported checkout, subscription, refund, dispute, and
+credit grant events. Add custom `events` handlers in `http.ts` for app-specific
+side effects such as analytics, email, or audit logging.
+
+## Auth Resolver
+
+The example resolver calls `api.billing.getUserInfo`, which reads the first row
+from the demo `users` table. Replace this with production auth:
 
 ```ts
-const mutation = useMutation(api.myFunctions.myMutationFunction);
-function handleButtonPress() {
-  // fire and forget, the most common way to use mutations
-  mutation({ first: "Hello!", second: "me" });
-  // OR
-  // use the result once the mutation has completed
-  mutation({ first: "Hello!", second: "me" }).then((result) =>
-    console.log(result),
-  );
-}
+const resolve: ApiResolver = async (ctx) => {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new Error("Not authenticated");
+
+  return {
+    userId: identity.subject,
+    email: identity.email!,
+    entityId: identity.subject, // or the active org/team ID
+  };
+};
 ```
 
-Use the Convex CLI to push your functions to a deployment. See everything the
-Convex CLI can do by running `npx convex -h` in your project root directory. To
-learn more, launch the docs with `npx convex docs`.
+Use `entityId` for the billing owner. For team billing, resolve the active org
+ID instead of the user ID.
+
+## Demo Credit Spending
+
+`generateDemoImage` demonstrates the right shape for app-owned credit spending:
+the backend action calls `creditsDebit`; the frontend `Credits.Root` only
+refreshes and displays the balance.

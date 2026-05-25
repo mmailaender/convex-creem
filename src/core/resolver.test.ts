@@ -36,6 +36,8 @@ describe("resolveBillingSnapshot", () => {
     });
     expect(result.subscriptions).toHaveLength(0);
     expect(result.orders).toHaveLength(0);
+    expect(result.appPlanAssignments).toHaveLength(0);
+    expect(result.access).toHaveLength(0);
     expect(result.paymentRecoveryState).toBe("none");
     expect(result.availableBillingActions).toContain("checkout");
     expect(result.entityId).toBe("e1");
@@ -83,6 +85,22 @@ describe("resolveBillingSnapshot", () => {
     expect(result.paymentRecoveryState).toBe("none");
     expect(result.availableBillingActions).toContain("portal");
     expect(result.availableBillingActions).toContain("cancel");
+    expect(result.access).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "creem_subscription",
+          kind: "subscription",
+          planId: "basic",
+          subscriptionId: "sub_1",
+        }),
+        expect.objectContaining({
+          source: "creem_subscription",
+          kind: "subscription",
+          planId: "addon",
+          subscriptionId: "sub_2",
+        }),
+      ]),
+    );
   });
 
   it("maps orders with plan IDs from catalog", () => {
@@ -97,7 +115,59 @@ describe("resolveBillingSnapshot", () => {
     expect(result.orders).toHaveLength(2);
     expect(result.orders[0].planId).toBe("basic");
     expect(result.orders[1].planId).toBeNull();
+    expect(result.access).toEqual([
+      expect.objectContaining({
+        source: "creem_order",
+        kind: "one_time",
+        orderId: "ord_1",
+        productId: "prod_basic_m",
+      }),
+      expect.objectContaining({
+        source: "creem_order",
+        kind: "one_time",
+        orderId: "ord_2",
+        productId: "prod_unknown",
+      }),
+    ]);
     expect(result.availableBillingActions).toContain("checkout");
+  });
+
+  it("includes active app-owned plan assignments in the unified access view", () => {
+    const result = resolveBillingSnapshot({
+      entityId: "e1",
+      catalog,
+      appPlanAssignments: [
+        {
+          entityId: "e1",
+          planId: "free",
+          status: "active",
+          startsAt: "2025-01-01T00:00:00Z",
+          source: "manual",
+          createdAt: "2025-01-01T00:00:00Z",
+          updatedAt: "2025-01-01T00:00:00Z",
+        },
+        {
+          entityId: "e1",
+          planId: "trial",
+          status: "ended",
+          startsAt: "2024-01-01T00:00:00Z",
+          endsAt: "2024-02-01T00:00:00Z",
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-02-01T00:00:00Z",
+        },
+      ],
+    });
+
+    expect(result.appPlanAssignments).toHaveLength(2);
+    expect(result.access).toEqual([
+      expect.objectContaining({
+        source: "app_plan_assignment",
+        kind: "app_plan",
+        planId: "free",
+        status: "active",
+        assignmentSource: "manual",
+      }),
+    ]);
   });
 
   it("derives warning recovery state from past_due subscriptions", () => {

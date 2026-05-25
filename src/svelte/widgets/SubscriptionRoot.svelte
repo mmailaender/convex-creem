@@ -26,6 +26,10 @@
     PlanCatalogEntry,
     UIPlanEntry,
     RecurringCycle,
+    FreePlanUpdateBehaviorIntent,
+    FreePlanUpdateBehaviorSetting,
+    ResolvedUpdateBehavior,
+    SupportedRecurringCycle,
     UpdateBehavior,
     UpdateBehaviorIntent,
     UpdateBehaviorSetting,
@@ -36,13 +40,21 @@
     type BillingI18n,
     type BillingLabelOverrides,
   } from "../../core/i18n.js";
-  import { findPlanById, normalizePlanCatalog } from "../../core/catalog.js";
-  import { buildUpdateSummary } from "../../core/subscriptionUpdate.js";
+  import {
+    findPlanById,
+    normalizePlanCatalog,
+    shouldShowPlan,
+  } from "../../core/catalog.js";
+  import {
+    buildUpdateSummary,
+    resolveFreePlanUpdateBehavior,
+    resolveTargetUpdateBehavior,
+  } from "../../core/subscriptionUpdate.js";
   import {
     formatPriceWithInterval,
     formatUnitPrice,
     formatUnitPriceBreakdown,
-  } from "../primitives/shared.js";
+  } from "../../core/display.js";
   import type {
     BillingPermissions,
     CheckoutIntent,
@@ -53,30 +65,59 @@
   } from "./types.js";
 
   interface Props {
+    /** Optional local catalog override. Defaults to the catalog from `CreemConvexProvider`. */
     catalog?: PlanCatalog;
+    /** Catalog plan IDs to render with the default pricing layout. */
     plans?: readonly string[];
+    /** Grouped plan definitions used to render a group selector and group-specific plan sets. */
     groups?: SubscriptionGroupRegistration[];
+    /** Initial uncontrolled group value. */
     defaultGroup?: string;
+    /** Controlled group value. Pair with `onGroupChange`. */
     group?: string;
+    /** Called whenever the active group changes. */
     onGroupChange?: (group: string) => void;
+    /** Group selector placement: automatic, hidden, or rendered externally via `Subscription.GroupSelector`. */
     groupSelector?: "auto" | "hidden" | "external";
+    /** Initial billing cycle. Defaults to provider `defaultCycle`, then `every-month`. */
     defaultCycle?: RecurringCycle;
+    /** Controlled billing cycle. Pair with `onCycleChange`. */
     cycle?: RecurringCycle;
+    /** Called whenever the active billing cycle changes. */
     onCycleChange?: (cycle: RecurringCycle) => void;
+    /** Interval selector placement: automatic, hidden, or rendered externally via `Subscription.IntervalSelector`. */
     intervalSelector?: "auto" | "hidden" | "external";
+    /** Optional badges shown next to billing interval labels, e.g. `{ "every-year": "-20%" }`. */
+    cycleBadges?: Partial<Record<SupportedRecurringCycle, string>>;
+    /** Local UI permission overrides for this subscription root. */
     permissions?: BillingPermissions;
+    /** Wrapper CSS class. */
     class?: string;
+    /** Checkout success URL override. Defaults to Creem product success URL, then the current page. */
     successUrl?: string;
+    /** App-derived quantity for unit-based plans. */
     units?: number;
+    /** Show quantity controls on unit-based plan cards. */
     showUnitPicker?: boolean;
-    twoColumnLayout?: boolean;
+    /** Preferred number of pricing columns. `"auto"` derives this from the visible plan count. */
+    columns?: "auto" | 1 | 2 | 3 | 4;
+    /** Paid subscription update behavior for paid-to-paid plan switches and unit changes. */
     updateBehavior?: UpdateBehaviorSetting;
+    /** Cancellation behavior for paid-to-free or paid-to-app-owned plan switches. */
+    freePlanUpdateBehavior?: FreePlanUpdateBehaviorSetting;
+    /** Remove built-in classes from compound subscription pieces. */
     unstyled?: boolean;
+    /** Optional checkout guard for this root. Overrides provider guard. */
     onBeforeCheckout?: (intent: CheckoutIntent) => Promise<boolean> | boolean;
+    /** Optional paid-plan-change guard for this root. Overrides provider guard. */
     onBeforePlanChange?: (intent: PlanChangeIntent) => Promise<boolean> | boolean;
-    onBeforeFreePlanActivation?: (intent: { freePlanId: string }) => Promise<boolean> | boolean;
+    /** Optional app-owned-plan activation guard for this root. Overrides provider guard. */
+    onBeforePlanActivation?: (intent: { planId: string }) => Promise<boolean> | boolean;
+    /** Local subscription label overrides. */
     labels?: BillingLabelOverrides;
+    /** Local locale, labels, or formatter overrides. */
     i18n?: BillingI18n;
+    /** Optional compound subscription markup. When omitted, default pricing cards render. */
     children?: import("svelte").Snippet;
   }
 
@@ -92,17 +133,19 @@
     cycle = undefined,
     onCycleChange = undefined,
     intervalSelector = "auto",
+    cycleBadges = undefined,
     permissions = undefined,
     class: className = "",
     successUrl = undefined,
     units = undefined,
     showUnitPicker = false,
-    twoColumnLayout = false,
-    updateBehavior = "proration-charge-immediately",
+    columns = "auto",
+    updateBehavior = undefined,
+    freePlanUpdateBehavior = undefined,
     unstyled = false,
     onBeforeCheckout = undefined,
     onBeforePlanChange = undefined,
-    onBeforeFreePlanActivation = undefined,
+    onBeforePlanActivation = undefined,
     labels: labelOverrides = undefined,
     i18n = undefined,
     children,
@@ -118,7 +161,6 @@
     );
   }
 
-  const resolvedCatalog = $derived(catalog ?? provider?.catalog);
   const resolvedDefaultCycle = $derived(
     defaultCycle ?? provider?.defaultCycle ?? "every-month",
   );
@@ -129,8 +171,8 @@
   const resolvedOnBeforePlanChange = $derived(
     onBeforePlanChange ?? provider?.onBeforePlanChange,
   );
-  const resolvedOnBeforeFreePlanActivation = $derived(
-    onBeforeFreePlanActivation ?? provider?.onBeforeFreePlanActivation,
+  const resolvedOnBeforePlanActivation = $derived(
+    onBeforePlanActivation ?? provider?.onBeforePlanActivation,
   );
   const resolvedI18n = $derived.by(() => {
     const providerI18n = resolveBillingI18n(provider?.i18n);
@@ -158,8 +200,15 @@
   const resumeRef = resolvedApi.subscriptions?.resume;
   const cancelScheduledUpdateRef =
     resolvedApi.subscriptions?.cancelScheduledUpdate;
+  const activateAppPlanRef = resolvedApi.plans?.activate;
 
   const billingModelQuery = useQuery(billingUiModelRef, {});
+  const model = $derived(
+    (billingModelQuery.data ?? null) as ConnectedBillingModel | null,
+  );
+  const resolvedCatalog = $derived.by(() =>
+    mergePlanCatalogs(model?.catalog, provider?.catalog, catalog),
+  );
 
   let selectedCycle = $state<RecurringCycle>(
     untrack(() => resolvedDefaultCycle),
@@ -175,6 +224,7 @@
         kind: "plan-switch";
         plan: UIPlanEntry;
         productId?: string;
+        appPlanId?: string;
         freePlanId?: string;
         units?: number;
       }
@@ -216,6 +266,7 @@
     getDisableUnits: () => !canUpdateUnits,
     getUnstyled: () => unstyled,
     getLabels: () => resolvedI18n.labels,
+    getCycleBadge: (cycle) => cycleBadges?.[cycle],
     formatCurrency: (input) => resolvedI18n.formatCurrency(input),
     formatDate: (input) => resolvedI18n.formatDate(input),
     checkout: (payload) => handlePricingCheckout(payload),
@@ -249,9 +300,6 @@
 
   setContext(SUBSCRIPTION_CONTEXT_KEY, contextValue);
 
-  const model = $derived(
-    (billingModelQuery.data ?? null) as ConnectedBillingModel | null,
-  );
   const canCheckout = $derived(
     !model?.user && resolvedOnBeforeCheckout != null
       ? true
@@ -325,6 +373,10 @@
         description: plan.description ?? catalogEntry?.description ?? firstProduct?.description ?? undefined,
         contactUrl: plan.contactUrl ?? catalogEntry?.contactUrl,
         recommended: plan.recommended ?? catalogEntry?.recommended,
+        limits: catalogEntry?.limits,
+        creditGrant: catalogEntry?.creditGrant,
+        eligibility: catalogEntry?.eligibility,
+        metadata: catalogEntry?.metadata,
         creemProductIds:
           Object.keys(productIds).length > 0
             ? (productIds as Record<string, string>)
@@ -365,30 +417,11 @@
       : (groupItems[0]?.value ?? null),
   );
 
-  const visiblePlans = $derived(
+  const groupedPlans = $derived(
     groupItems.length > 1 && activeGroupId
       ? plans.filter((plan) => plan.groupId === activeGroupId)
       : plans,
   );
-  const availableCycles = $derived.by<RecurringCycle[]>(() => {
-    const cycles = new SvelteSet<RecurringCycle>();
-    for (const plan of visiblePlans) {
-      for (const cycle of plan.billingCycles ?? []) {
-        cycles.add(cycle);
-      }
-    }
-    return Array.from(cycles);
-  });
-  const effectiveCycle = $derived.by<RecurringCycle>(() => {
-    const requestedCycle = cycle ?? selectedCycle;
-    if (
-      availableCycles.length === 0 ||
-      availableCycles.includes(requestedCycle)
-    ) {
-      return requestedCycle;
-    }
-    return availableCycles[0] ?? requestedCycle;
-  });
 
   // Collect all product IDs that belong to plans in THIS component instance.
   const ownProductIds = $derived.by<Set<string>>(() => {
@@ -441,7 +474,23 @@
       });
       return matchedPlan?.planId ?? null;
     }
-    // No active subscription: if user is signed in, treat the free plan as active.
+    // No active subscription: use explicit app-owned plan state when the app provides it.
+    if (model.activePlanId !== undefined) {
+      return model.activePlanId;
+    }
+    const assignedPlanId =
+      model.appPlanAssignments?.find(
+        (assignment) =>
+          assignment.status === "active" &&
+          plans.some((plan) => plan.planId === assignment.planId),
+      )?.planId ?? null;
+    if (assignedPlanId) {
+      return assignedPlanId;
+    }
+    if (model.activeFreePlanId !== undefined) {
+      return model.activeFreePlanId;
+    }
+    // Backwards-compatible default: signed-in users without a subscription are on the first free plan.
     if (model.user) {
       const freePlan = plans.find((p) => p.category === "free");
       if (freePlan) return freePlan.planId;
@@ -449,10 +498,92 @@
     return null;
   });
 
+  const visiblePlans = $derived(
+    groupedPlans.filter((plan) =>
+      shouldShowPlan(plan, model?.appPlanActivations, activePlanId),
+    ),
+  );
+
+  const availableCycles = $derived.by<RecurringCycle[]>(() => {
+    const cycles = new SvelteSet<RecurringCycle>();
+    for (const plan of visiblePlans) {
+      for (const cycle of plan.billingCycles ?? []) {
+        cycles.add(cycle);
+      }
+    }
+    return Array.from(cycles);
+  });
+
+  const effectiveCycle = $derived.by<RecurringCycle>(() => {
+    const requestedCycle = cycle ?? selectedCycle;
+    if (
+      availableCycles.length === 0 ||
+      availableCycles.includes(requestedCycle)
+    ) {
+      return requestedCycle;
+    }
+    return availableCycles[0] ?? requestedCycle;
+  });
+
   function getProductPrice(productId?: string | null) {
     return productId
       ? (allProducts.find((product) => product.id === productId)?.price ?? null)
       : null;
+  }
+
+  function hasProductMappings(plan: PlanCatalogEntry | undefined) {
+    return Object.keys(plan?.creemProductIds ?? {}).length > 0 ||
+      Object.keys(plan?.products ?? {}).length > 0;
+  }
+
+  function mergePlanCatalogs(
+    ...catalogs: Array<PlanCatalog | null | undefined>
+  ): PlanCatalog | undefined {
+    const defined = catalogs.filter(
+      (entry): entry is PlanCatalog => entry != null,
+    );
+    if (defined.length === 0) return undefined;
+
+    const order: string[] = [];
+    const plansById = new SvelteMap<string, PlanCatalogEntry>();
+
+    for (const entry of defined) {
+      for (const plan of entry.plans) {
+        const existing = plansById.get(plan.planId);
+        if (!existing) {
+          order.push(plan.planId);
+          plansById.set(plan.planId, plan);
+          continue;
+        }
+
+        const merged: PlanCatalogEntry = {
+          ...existing,
+          ...plan,
+          creemProductIds:
+            Object.keys(plan.creemProductIds ?? {}).length > 0
+              ? plan.creemProductIds
+              : existing.creemProductIds,
+          products:
+            Object.keys(plan.products ?? {}).length > 0
+              ? plan.products
+              : existing.products,
+        };
+        if (!hasProductMappings(merged) && hasProductMappings(existing)) {
+          merged.creemProductIds = existing.creemProductIds;
+          merged.products = existing.products;
+        }
+        plansById.set(plan.planId, merged);
+      }
+    }
+
+    return {
+      version: defined.at(-1)?.version ?? defined[0].version,
+      defaultPlanId: defined.at(-1)?.defaultPlanId ?? defined[0].defaultPlanId,
+      plans: order.flatMap((planId) => {
+        const plan = plansById.get(planId);
+        return plan ? [plan] : [];
+      }),
+    };
   }
 
   function getPlanForProduct(productId?: string | null) {
@@ -469,18 +600,49 @@
           kind: "plan-switch";
           plan: UIPlanEntry;
           productId?: string;
+          appPlanId?: string;
           freePlanId?: string;
           units?: number;
         }
       | { kind: "unit-update"; units: number },
-  ): UpdateBehavior {
-    if (typeof updateBehavior !== "function") return updateBehavior;
-
+  ): ResolvedUpdateBehavior {
     const currentPlan = getPlanForProduct(localSubscriptionProductId);
+
+    if (update.kind === "plan-switch" && update.freePlanId) {
+      if (typeof freePlanUpdateBehavior !== "function") {
+        return resolveFreePlanUpdateBehavior(freePlanUpdateBehavior);
+      }
+      const intent: FreePlanUpdateBehaviorIntent = {
+        kind: "plan-switch",
+        target: "free-plan",
+        fromPlanId: activePlanId,
+        toPlanId: update.plan.planId,
+        fromPlan: currentPlan,
+        toPlan: update.plan,
+        fromProductId: localSubscriptionProductId,
+        toProductId: update.productId ?? null,
+        fromPrice: getProductPrice(localSubscriptionProductId),
+        toPrice: getProductPrice(update.productId),
+        currentUnits: localSubscribedUnits,
+        targetUnits: update.units,
+        freePlanId: update.freePlanId,
+        appPlanId: update.appPlanId,
+      };
+      return resolveFreePlanUpdateBehavior(freePlanUpdateBehavior(intent));
+    }
+
+    const applyTargetRules = (behavior: UpdateBehavior | undefined) =>
+      resolveTargetUpdateBehavior(behavior, {});
+
+    if (typeof updateBehavior !== "function") {
+      return applyTargetRules(updateBehavior);
+    }
+
     const intent: UpdateBehaviorIntent =
       update.kind === "plan-switch"
         ? {
             kind: "plan-switch",
+            target: "paid-plan",
             fromPlanId: activePlanId,
             toPlanId: update.plan.planId,
             fromPlan: currentPlan,
@@ -494,6 +656,7 @@
           }
         : {
             kind: "unit-update",
+            target: "units",
             fromPlanId: activePlanId,
             fromPlan: currentPlan,
             fromProductId: localSubscriptionProductId,
@@ -503,7 +666,7 @@
             currentUnits: localSubscribedUnits,
             targetUnits: update.units,
           };
-    return updateBehavior(intent);
+    return applyTargetRules(updateBehavior(intent));
   }
 
   const getFallbackSuccessUrl = (): string | undefined => {
@@ -517,6 +680,9 @@
       ? "dark"
       : "light";
   };
+
+  const getActionErrorMessage = (error: unknown, fallback: string) =>
+    error instanceof Error ? error.message : fallback;
 
   function formatGroupTitle(value: string) {
     return value
@@ -604,11 +770,11 @@
         { capture: true, once: true },
       );
       window.location.href = url;
-      window.location.href = url;
     } catch (error) {
-      actionError = error instanceof Error
-        ? error.message
-        : resolvedI18n.labels.subscription.checkoutFailed;
+      actionError = getActionErrorMessage(
+        error,
+        resolvedI18n.labels.subscription.checkoutFailed,
+      );
     } finally {
       isActionLoading = false;
     }
@@ -622,9 +788,25 @@
     await startCheckout(payload.productId, payload.units);
   };
 
+  const activateAppPlan = async (appPlanId: string) => {
+    actionError = null;
+    try {
+      if (!activateAppPlanRef) return;
+      await client.mutation(activateAppPlanRef, {
+        planId: appPlanId,
+      });
+    } catch (err) {
+      actionError = getActionErrorMessage(
+        err,
+        resolvedI18n.labels.subscription.switchFailed,
+      );
+    }
+  };
+
   const requestSwitchPlan = async (payload: {
     plan: UIPlanEntry;
     productId?: string;
+    appPlanId?: string;
     freePlanId?: string;
     units?: number;
   }) => {
@@ -634,24 +816,30 @@
         fromPlanId: activePlanId,
         toPlanId: payload.plan.planId,
         productId: payload.productId,
+        appPlanId: payload.appPlanId,
         freePlanId: payload.freePlanId,
         units: payload.units,
       });
       if (!proceed) return;
     }
-    // Consent gate: onBeforeFreePlanActivation
-    if (resolvedOnBeforeFreePlanActivation && payload.plan.category === "free") {
-      const proceed = await resolvedOnBeforeFreePlanActivation({
-        freePlanId: payload.plan.planId,
+    const appPlanId = payload.appPlanId ?? payload.freePlanId;
+    // Consent gate: onBeforePlanActivation
+    if (resolvedOnBeforePlanActivation && appPlanId) {
+      const proceed = await resolvedOnBeforePlanActivation({
+        planId: appPlanId,
       });
       if (!proceed) return;
+    }
+    if (appPlanId && !matchedSubscription?.id && activateAppPlanRef) {
+      await activateAppPlan(appPlanId);
+      return;
     }
     pendingUpdate = { kind: "plan-switch", ...payload };
     updateDialogOpen = true;
   };
 
   const confirmUpdate = async () => {
-    if (!updateRef || !pendingUpdate) return;
+    if (!pendingUpdate) return;
     const update = pendingUpdate;
     const selectedUpdateBehavior = resolveUpdateBehavior(update);
     const subId = matchedSubscription?.id;
@@ -660,6 +848,12 @@
     actionError = null;
     try {
       if (update.kind === "plan-switch") {
+        const appPlanId = update.appPlanId ?? update.freePlanId;
+        if (appPlanId && !subId && activateAppPlanRef) {
+          await activateAppPlan(appPlanId);
+          return;
+        }
+        if (!updateRef) return;
         await client.mutation(
           updateRef,
           {
@@ -684,7 +878,7 @@
                         entityId: "",
                         subscriptionId: subId ?? "",
                         targetProductId: update.productId,
-                        targetPlanId: update.freePlanId,
+                            targetPlanId: update.appPlanId ?? update.freePlanId,
                         effectiveAt: matchedSubscription?.currentPeriodEnd ?? "",
                         status: "pending",
                         createdAt: new Date().toISOString(),
@@ -711,6 +905,7 @@
           },
         );
       } else {
+        if (!updateRef) return;
         await client.mutation(
           updateRef,
           {
@@ -759,11 +954,12 @@
         );
       }
     } catch (error) {
-      actionError = error instanceof Error
-        ? error.message
-        : update.kind === "plan-switch"
+      actionError = getActionErrorMessage(
+        error,
+        update.kind === "plan-switch"
           ? resolvedI18n.labels.subscription.switchFailed
-          : resolvedI18n.labels.subscription.unitUpdateFailed;
+          : resolvedI18n.labels.subscription.unitUpdateFailed,
+      );
     }
   };
 
@@ -812,6 +1008,7 @@
         formatPriceWithInterval(
           localSubscriptionProductId ?? undefined,
           allProducts,
+          resolvedI18n.labels,
           resolvedI18n.formatCurrency,
         );
       const newPrice =
@@ -820,6 +1017,7 @@
           ? formatPriceWithInterval(
               pendingUpdate.productId,
               allProducts,
+              resolvedI18n.labels,
               resolvedI18n.formatCurrency,
             )
           : null);
@@ -877,6 +1075,7 @@
       const price = formatPriceWithInterval(
         localScheduledUpdate.targetProductId,
         allProducts,
+        resolvedI18n.labels,
         resolvedI18n.formatCurrency,
       );
       const title = targetPlan?.title ?? resolvedI18n.labels.subscription.newPlan;
@@ -929,9 +1128,10 @@
         },
       );
     } catch (error) {
-      actionError = error instanceof Error
-        ? error.message
-        : resolvedI18n.labels.subscription.cancelFailed;
+      actionError = getActionErrorMessage(
+        error,
+        resolvedI18n.labels.subscription.cancelFailed,
+      );
     }
   };
 
@@ -967,9 +1167,10 @@
         },
       );
     } catch (error) {
-      actionError = error instanceof Error
-        ? error.message
-        : resolvedI18n.labels.subscription.resumeFailed;
+      actionError = getActionErrorMessage(
+        error,
+        resolvedI18n.labels.subscription.resumeFailed,
+      );
     }
   };
 
@@ -1006,9 +1207,10 @@
         },
       );
     } catch (error) {
-      actionError = error instanceof Error
-        ? error.message
-        : resolvedI18n.labels.subscription.resumeFailed;
+      actionError = getActionErrorMessage(
+        error,
+        resolvedI18n.labels.subscription.resumeFailed,
+      );
     }
   };
 
@@ -1075,18 +1277,21 @@
         subscriptionTrialEnd={matchedSubscription?.trialEnd ?? null}
         {units}
         showUnitPicker={showUnitPicker}
-        {twoColumnLayout}
+        {columns}
         subscribedUnits={localSubscribedUnits}
         isGroupSubscribed={ownsActiveSubscription}
         onCycleChange={(cycle) => {
           contextValue.setCycle(cycle);
         }}
         showCycleToggle={intervalSelector === "auto"}
+        {cycleBadges}
         disableCheckout={!canCheckout}
         disableSwitch={!canChange}
         disableUnits={!canUpdateUnits}
         onCheckout={canCheckout ? handlePricingCheckout : undefined}
-        onSwitchPlan={updateRef && canChange ? requestSwitchPlan : undefined}
+        onSwitchPlan={(updateRef || activateAppPlanRef) && canChange
+          ? requestSwitchPlan
+          : undefined}
         onUpdateUnits={updateRef && canUpdateUnits
           ? handleUpdateUnits
           : undefined}

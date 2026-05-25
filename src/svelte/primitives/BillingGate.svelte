@@ -2,7 +2,7 @@
   /* global $props, $derived */
   import type { Snippet } from "svelte";
   import type { AvailableAction, BillingSnapshot } from "../../core/types.js";
-  import { hasBillingActionLocal } from "./shared.js";
+  import { hasBillingActionLocal } from "../../core/display.js";
 
   interface Props {
     snapshot?: BillingSnapshot | null;

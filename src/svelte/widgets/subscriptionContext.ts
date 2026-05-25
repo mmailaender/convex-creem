@@ -1,4 +1,8 @@
-import type { RecurringCycle, UIPlanEntry } from "../../core/types.js";
+import type {
+  RecurringCycle,
+  SupportedRecurringCycle,
+  UIPlanEntry,
+} from "../../core/types.js";
 import type {
   BillingCurrencyFormatInput,
   BillingDateFormatInput,
@@ -28,6 +32,7 @@ export type SubscriptionContextValue = {
   getDisableUnits: () => boolean;
   getUnstyled: () => boolean;
   getLabels: () => BillingLabels;
+  getCycleBadge: (cycle: SupportedRecurringCycle) => string | undefined;
   formatCurrency: (input: BillingCurrencyFormatInput) => string;
   formatDate: (input: BillingDateFormatInput) => string;
   checkout: (payload: {
@@ -38,6 +43,7 @@ export type SubscriptionContextValue = {
   switchPlan?: (payload: {
     plan: UIPlanEntry;
     productId?: string;
+    appPlanId?: string;
     freePlanId?: string;
     units?: number;
   }) => Promise<void> | void;

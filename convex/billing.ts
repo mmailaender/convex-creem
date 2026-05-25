@@ -1,10 +1,11 @@
 import {
+  appPlanActivateArgs,
   Creem,
   defineBillingCatalog,
   type ApiResolver,
 } from "@mmailaender/convex-creem";
 import { api, components } from "./_generated/api";
-import { action, internalAction, query } from "./_generated/server";
+import { action, internalAction, mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 
 const demoCreditsProductId =
@@ -13,6 +14,20 @@ const demoCreditsProductId =
 const billingCatalog = defineBillingCatalog({
   version: "example-server",
   plans: [
+    {
+      planId: "trial",
+      category: "trial",
+      billingType: "custom",
+      eligibility: {
+        oncePerEntity: true,
+        hideWhenIneligible: true,
+      },
+    },
+    {
+      planId: "free",
+      category: "free",
+      billingType: "custom",
+    },
     {
       planId: "ai-credits-100",
       category: "paid",
@@ -41,9 +56,10 @@ export const creem = new Creem(components.creem, {
 // Replace with your own auth logic (e.g. ctx.auth.getUserIdentity()).
 // This example uses a demo user from the "users" table.
 const resolve: ApiResolver = async (ctx) => {
-  const user: { _id: Id<"users">; email: string } = await ctx.runQuery(
-    api.billing.getUserInfo,
-  );
+  const user: {
+    _id: Id<"users">;
+    email: string;
+  } = await ctx.runQuery(api.billing.getUserInfo);
   return {
     userId: user._id as string,
     email: user.email,
@@ -58,6 +74,22 @@ export const getUserInfo = query({
     const user = await ctx.db.query("users").first();
     if (!user) throw new Error("User not found");
     return user;
+  },
+});
+
+export const plansActivate = mutation({
+  args: appPlanActivateArgs,
+  handler: async (ctx, args) => {
+    const user = await ctx.db.query("users").first();
+    if (!user) throw new Error("User not found");
+
+    await creem.appPlans.activate(ctx, {
+      entityId: user._id as string,
+      planId: args.planId,
+      activatedByUserId: user._id as string,
+    });
+
+    return { success: true };
   },
 });
 

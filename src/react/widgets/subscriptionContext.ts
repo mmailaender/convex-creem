@@ -1,5 +1,9 @@
 import { createContext } from "react";
-import type { RecurringCycle, UIPlanEntry } from "../../core/types.js";
+import type {
+  RecurringCycle,
+  SupportedRecurringCycle,
+  UIPlanEntry,
+} from "../../core/types.js";
 import type {
   BillingCurrencyFormatInput,
   BillingDateFormatInput,
@@ -29,6 +33,7 @@ export type SubscriptionContextValue = {
   disableUnits: boolean;
   unstyled: boolean;
   labels: BillingLabels;
+  cycleBadges?: Partial<Record<SupportedRecurringCycle, string>>;
   formatCurrency: (input: BillingCurrencyFormatInput) => string;
   formatDate: (input: BillingDateFormatInput) => string;
   checkout: (payload: {
@@ -39,6 +44,7 @@ export type SubscriptionContextValue = {
   switchPlan?: (payload: {
     plan: UIPlanEntry;
     productId?: string;
+    appPlanId?: string;
     freePlanId?: string;
     units?: number;
   }) => Promise<void> | void;

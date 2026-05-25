@@ -8,11 +8,14 @@
   interface Props {
     value: string;
     label: string;
-    description?: string;
     children?: import("svelte").Snippet;
   }
 
-  let { value, label: _label, children }: Props = $props();
+  let {
+    value,
+    label: _label,
+    children,
+  }: Props = $props();
   const rootContext = getContext<SubscriptionContextValue | undefined>(
     SUBSCRIPTION_CONTEXT_KEY,
   );

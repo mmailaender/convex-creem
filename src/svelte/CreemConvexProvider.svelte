@@ -28,9 +28,9 @@
     onBeforePlanChange?: (
       intent: PlanChangeIntent,
     ) => Promise<boolean> | boolean;
-    /** Optional guard that can block activating an app-owned free plan. */
-    onBeforeFreePlanActivation?: (intent: {
-      freePlanId: string;
+    /** Optional guard that can block activating an app-owned plan. */
+    onBeforePlanActivation?: (intent: {
+      planId: string;
     }) => Promise<boolean> | boolean;
     /** Locale, labels, and formatting overrides for widgets below this provider. */
     i18n?: BillingI18n;
@@ -45,7 +45,7 @@
     permissions = undefined,
     onBeforeCheckout = undefined,
     onBeforePlanChange = undefined,
-    onBeforeFreePlanActivation = undefined,
+    onBeforePlanActivation = undefined,
     i18n = undefined,
     children,
   }: Props = $props();
@@ -69,8 +69,8 @@
     get onBeforePlanChange() {
       return onBeforePlanChange;
     },
-    get onBeforeFreePlanActivation() {
-      return onBeforeFreePlanActivation;
+    get onBeforePlanActivation() {
+      return onBeforePlanActivation;
     },
     get i18n() {
       return i18n;

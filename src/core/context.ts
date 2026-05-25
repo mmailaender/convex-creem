@@ -115,9 +115,9 @@ export type BillingContextValue = {
   /** Called before plan change — return `false` to block. */
   onBeforePlanChange?: (intent: PlanChangeIntent) => Promise<boolean> | boolean;
 
-  /** Called before free plan activation — return `false` to block. */
-  onBeforeFreePlanActivation?: (intent: {
-    freePlanId: string;
+  /** Called before app-owned plan activation — return `false` to block. */
+  onBeforePlanActivation?: (intent: {
+    planId: string;
   }) => Promise<boolean> | boolean;
 
   // ── Credits (optional capability) ──────────────────────────
@@ -148,8 +148,8 @@ export type BillingProviderConfig = {
   onBeforeCheckout?: BillingContextValue["onBeforeCheckout"];
   /** Consent gate: called before plan change. */
   onBeforePlanChange?: BillingContextValue["onBeforePlanChange"];
-  /** Consent gate: called before free plan activation. */
-  onBeforeFreePlanActivation?: BillingContextValue["onBeforeFreePlanActivation"];
+  /** Consent gate: called before app-owned plan activation. */
+  onBeforePlanActivation?: BillingContextValue["onBeforePlanActivation"];
   /** Optional UI label and formatting configuration. */
   i18n?: BillingI18n;
 };
