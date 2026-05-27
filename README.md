@@ -1812,6 +1812,17 @@ that seats are the only unit-based pricing use case.
 `twoColumnLayout` was removed. Use `columns={2}` for a fixed two-column pricing
 grid, or omit it for automatic layout.
 
+### Product namespace cleanup
+
+`Product.Group` was removed. It was only a compatibility alias for
+`Product.Root`, not a real grouping primitive. Render `Product.Root` directly.
+`Subscription.Group` remains because it is a distinct component for grouping
+subscription plans.
+
+| Previous API      | New API    |
+| ----------------- | ---------------- |
+| `<Product.Group>` | `<Product.Root>` |
+
 ### App-owned plans and i18n
 
 `freePlans.activate` and `onBeforeFreePlanActivation` were removed:

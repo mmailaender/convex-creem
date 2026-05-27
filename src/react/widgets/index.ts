@@ -65,12 +65,9 @@ export const Subscription: typeof SubscriptionItem & {
 export const Product: typeof ProductItem & {
   Root: typeof ProductRoot;
   Item: typeof ProductItem;
-  /** @deprecated Use `Product.Root` instead. */
-  Group: typeof ProductRoot;
 } = Object.assign(ProductItem, {
   Root: ProductRoot,
   Item: ProductItem,
-  Group: ProductRoot,
 });
 
 export const Credits: typeof CreditsRoot & {
