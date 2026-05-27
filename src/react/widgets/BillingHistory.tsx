@@ -12,6 +12,7 @@ import type {
 } from "./types.js";
 import { formatPrice } from "../../core/display.js";
 import { resolveBillingI18n } from "../../core/i18n.js";
+import { getConvexErrorMessage } from "../../core/convexError.js";
 import {
   requireCreemConvexApi,
   useCreemConvex,
@@ -87,9 +88,7 @@ export const BillingHistory = ({
       setResult(next as ConnectedTransactionList);
     } catch (cause) {
       setError(
-        cause instanceof Error
-          ? cause.message
-          : i18n.labels.billingHistory.loadError,
+        getConvexErrorMessage(cause, i18n.labels.billingHistory.loadError),
       );
     } finally {
       setIsLoading(false);

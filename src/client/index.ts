@@ -190,6 +190,9 @@ export const creditsCreateAccountArgs = {
 export const creditsGetBalanceArgs = {
   accountId: v.optional(v.string()),
 };
+const CUSTOMER_CHECKOUT_REQUIRED_ERROR = {
+  message: "Customer not found — complete a checkout first",
+} as const;
 
 /**
  * Convex arg validator for crediting an account.
@@ -737,7 +740,7 @@ export class Creem {
       { entityId },
     );
     if (!customer) {
-      throw new ConvexError("Customer not found — complete a checkout first");
+      throw new ConvexError(CUSTOMER_CHECKOUT_REQUIRED_ERROR);
     }
     // Try to find existing default account
     const accounts = await this.sdk.customerCredits.listAccounts(
@@ -2183,10 +2186,9 @@ export class Creem {
               this.component.lib.getCustomerByEntityId,
               { entityId },
             );
-            if (!customer)
-              throw new ConvexError(
-                "Customer not found — complete a checkout first",
-              );
+            if (!customer) {
+              throw new ConvexError(CUSTOMER_CHECKOUT_REQUIRED_ERROR);
+            }
             return await this.credits.createAccount({
               customerId: customer.id,
               name: args.name,

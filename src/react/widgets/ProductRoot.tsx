@@ -17,6 +17,7 @@ import { ProductGroupContext } from "./productGroupContext.js";
 import { renderMarkdown } from "../../core/markdown.js";
 import { pendingCheckout } from "../../core/pendingCheckout.js";
 import { resolveBillingI18n } from "../../core/i18n.js";
+import { getConvexErrorMessage } from "../../core/convexError.js";
 import {
   getActiveOwnedProductId,
   getEffectiveOwnedProductIds,
@@ -164,9 +165,10 @@ export const ProductRoot = ({
         window.location.href = url;
       } catch (checkoutError) {
         setError(
-          checkoutError instanceof Error
-            ? checkoutError.message
-            : i18n.labels.product.checkoutFailed,
+          getConvexErrorMessage(
+            checkoutError,
+            i18n.labels.product.checkoutFailed,
+          ),
         );
       } finally {
         setIsLoading(false);

@@ -99,9 +99,11 @@ The example resolver calls `api.billing.getUserInfo`, which reads the first row
 from the demo `users` table. Replace this with production auth:
 
 ```ts
+import { ConvexError } from "convex/values";
+
 const resolve: ApiResolver = async (ctx) => {
   const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new Error("Not authenticated");
+  if (!identity) throw new ConvexError("Not authenticated");
 
   return {
     userId: identity.subject,

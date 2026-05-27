@@ -18,6 +18,7 @@ import {
   CreditsTitle,
 } from "./CreditsSlots.js";
 import { resolveBillingI18n } from "../../core/i18n.js";
+import { getConvexErrorMessage } from "../../core/convexError.js";
 
 export const CreditsRoot = ({
   unitLabel = "credits",
@@ -53,9 +54,7 @@ export const CreditsRoot = ({
       const result = await client.action(getBalanceRef, {});
       setBalance(result?.balance ?? "0");
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : i18n.labels.credits.loadFailed,
-      );
+      setError(getConvexErrorMessage(cause, i18n.labels.credits.loadFailed));
     } finally {
       setLoading(false);
     }

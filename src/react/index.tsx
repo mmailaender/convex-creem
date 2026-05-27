@@ -54,6 +54,7 @@ export {
 } from "../core/selectors.js";
 export { evaluateUsageLimits } from "../core/usageLimits.js";
 export { resolveBillingSnapshot } from "../core/resolver.js";
+export { getConvexErrorMessage } from "../core/convexError.js";
 export { createCreemReact } from "./createCreemReact.js";
 export type {
   CreateCreemReactOptions,

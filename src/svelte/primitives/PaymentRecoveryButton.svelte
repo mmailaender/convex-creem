@@ -5,6 +5,7 @@
     defaultBillingLabels,
     type BillingLabels,
   } from "../../core/i18n.js";
+  import { getConvexErrorMessage } from "../../core/convexError.js";
 
   interface Props {
     portalUrl: FunctionReference<"action">;
@@ -31,8 +32,7 @@
       const result = (await client.action(portalUrl, {})) as { url: string };
       window.location.href = result.url;
     } catch (err) {
-      error =
-        err instanceof Error ? err.message : labels.portal.failedToOpen;
+      error = getConvexErrorMessage(err, labels.portal.failedToOpen);
       isLoading = false;
     }
   };

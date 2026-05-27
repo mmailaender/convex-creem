@@ -18,6 +18,7 @@
     defineBillingCatalog,
     createCreemSvelte,
     evaluateUsageLimits,
+    getConvexErrorMessage,
     plansOf,
     selectBaseSubscription,
     type ConnectedBillingApi,
@@ -456,10 +457,10 @@
       await refreshCredits?.();
       demoImageMessage = `Generated demo image and consumed ${result.creditsConsumed} credits.`;
     } catch (cause) {
-      demoImageError =
-        cause instanceof Error
-          ? cause.message
-          : "Could not generate the demo image";
+      demoImageError = getConvexErrorMessage(
+        cause,
+        "Could not generate the demo image",
+      );
     } finally {
       demoImageLoading = false;
     }

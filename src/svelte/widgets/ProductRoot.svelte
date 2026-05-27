@@ -24,6 +24,7 @@
   import { SvelteSet } from "svelte/reactivity";
   import { renderMarkdown } from "../../core/markdown.js";
   import { pendingCheckout } from "../../core/pendingCheckout.js";
+  import { getConvexErrorMessage } from "../../core/convexError.js";
   import {
     getActiveOwnedProductId,
     getEffectiveOwnedProductIds,
@@ -213,10 +214,10 @@
       window.location.href = url;
       window.location.href = url;
     } catch (checkoutError) {
-      error =
-        checkoutError instanceof Error
-          ? checkoutError.message
-          : i18n.labels.product.checkoutFailed;
+      error = getConvexErrorMessage(
+        checkoutError,
+        i18n.labels.product.checkoutFailed,
+      );
       isLoading = false;
     }
   };

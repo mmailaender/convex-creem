@@ -1,5 +1,5 @@
 import { QueryCtx, mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { creem } from "./billing";
 
@@ -52,7 +52,7 @@ export const createDemoUser = mutation({
 
     const email = process.env.TEST_USER_EMAIL;
     if (!email) {
-      throw new Error("TEST_USER_EMAIL environment variable is not set");
+      throw new ConvexError("TEST_USER_EMAIL environment variable is not set");
     }
 
     const userId = await ctx.db.insert("users", {
@@ -68,11 +68,11 @@ export const createDemoUser = mutation({
 export const authorizeTodo = async (ctx: QueryCtx, todoId: Id<"todos">) => {
   const user = await currentUser(ctx);
   if (!user) {
-    throw new Error("No user found");
+    throw new ConvexError("No user found");
   }
   const todo = await ctx.db.get(todoId);
   if (!todo || todo.userId !== user._id) {
-    throw new Error("Todo not found");
+    throw new ConvexError("Todo not found");
   }
 };
 
@@ -96,7 +96,7 @@ export const insertTodo = mutation({
   handler: async (ctx, args) => {
     const user = await currentUser(ctx);
     if (!user) {
-      throw new Error("No user found. Create a demo user first.");
+      throw new ConvexError("No user found. Create a demo user first.");
     }
     const todoCount = (
       await ctx.db
@@ -105,10 +105,10 @@ export const insertTodo = mutation({
         .collect()
     ).length;
     if (!user.subscription && todoCount >= MAX_FREE_TODOS) {
-      throw new Error("Reached maximum number of todos for free plan");
+      throw new ConvexError("Reached maximum number of todos for free plan");
     }
     if (user.isBasic && todoCount >= MAX_PREMIUM_TODOS) {
-      throw new Error("Reached maximum number of todos for basic plan");
+      throw new ConvexError("Reached maximum number of todos for basic plan");
     }
     await ctx.db.insert("todos", {
       userId: user._id,

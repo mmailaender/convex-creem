@@ -7,6 +7,7 @@ import {
 import { api, components } from "./_generated/api";
 import { action, internalAction, mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { ConvexError } from "convex/values";
 
 const demoCreditsProductId =
   process.env.CREEM_ONETIME_CREDITS ?? "prod_73CnZ794MaJ1DUn8MU0O5f";
@@ -72,7 +73,7 @@ export const getUserInfo = query({
   args: {},
   handler: async (ctx) => {
     const user = await ctx.db.query("users").first();
-    if (!user) throw new Error("User not found");
+    if (!user) throw new ConvexError("User not found");
     return user;
   },
 });
@@ -81,7 +82,7 @@ export const plansActivate = mutation({
   args: appPlanActivateArgs,
   handler: async (ctx, args) => {
     const user = await ctx.db.query("users").first();
-    if (!user) throw new Error("User not found");
+    if (!user) throw new ConvexError("User not found");
 
     await creem.appPlans.activate(ctx, {
       entityId: user._id as string,

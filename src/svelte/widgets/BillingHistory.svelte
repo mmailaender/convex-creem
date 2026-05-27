@@ -13,6 +13,7 @@
   } from "./types.js";
   import { formatPrice } from "../../core/display.js";
   import { resolveBillingI18n } from "../../core/i18n.js";
+  import { getConvexErrorMessage } from "../../core/convexError.js";
   import {
     CREEM_CONVEX_CONTEXT_KEY,
     type CreemConvexContextValue,
@@ -87,11 +88,15 @@
     isLoading = true;
     error = null;
     try {
-      result = (await client.action(searchRef, args)) as ConnectedTransactionList;
+      result = (await client.action(
+        searchRef,
+        args,
+      )) as ConnectedTransactionList;
     } catch (cause) {
-      error = cause instanceof Error
-        ? cause.message
-        : i18n.labels.billingHistory.loadError;
+      error = getConvexErrorMessage(
+        cause,
+        i18n.labels.billingHistory.loadError,
+      );
     } finally {
       isLoading = false;
     }

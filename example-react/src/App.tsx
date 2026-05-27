@@ -11,6 +11,7 @@ import {
   evaluateUsageLimits,
   plansOf,
   selectBaseSubscription,
+  getConvexErrorMessage,
   type ConnectedBillingApi,
   type ConnectedBillingModel,
   type Transition,
@@ -241,9 +242,7 @@ export default function App() {
       );
     } catch (cause) {
       setDemoImageError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not generate the demo image",
+        getConvexErrorMessage(cause, "Could not generate the demo image"),
       );
     } finally {
       setDemoImageLoading(false);

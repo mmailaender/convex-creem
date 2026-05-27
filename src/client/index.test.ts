@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { ConvexError } from "convex/values";
 import { Creem } from "./index.js";
 import { defineBillingCatalog } from "../core/catalog.js";
 import type { ComponentApi } from "../component/_generated/component.js";
@@ -2151,6 +2152,23 @@ describe("api() convenience exports", () => {
       const handler = extractHandler(apiExports.orders.list as never);
       const result = await handler(ctx, {});
       expect(result).toEqual(orders);
+    });
+  });
+
+  describe("credits.getBalance", () => {
+    it("throws a ConvexError with user-facing data when checkout is required", async () => {
+      resolve.mockResolvedValue({ entityId: "user_1" });
+      const ctx = createMockCtx({
+        [REFS.getCustomerByEntityId]: null,
+      });
+      const handler = extractHandler(apiExports.credits.getBalance as never);
+
+      await expect(handler(ctx, {})).rejects.toMatchObject({
+        data: {
+          message: "Customer not found — complete a checkout first",
+        },
+      });
+      await expect(handler(ctx, {})).rejects.toBeInstanceOf(ConvexError);
     });
   });
 });

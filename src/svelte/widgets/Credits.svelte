@@ -14,6 +14,7 @@
     type CreemConvexContextValue,
   } from "../creemConvexContext.js";
   import { resolveBillingI18n } from "../../core/i18n.js";
+  import { getConvexErrorMessage } from "../../core/convexError.js";
 
   interface Props {
     /** Unit label displayed next to the balance, such as `credits` or `tokens`. */
@@ -64,7 +65,7 @@
       const balanceResult = result as CreditsBalanceResult;
       balance = balanceResult.balance ?? "0";
     } catch (cause: unknown) {
-      error = cause instanceof Error ? cause.message : i18n.labels.credits.loadFailed;
+      error = getConvexErrorMessage(cause, i18n.labels.credits.loadFailed);
     } finally {
       loading = false;
     }
