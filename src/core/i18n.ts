@@ -94,7 +94,10 @@ export type BillingLabels = {
       updateUnitsTitle: string;
       confirmSwitch: string;
       confirmUpdate: string;
-      behaviorDescription: (behavior: ResolvedUpdateBehavior) => string;
+      behaviorDescription: (
+        behavior: ResolvedUpdateBehavior,
+        input?: { isDowngrade?: boolean },
+      ) => string;
       periodEndNote: (input: {
         behavior: ResolvedUpdateBehavior;
         formattedDate: string;
@@ -176,9 +179,13 @@ export type ResolvedBillingI18n = {
 
 const defaultBehaviorDescription = (
   behavior: ResolvedUpdateBehavior,
+  input?: { isDowngrade?: boolean },
 ): string => {
   switch (behavior) {
     case "proration-charge-immediately":
+      if (input?.isDowngrade) {
+        return "The price difference will be prorated and refunded immediately.";
+      }
       return "The price difference will be prorated and charged immediately.";
     case "proration-charge":
       return "The price difference will be prorated and applied to your next invoice.";

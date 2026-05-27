@@ -13,6 +13,8 @@ export type UpdateSummaryInput = {
   updateBehavior: ResolvedUpdateBehavior;
   currentLabel: string;
   newLabel: string;
+  currentPrice?: number | null;
+  newPrice?: number | null;
   currentCaption?: string | null;
   newCaption?: string | null;
   currentPeriodEnd?: string | null;
@@ -92,6 +94,8 @@ export const buildUpdateSummary = (
     updateBehavior,
     currentLabel,
     newLabel,
+    currentPrice,
+    newPrice,
     currentCaption = null,
     newCaption = null,
     currentPeriodEnd,
@@ -128,8 +132,13 @@ export const buildUpdateSummary = (
       kind === "plan-switch"
         ? labels.subscription.dialogs.switchPlanTitle
         : labels.subscription.dialogs.updateUnitsTitle,
-    description:
-      labels.subscription.dialogs.behaviorDescription(updateBehavior),
+    description: labels.subscription.dialogs.behaviorDescription(
+      updateBehavior,
+      {
+        isDowngrade:
+          currentPrice != null && newPrice != null && newPrice < currentPrice,
+      },
+    ),
     currentLabel,
     newLabel,
     currentCaption,

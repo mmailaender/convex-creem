@@ -20,6 +20,7 @@
     type CreemConvexContextValue,
   } from "../creemConvexContext.js";
   import { pendingCheckout } from "../../core/pendingCheckout.js";
+  import { getConvexErrorMessage } from "../../core/convexError.js";
 
   import type {
     PlanCatalog,
@@ -692,9 +693,6 @@
       : "light";
   };
 
-  const getActionErrorMessage = (error: unknown, fallback: string) =>
-    error instanceof Error ? error.message : fallback;
-
   function formatGroupTitle(value: string) {
     return value
       .split(/[-_\s]+/)
@@ -782,7 +780,7 @@
       );
       window.location.href = url;
     } catch (error) {
-      actionError = getActionErrorMessage(
+      actionError = getConvexErrorMessage(
         error,
         resolvedI18n.labels.subscription.checkoutFailed,
       );
@@ -807,7 +805,7 @@
         planId: appPlanId,
       });
     } catch (err) {
-      actionError = getActionErrorMessage(
+      actionError = getConvexErrorMessage(
         err,
         resolvedI18n.labels.subscription.switchFailed,
       );
@@ -965,7 +963,7 @@
         );
       }
     } catch (error) {
-      actionError = getActionErrorMessage(
+      actionError = getConvexErrorMessage(
         error,
         update.kind === "plan-switch"
           ? resolvedI18n.labels.subscription.switchFailed
@@ -1032,6 +1030,16 @@
               resolvedI18n.formatCurrency,
             )
           : null);
+      const currentPriceAmount = getProductPrice(localSubscriptionProductId);
+      const newPriceAmount = getProductPrice(pendingUpdate.productId);
+      const currentComparisonPrice =
+        currentPriceAmount != null && useUnitBreakdown
+          ? currentPriceAmount * switchUnits
+          : currentPriceAmount;
+      const newComparisonPrice =
+        newPriceAmount != null && useUnitBreakdown
+          ? newPriceAmount * switchUnits
+          : newPriceAmount;
 
       return buildUpdateSummary({
         kind: "plan-switch",
@@ -1040,6 +1048,8 @@
         newLabel: newPrice
           ? `${pendingUpdate.plan.title ?? resolvedI18n.labels.subscription.newPlan} \u00b7 ${newPrice}`
           : (pendingUpdate.plan.title ?? resolvedI18n.labels.subscription.newPlan),
+        currentPrice: currentComparisonPrice,
+        newPrice: newComparisonPrice,
         currentCaption: currentBreakdown?.calculation ?? null,
         newCaption: newBreakdown?.calculation ?? null,
         currentPeriodEnd: matchedSubscription?.currentPeriodEnd,
@@ -1065,12 +1075,15 @@
       resolvedI18n.labels,
       resolvedI18n.formatCurrency,
     );
+    const unitPriceAmount = getProductPrice(localSubscriptionProductId);
 
     return buildUpdateSummary({
       kind: "unit-update",
       updateBehavior: selectedUpdateBehavior,
       currentLabel: currentPrice ?? resolvedI18n.labels.subscription.unitCount(currentUnits),
       newLabel: newPrice ?? resolvedI18n.labels.subscription.unitCount(pendingUpdate.units),
+      currentPrice: unitPriceAmount != null ? unitPriceAmount * currentUnits : null,
+      newPrice: unitPriceAmount != null ? unitPriceAmount * pendingUpdate.units : null,
       currentPeriodEnd: matchedSubscription?.currentPeriodEnd,
       isTrialing: matchedSubscription?.status === "trialing",
       trialEnd: matchedSubscription?.trialEnd,
@@ -1139,7 +1152,7 @@
         },
       );
     } catch (error) {
-      actionError = getActionErrorMessage(
+      actionError = getConvexErrorMessage(
         error,
         resolvedI18n.labels.subscription.cancelFailed,
       );
@@ -1178,7 +1191,7 @@
         },
       );
     } catch (error) {
-      actionError = getActionErrorMessage(
+      actionError = getConvexErrorMessage(
         error,
         resolvedI18n.labels.subscription.resumeFailed,
       );
@@ -1218,7 +1231,7 @@
         },
       );
     } catch (error) {
-      actionError = getActionErrorMessage(
+      actionError = getConvexErrorMessage(
         error,
         resolvedI18n.labels.subscription.resumeFailed,
       );

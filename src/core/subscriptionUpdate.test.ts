@@ -25,6 +25,25 @@ describe("buildUpdateSummary", () => {
       expect(result.description).toContain("prorated and charged immediately");
     });
 
+    it("describes immediate proration as a refund for downgrades", () => {
+      const result = buildUpdateSummary({
+        ...base,
+        currentPrice: 10000,
+        newPrice: 5000,
+      });
+      expect(result.description).toContain("prorated and refunded immediately");
+      expect(result.description).not.toContain("charged immediately");
+    });
+
+    it("keeps immediate proration as a charge for upgrades", () => {
+      const result = buildUpdateSummary({
+        ...base,
+        currentPrice: 5000,
+        newPrice: 10000,
+      });
+      expect(result.description).toContain("prorated and charged immediately");
+    });
+
     it("describes proration-charge", () => {
       const result = buildUpdateSummary({
         ...base,

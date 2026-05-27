@@ -17,6 +17,7 @@ import { ScheduledChangeBanner } from "../primitives/ScheduledChangeBanner.js";
 
 import { SubscriptionContext } from "./subscriptionContext.js";
 import { pendingCheckout } from "../../core/pendingCheckout.js";
+import { getConvexErrorMessage } from "../../core/convexError.js";
 
 import type {
   PlanCatalog,
@@ -83,9 +84,6 @@ const formatGroupTitle = (value: string) =>
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
-
-const getActionErrorMessage = (error: unknown, fallback: string) =>
-  error instanceof Error ? error.message : fallback;
 
 const planTypeToCategory = (
   type: SubscriptionPlanRegistration["type"],
@@ -671,7 +669,7 @@ export const SubscriptionRoot = ({
         window.location.href = url;
       } catch (error) {
         setActionError(
-          getActionErrorMessage(
+          getConvexErrorMessage(
             error,
             resolvedI18n.labels.subscription.checkoutFailed,
           ),
@@ -728,7 +726,7 @@ export const SubscriptionRoot = ({
         });
       } catch (cause) {
         setActionError(
-          getActionErrorMessage(
+          getConvexErrorMessage(
             cause,
             resolvedI18n.labels.subscription.switchFailed,
           ),
@@ -912,7 +910,7 @@ export const SubscriptionRoot = ({
       }
     } catch (error) {
       setActionError(
-        getActionErrorMessage(
+        getConvexErrorMessage(
           error,
           update.kind === "plan-switch"
             ? resolvedI18n.labels.subscription.switchFailed
@@ -996,6 +994,16 @@ export const SubscriptionRoot = ({
               resolvedI18n.formatCurrency,
             )
           : null);
+      const currentPriceAmount = getProductPrice(localSubscriptionProductId);
+      const newPriceAmount = getProductPrice(pendingUpdate.productId);
+      const currentComparisonPrice =
+        currentPriceAmount != null && useUnitBreakdown
+          ? currentPriceAmount * switchUnits
+          : currentPriceAmount;
+      const newComparisonPrice =
+        newPriceAmount != null && useUnitBreakdown
+          ? newPriceAmount * switchUnits
+          : newPriceAmount;
 
       return buildUpdateSummary({
         kind: "plan-switch",
@@ -1007,6 +1015,8 @@ export const SubscriptionRoot = ({
           ? `${pendingUpdate.plan.title ?? resolvedI18n.labels.subscription.newPlan} \u00b7 ${newPrice}`
           : (pendingUpdate.plan.title ??
             resolvedI18n.labels.subscription.newPlan),
+        currentPrice: currentComparisonPrice,
+        newPrice: newComparisonPrice,
         currentCaption: currentBreakdown?.calculation ?? null,
         newCaption: newBreakdown?.calculation ?? null,
         currentPeriodEnd: matchedSubscription?.currentPeriodEnd,
@@ -1032,6 +1042,7 @@ export const SubscriptionRoot = ({
       resolvedI18n.labels,
       resolvedI18n.formatCurrency,
     );
+    const unitPriceAmount = getProductPrice(localSubscriptionProductId);
 
     return buildUpdateSummary({
       kind: "unit-update",
@@ -1042,6 +1053,10 @@ export const SubscriptionRoot = ({
       newLabel:
         newPrice ??
         resolvedI18n.labels.subscription.unitCount(pendingUpdate.units),
+      currentPrice:
+        unitPriceAmount != null ? unitPriceAmount * currentUnits : null,
+      newPrice:
+        unitPriceAmount != null ? unitPriceAmount * pendingUpdate.units : null,
       currentPeriodEnd: matchedSubscription?.currentPeriodEnd,
       isTrialing: matchedSubscription?.status === "trialing",
       trialEnd: matchedSubscription?.trialEnd,
@@ -1055,6 +1070,7 @@ export const SubscriptionRoot = ({
     allProducts,
     localSubscribedUnits,
     units,
+    getProductPrice,
     resolveUpdateBehavior,
     matchedSubscription,
     resolvedI18n,
@@ -1130,7 +1146,7 @@ export const SubscriptionRoot = ({
       );
     } catch (error) {
       setActionError(
-        getActionErrorMessage(
+        getConvexErrorMessage(
           error,
           resolvedI18n.labels.subscription.cancelFailed,
         ),
@@ -1178,7 +1194,7 @@ export const SubscriptionRoot = ({
       );
     } catch (error) {
       setActionError(
-        getActionErrorMessage(
+        getConvexErrorMessage(
           error,
           resolvedI18n.labels.subscription.resumeFailed,
         ),
@@ -1227,7 +1243,7 @@ export const SubscriptionRoot = ({
       );
     } catch (error) {
       setActionError(
-        getActionErrorMessage(
+        getConvexErrorMessage(
           error,
           resolvedI18n.labels.subscription.resumeFailed,
         ),
