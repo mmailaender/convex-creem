@@ -29,7 +29,7 @@
     "dev:backend": "convex dev --typecheck-components",
     "dev:frontend:react": "cd example-react && vite --clearScreen false",
     "dev:frontend:svelte": "vite --clearScreen false --config example-svelte/vite.config.ts",
-    "dev:build": "chokidar 'tsconfig*.json' 'src/**/*.ts' 'src/**/*.tsx' 'src/**/*.svelte' -i '**/*.test.ts' -i '**/*.test.tsx' -c 'npx convex codegen --component-dir ./src/component && pnpm build' --initial",
+    "dev:build": "chokidar 'tsconfig*.json' 'src/**/*.ts' 'src/**/*.tsx' 'src/**/*.svelte' -i '**/*.test.ts' -i '**/*.test.tsx' -i 'src/core/**/*.d.ts' -c 'npx convex codegen --component-dir ./src/component && pnpm build' --initial",
     "predev": "convex dev --skip-push",
     "clean": "rm -rf dist *.tsbuildinfo",
     "build": "tsc --project ./tsconfig.build.json && svelte-package --input src/svelte --output dist/svelte --tsconfig ./tsconfig.svelte-package.json && node ./scripts/clean-svelte-package-artifacts.mjs",
