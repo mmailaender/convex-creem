@@ -15,6 +15,29 @@ Use this order:
 5. Choose the billing path you need: subscriptions, one-time products, credits,
    account tools, or usage gates.
 
+For brownfield projects, first inventory the billing integration you are
+replacing. Agent automation can add the Convex Creem component, routes, and
+catalog wiring, but it cannot know which old provider settings are still safe to
+remove from your deployment or payment dashboard. Before switching traffic, check:
+
+- Existing webhook paths in your app and payment provider dashboard, such as
+  `/api/stripe/webhook`, `/api/billing/webhook`, `/webhooks/lemonsqueezy`, or
+  other custom billing endpoints. Keep them only if another live billing flow
+  still depends on them.
+- Public client env vars for the old billing UI, such as product, price, plan,
+  checkout, or publishable-key variables in `VITE_*`, `NEXT_PUBLIC_*`, or
+  `PUBLIC_*` namespaces.
+- Server env vars for the old billing system, such as API keys, webhook signing
+  secrets, customer portal configuration, price IDs used by server actions, or
+  framework route secrets.
+- Background jobs, scheduled syncs, or server functions that still read the old
+  billing env vars or process the old webhook events.
+
+Clean up the old webhook registrations and env vars manually after confirming
+the Convex Creem webhook is receiving events and any necessary historical data
+has been migrated or retained. Do not delete old secrets before rollback and
+data-retention requirements are clear.
+
 ---
 
 ## 1. Install
@@ -795,6 +818,14 @@ npx convex env set CREEM_API_KEY <your_creem_api_key>
 npx convex env set CREEM_WEBHOOK_SECRET <your_creem_webhook_signing_secret>
 npx convex env set CREEM_ONETIME_CREDITS prod_...
 ```
+
+In brownfield projects, also remove stale billing env vars after the migration is
+verified. The automation process may add the new Convex Creem variables, but
+old provider values usually live in several places: local `.env*` files, hosting
+provider env settings, CI secrets, Convex env, and the payment provider
+dashboard. Search for the old provider name and old public prefixes so unused
+webhook secrets, price IDs, product IDs, publishable keys, and API keys do not
+linger.
 
 ---
 
