@@ -453,6 +453,17 @@
   const localCurrentPeriodEnd = $derived(
     matchedSubscription?.currentPeriodEnd ?? null,
   );
+  const formattedCancelPeriodEnd = $derived.by(() => {
+    if (!localCurrentPeriodEnd) return undefined;
+    const date = new Date(localCurrentPeriodEnd);
+    if (Number.isNaN(date.getTime())) return undefined;
+    return resolvedI18n.formatDate({ date });
+  });
+  const cancelDescription = $derived(
+    resolvedI18n.labels.subscription.dialogs.cancelDescription({
+      formattedDate: formattedCancelPeriodEnd,
+    }),
+  );
   const localSubscriptionState = $derived(matchedSubscription?.status ?? null);
   const localSubscribedUnits = $derived(matchedSubscription?.units ?? null);
   const localScheduledUpdate = $derived(
@@ -1339,7 +1350,7 @@
               {resolvedI18n.labels.subscription.dialogs.cancelTitle}
             </Dialog.Title>
             <Dialog.Description class="dialog-description">
-              {resolvedI18n.labels.subscription.dialogs.cancelDescription}
+              {cancelDescription}
             </Dialog.Description>
             <div class="dialog-actions">
               <button

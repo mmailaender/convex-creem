@@ -459,6 +459,16 @@ export const SubscriptionRoot = ({
   const localCancelAtPeriodEnd =
     matchedSubscription?.cancelAtPeriodEnd ?? false;
   const localCurrentPeriodEnd = matchedSubscription?.currentPeriodEnd ?? null;
+  const formattedCancelPeriodEnd = useMemo(() => {
+    if (!localCurrentPeriodEnd) return undefined;
+    const date = new Date(localCurrentPeriodEnd);
+    if (Number.isNaN(date.getTime())) return undefined;
+    return resolvedI18n.formatDate({ date });
+  }, [localCurrentPeriodEnd, resolvedI18n]);
+  const cancelDescription =
+    resolvedI18n.labels.subscription.dialogs.cancelDescription({
+      formattedDate: formattedCancelPeriodEnd,
+    });
   const localSubscriptionState = matchedSubscription?.status ?? null;
   const localSubscribedUnits = matchedSubscription?.units ?? null;
   const localScheduledUpdate = useMemo(
@@ -1461,10 +1471,7 @@ export const SubscriptionRoot = ({
                       {resolvedI18n.labels.subscription.dialogs.cancelTitle}
                     </Dialog.Title>
                     <Dialog.Description className="dialog-description">
-                      {
-                        resolvedI18n.labels.subscription.dialogs
-                          .cancelDescription
-                      }
+                      {cancelDescription}
                     </Dialog.Description>
                     <div className="dialog-actions">
                       <button

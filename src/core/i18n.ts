@@ -87,7 +87,7 @@ export type BillingLabels = {
     resumeFailed: string;
     dialogs: {
       cancelTitle: string;
-      cancelDescription: string;
+      cancelDescription: (input: { formattedDate?: string }) => string;
       confirmCancel: string;
       keepSubscription: string;
       switchPlanTitle: string;
@@ -262,8 +262,8 @@ export const defaultBillingLabels: BillingLabels = {
     resumeFailed: "Resume failed",
     dialogs: {
       cancelTitle: "Cancel subscription?",
-      cancelDescription:
-        "Are you sure you want to cancel your subscription? You will continue to have access until the end of your current billing period.",
+      cancelDescription: ({ formattedDate }) =>
+        `Are you sure you want to cancel your subscription? You will continue to have access until the end of your current billing period${formattedDate ? ` (${formattedDate})` : ""}.`,
       confirmCancel: "Yes, cancel",
       keepSubscription: "Keep subscription",
       switchPlanTitle: "Switch plan?",

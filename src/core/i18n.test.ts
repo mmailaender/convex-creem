@@ -48,4 +48,16 @@ describe("billing i18n", () => {
       i18n.formatDate({ date: new Date("2026-05-14T00:00:00.000Z") }),
     ).toBe("date:2026");
   });
+
+  it("formats cancel descriptions with an optional period end date", () => {
+    const description =
+      defaultBillingLabels.subscription.dialogs.cancelDescription({
+        formattedDate: "Jun 18, 2026",
+      });
+
+    expect(description).toContain("Jun 18, 2026");
+    expect(
+      defaultBillingLabels.subscription.dialogs.cancelDescription({}),
+    ).toContain("current billing period.");
+  });
 });
