@@ -479,6 +479,7 @@ describe("subscriptions namespace", () => {
         expect.objectContaining({
           subscriptionId: "sub_1",
           cancelMode: "scheduled",
+          scheduledUpdateId: "scheduled_update_1",
           previousStatus: "active",
         }),
       );
@@ -954,7 +955,20 @@ describe("verifyWebhook (HMAC path)", () => {
       webhookSecret: "test-webhook-secret",
     });
 
-    const body = '{"eventType":"checkout.completed","object":{}}';
+    const body = JSON.stringify({
+      id: "evt_valid_hmac",
+      eventType: "checkout.completed",
+      created_at: 1772265126979,
+      object: {
+        id: "ch_valid_hmac",
+        object: "checkout",
+        product: "prod_valid_hmac",
+        units: 1,
+        customer: "cust_valid_hmac",
+        status: "completed",
+        mode: "test",
+      },
+    });
     // Generate a valid HMAC signature
     const key = await crypto.subtle.importKey(
       "raw",
@@ -1146,6 +1160,68 @@ describe("registerRoutes", () => {
 
   const SECRET = "webhook-test-secret";
 
+  function refundWebhookBody({
+    id,
+    refundAmount,
+    orderAmount,
+    productId = "prod_credits",
+  }: {
+    id: string;
+    refundAmount: number;
+    orderAmount: number;
+    productId?: string;
+  }) {
+    return JSON.stringify({
+      id: `evt_${id}`,
+      eventType: "refund.created",
+      created_at: 1772265452403,
+      object: {
+        id,
+        object: "refund",
+        status: "succeeded",
+        refund_amount: refundAmount,
+        refund_currency: "USD",
+        reason: "requested_by_customer",
+        transaction: {
+          id: `tran_${id}`,
+          object: "transaction",
+          amount: orderAmount,
+          amount_paid: orderAmount,
+          currency: "USD",
+          type: "payment",
+          tax_country: "US",
+          tax_amount: 0,
+          status: refundAmount >= orderAmount ? "refunded" : "partialRefund",
+          refunded_amount: refundAmount,
+          order: `ord_${id}`,
+          customer: "cust_6aVJrSJi8h9r7cGzWPVBF0",
+          created_at: 1772265452403,
+          mode: "test",
+        },
+        order: {
+          object: "order",
+          id: `ord_${id}`,
+          customer: "cust_6aVJrSJi8h9r7cGzWPVBF0",
+          product: productId,
+          amount: orderAmount,
+          currency: "USD",
+          sub_total: orderAmount,
+          tax_amount: 0,
+          amount_due: orderAmount,
+          amount_paid: orderAmount,
+          status: "paid",
+          type: "onetime",
+          transaction: `tran_${id}`,
+          created_at: "2026-02-28T07:52:06.979Z",
+          updated_at: "2026-02-28T07:52:06.979Z",
+          mode: "test",
+        },
+        created_at: 1772265452403,
+        mode: "test",
+      },
+    });
+  }
+
   it("routes to default path /creem/events", () => {
     const creem = new Creem(mockComponent, {
       apiKey: "k",
@@ -1171,6 +1247,7 @@ describe("registerRoutes", () => {
 
     // Use real Creem test webhook payload
     const body = JSON.stringify({
+      id: "evt_checkout_order",
       eventType: "checkout.completed",
       created_at: 1772265126979,
       object: {
@@ -1269,7 +1346,9 @@ describe("registerRoutes", () => {
     });
 
     const body = JSON.stringify({
+      id: "evt_checkout_credits",
       eventType: "checkout.completed",
+      created_at: 1772265126979,
       object: {
         id: "ch_credits",
         object: "checkout",
@@ -1362,36 +1441,10 @@ describe("registerRoutes", () => {
     const { handler } = setupWebhookHandler(creem);
     const ctx = createMockCtx();
 
-    const body = JSON.stringify({
-      eventType: "refund.created",
-      object: {
-        id: "ref_credits",
-        object: "refund",
-        status: "succeeded",
-        refund_amount: 1000,
-        refund_currency: "USD",
-        reason: "requested_by_customer",
-        order: {
-          object: "order",
-          id: "ord_credits",
-          customer: "cust_6aVJrSJi8h9r7cGzWPVBF0",
-          product: "prod_credits",
-          amount: 2000,
-          currency: "USD",
-          sub_total: 2000,
-          tax_amount: 0,
-          amount_due: 2000,
-          amount_paid: 2000,
-          status: "paid",
-          type: "onetime",
-          transaction: "tran_credits",
-          created_at: "2026-02-28T07:52:06.979Z",
-          updated_at: "2026-02-28T07:52:06.979Z",
-          mode: "test",
-        },
-        created_at: 1772265452403,
-        mode: "test",
-      },
+    const body = refundWebhookBody({
+      id: "ref_credits",
+      refundAmount: 1000,
+      orderAmount: 2000,
     });
 
     const response = await signAndSend(handler!, ctx, body, SECRET);
@@ -1431,27 +1484,10 @@ describe("registerRoutes", () => {
     const { handler } = setupWebhookHandler(creem);
     const ctx = createMockCtx();
 
-    const body = JSON.stringify({
-      eventType: "refund.created",
-      object: {
-        id: "ref_partial_credits",
-        object: "refund",
-        status: "succeeded",
-        refund_amount: 1000,
-        order: {
-          object: "order",
-          id: "ord_credits",
-          customer: "cust_6aVJrSJi8h9r7cGzWPVBF0",
-          product: "prod_credits",
-          amount: 2000,
-          amount_paid: 2000,
-          status: "paid",
-          type: "onetime",
-          transaction: "tran_credits",
-          mode: "test",
-        },
-        mode: "test",
-      },
+    const body = refundWebhookBody({
+      id: "ref_partial_credits",
+      refundAmount: 1000,
+      orderAmount: 2000,
     });
 
     const response = await signAndSend(handler!, ctx, body, SECRET);
@@ -1487,27 +1523,10 @@ describe("registerRoutes", () => {
     const { handler } = setupWebhookHandler(creem);
     const ctx = createMockCtx();
 
-    const body = JSON.stringify({
-      eventType: "refund.created",
-      object: {
-        id: "ref_full_credits",
-        object: "refund",
-        status: "succeeded",
-        refund_amount: 2000,
-        order: {
-          object: "order",
-          id: "ord_credits",
-          customer: "cust_6aVJrSJi8h9r7cGzWPVBF0",
-          product: "prod_credits",
-          amount: 2000,
-          amount_paid: 2000,
-          status: "paid",
-          type: "onetime",
-          transaction: "tran_credits",
-          mode: "test",
-        },
-        mode: "test",
-      },
+    const body = refundWebhookBody({
+      id: "ref_full_credits",
+      refundAmount: 2000,
+      orderAmount: 2000,
     });
 
     const response = await signAndSend(handler!, ctx, body, SECRET);
@@ -1552,6 +1571,7 @@ describe("registerRoutes", () => {
 
     // Use real Creem test webhook payload
     const body = JSON.stringify({
+      id: "evt_subscription_active",
       eventType: "subscription.active",
       created_at: 1772265324184,
       object: {
@@ -1608,31 +1628,6 @@ describe("registerRoutes", () => {
     );
   });
 
-  it.each(["subscription.created", "product.created", "product.updated"])(
-    "ignores unsupported Creem webhook event name %s",
-    async (eventType) => {
-      const creem = new Creem(mockComponent, {
-        apiKey: "k",
-        webhookSecret: SECRET,
-      });
-      const customHandler = vi.fn();
-      const { handler } = setupWebhookHandler(creem, {
-        [eventType]: customHandler,
-      });
-      const ctx = createMockCtx();
-
-      const body = JSON.stringify({
-        eventType,
-        object: { id: "evt_object_1", object: "unknown" },
-      });
-
-      const response = await signAndSend(handler!, ctx, body, SECRET);
-      expect(response.status).toBe(202);
-      expect(ctx.runMutation).not.toHaveBeenCalled();
-      expect(customHandler).not.toHaveBeenCalled();
-    },
-  );
-
   it("calls custom event handler when provided", async () => {
     const creem = new Creem(mockComponent, {
       apiKey: "k",
@@ -1644,9 +1639,11 @@ describe("registerRoutes", () => {
     });
     const ctx = createMockCtx();
 
-    const body = JSON.stringify({
-      eventType: "refund.created",
-      object: { id: "ref_1", object: "refund" },
+    const body = refundWebhookBody({
+      id: "ref_1",
+      refundAmount: 1000,
+      orderAmount: 1000,
+      productId: "prod_1",
     });
 
     const response = await signAndSend(handler!, ctx, body, SECRET);
@@ -1666,6 +1663,7 @@ describe("registerRoutes", () => {
     const ctx = createMockCtx();
 
     const body = JSON.stringify({
+      id: "evt_subscription_canceled",
       eventType: "subscription.canceled",
       created_at: 1772265355057,
       object: {
@@ -1791,6 +1789,59 @@ describe("api() convenience exports", () => {
     });
   });
 
+  describe("transactions.search", () => {
+    it("returns the first SDK page result without the pagination iterator", async () => {
+      resolve.mockResolvedValue({
+        userId: "user_1",
+        email: "a@b.com",
+        entityId: "user_1",
+      });
+      const ctx = createMockCtx({
+        [REFS.getCustomerByEntityId]: { id: "cust_1" },
+      });
+      const transactionList = {
+        items: [
+          {
+            id: "tran_1",
+            mode: "test",
+            object: "transaction",
+            amount: 2999,
+            currency: "USD",
+            type: "payment",
+            status: "paid",
+            createdAt: 1780135200,
+          },
+        ],
+        pagination: {
+          totalRecords: 1,
+          totalPages: 1,
+          currentPage: 1,
+          nextPage: null,
+          prevPage: null,
+        },
+      };
+      const search = vi.fn(async () => ({
+        result: transactionList,
+        next: vi.fn(),
+        [Symbol.asyncIterator]: vi.fn(),
+      }));
+      creem.sdk.transactions.search = search as never;
+
+      const handler = extractHandler(apiExports.transactions.search as never);
+      const result = await handler(ctx, { pageNumber: 1, pageSize: 10 });
+
+      expect(search).toHaveBeenCalledWith(
+        "cust_1",
+        undefined,
+        undefined,
+        1,
+        10,
+      );
+      expect(result).toEqual(transactionList);
+      expect(result).not.toHaveProperty("next");
+    });
+  });
+
   describe("snapshot", () => {
     it("returns null when resolve throws", async () => {
       resolve.mockRejectedValue(new Error("Not authenticated"));
@@ -1905,6 +1956,15 @@ describe("api() convenience exports", () => {
         subscriptionId: "sub_1",
         cancelAtPeriodEnd: true,
       });
+      expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+        0,
+        REFS.executeSubscriptionLifecycle,
+        expect.objectContaining({
+          subscriptionId: "sub_1",
+          cancelMode: "scheduled",
+          scheduledUpdateId: "scheduled_update_1",
+        }),
+      );
     });
 
     it("supports paid-to-free immediate updates through generated API", async () => {

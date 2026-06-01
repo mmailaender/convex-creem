@@ -475,16 +475,12 @@ export const syncProducts = action({
       ...(args.serverIdx !== undefined ? { serverIdx: args.serverIdx } : {}),
       ...(args.serverURL ? { serverURL: args.serverURL } : {}),
     });
-    let pageNumber = 1;
-    while (true) {
-      const products = await creem.products.search(pageNumber, 100);
-      pageNumber += 1;
+    const productPages = await creem.products.search(1, 100);
+    for await (const page of productPages) {
+      const products = "result" in page ? page.result : page;
       await ctx.runMutation(api.lib.updateProducts, {
         products: products.items.map(convertToDatabaseProduct),
       });
-      if (products.pagination.currentPage >= products.pagination.totalPages) {
-        break;
-      }
     }
   },
 });
@@ -1256,6 +1252,7 @@ export const executeSubscriptionLifecycle = action({
       v.literal("pause"),
     ),
     cancelMode: v.optional(v.string()),
+    scheduledUpdateId: v.optional(v.id("scheduledSubscriptionUpdates")),
     // For reverting on error:
     previousStatus: v.optional(v.string()),
     previousCancelAtPeriodEnd: v.optional(v.boolean()),
@@ -1268,6 +1265,17 @@ export const executeSubscriptionLifecycle = action({
     });
     try {
       if (args.operation === "cancel") {
+        if (args.scheduledUpdateId) {
+          const scheduledUpdate = await ctx.runQuery(
+            api.lib.getScheduledSubscriptionUpdate,
+            {
+              scheduledUpdateId: args.scheduledUpdateId,
+            },
+          );
+          if (!scheduledUpdate || scheduledUpdate.status !== "pending") {
+            return;
+          }
+        }
         const cancelParams =
           args.cancelMode === "immediate"
             ? { mode: "immediate" as const }

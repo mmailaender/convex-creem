@@ -243,6 +243,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           operation: "cancel" | "resume" | "pause";
           previousCancelAtPeriodEnd?: boolean;
           previousStatus?: string;
+          scheduledUpdateId?: string;
           serverIdx?: number;
           serverURL?: string;
           subscriptionId: string;

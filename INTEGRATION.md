@@ -18,7 +18,8 @@ Use this order:
 For brownfield projects, first inventory the billing integration you are
 replacing. Agent automation can add the Convex Creem component, routes, and
 catalog wiring, but it cannot know which old provider settings are still safe to
-remove from your deployment or payment dashboard. Before switching traffic, check:
+remove from your deployment or payment dashboard. Before switching traffic,
+check:
 
 - Existing webhook paths in your app and payment provider dashboard, such as
   `/api/stripe/webhook`, `/api/billing/webhook`, `/webhooks/lemonsqueezy`, or
@@ -819,8 +820,8 @@ npx convex env set CREEM_WEBHOOK_SECRET <your_creem_webhook_signing_secret>
 npx convex env set CREEM_ONETIME_CREDITS prod_...
 ```
 
-In brownfield projects, also remove stale billing env vars after the migration is
-verified. The automation process may add the new Convex Creem variables, but
+In brownfield projects, also remove stale billing env vars after the migration
+is verified. The automation process may add the new Convex Creem variables, but
 old provider values usually live in several places: local `.env*` files, hosting
 provider env settings, CI secrets, Convex env, and the payment provider
 dashboard. Search for the old provider name and old public prefixes so unused

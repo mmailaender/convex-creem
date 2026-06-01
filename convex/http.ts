@@ -12,7 +12,7 @@ creem.registerRoutes(http, {
   events: {
     "subscription.update": async (_ctx, event) => {
       console.log("Subscription updated", event);
-      const data = (event.data ?? event.object) as
+      const data = ("data" in event ? event.data : event.object) as
         | {
             customerCancellationReason?: string;
             customerCancellationComment?: string;

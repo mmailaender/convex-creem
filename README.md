@@ -747,14 +747,12 @@ creem.registerRoutes(http, {
   events: {
     "checkout.completed": async (ctx, event) => {
       // ctx is a Convex mutation context
-      // event has { type, data } from Creem
+      // event is the typed Creem webhook entity
       // Example: send confirmation email, grant entitlements, log analytics
     },
     "subscription.update": async (ctx, event) => {
-      const data = event.data as { customerCancellationReason?: string };
-      if (data?.customerCancellationReason) {
-        console.log("Cancellation reason:", data.customerCancellationReason);
-      }
+      const subscription = event.object;
+      console.log("Subscription updated:", subscription.id);
     },
   },
 });
@@ -1819,7 +1817,7 @@ grid, or omit it for automatic layout.
 `Subscription.Group` remains because it is a distinct component for grouping
 subscription plans.
 
-| Previous API      | New API    |
+| Previous API      | New API          |
 | ----------------- | ---------------- |
 | `<Product.Group>` | `<Product.Root>` |
 

@@ -56,7 +56,7 @@ const seed = internalAction({
     await ctx.runMutation(internal.seed.insertFakeUser);
 
     const firstPage = await creem.products.search(1, 1);
-    const hasProducts = firstPage.items.length > 0;
+    const hasProducts = firstPage.result.items.length > 0;
 
     // Return early if the Creem account already has products, ensures
     // this doesn't run more than once.
@@ -113,7 +113,10 @@ export const archiveAll = internalAction({
     const products = await creem.products.search(1, 100);
     console.log(
       "Current products",
-      products.items.map((product) => ({ id: product.id, name: product.name })),
+      products.result.items.map((product) => ({
+        id: product.id,
+        name: product.name,
+      })),
     );
   },
 });

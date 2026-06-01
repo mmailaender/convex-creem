@@ -1,26 +1,24 @@
 import "./polyfill.js";
 import { Creem as CreemSDK } from "creem";
 import type {
+  AccountResponseDto,
   CheckoutEntity,
   CustomerEntity,
+  RefundEntity,
   SubscriptionEntity,
+  TransactionListEntity,
+  WebhookEventEntity,
 } from "creem/models/components";
-import { Webhook, WebhookVerificationError } from "standardwebhooks";
 import {
-  getEntityId,
-  lowerCaseHeaders,
-  toHex,
-  constantTimeEqual,
-  normalizeSignature,
-} from "./helpers.js";
+  constructWebhookEventEntity,
+  WebhookVerificationError,
+} from "creem/webhooks";
+import { getEntityId } from "./helpers.js";
 import {
   type CreemWebhookEvent,
   getEventType,
-  getEventData,
   getCustomerId,
   getConvexEntityId,
-  parseSubscription,
-  parseCheckout,
 } from "./parsers.js";
 import {
   type FunctionReference,
@@ -75,8 +73,29 @@ export {
   parseSubscription,
   parseCheckout,
   parseProduct,
-  manualParseSubscription,
+  parseGeneratedWebhookEvent,
+  parseRefund,
 } from "./parsers.js";
+
+type GeneratedSubscriptionWebhookEvent = Extract<
+  WebhookEventEntity,
+  { eventType: `subscription.${string}` }
+>;
+
+const isGeneratedSubscriptionWebhookEvent = (
+  event: WebhookEventEntity | null,
+): event is GeneratedSubscriptionWebhookEvent =>
+  !!event && subscriptionWebhookEvents.has(event.eventType);
+
+const getCustomerCreditAccounts = (
+  response:
+    | { result: { data: Array<AccountResponseDto> } }
+    | { data?: Array<AccountResponseDto> },
+) => ("result" in response ? response.result.data : (response.data ?? []));
+
+const unwrapTransactionSearchPage = (
+  page: TransactionListEntity | { result: TransactionListEntity },
+): TransactionListEntity => ("result" in page ? page.result : page);
 
 /** Convex validator for the `subscriptions` table. Use with `v.object(subscriptionValidator.fields)` in custom functions. */
 export const subscriptionValidator = schema.tables.subscriptions.validator;
@@ -655,47 +674,14 @@ export class Creem {
     });
   }
 
-  private async verifyWebhook(body: string, headers: Record<string, string>) {
+  private async constructWebhookEvent(
+    body: string,
+    headers: Record<string, string>,
+  ) {
     if (!this.webhookSecret) {
       throw new ConvexError("Missing CREEM_WEBHOOK_SECRET");
     }
-
-    const normalized = lowerCaseHeaders(headers);
-    const webhookId = normalized["webhook-id"];
-    const webhookTimestamp = normalized["webhook-timestamp"];
-    const webhookSignature = normalized["webhook-signature"];
-
-    if (webhookId && webhookTimestamp && webhookSignature) {
-      new Webhook(this.webhookSecret).verify(body, {
-        "webhook-id": webhookId,
-        "webhook-timestamp": webhookTimestamp,
-        "webhook-signature": webhookSignature,
-      });
-      return;
-    }
-
-    const creemSignature =
-      normalized["creem-signature"] ?? normalized["x-creem-signature"];
-    if (!creemSignature) {
-      throw new WebhookVerificationError("Missing webhook signature");
-    }
-
-    const key = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(this.webhookSecret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
-    const digest = await crypto.subtle.sign(
-      "HMAC",
-      key,
-      new TextEncoder().encode(body),
-    );
-    const expected = toHex(new Uint8Array(digest));
-    if (!constantTimeEqual(normalizeSignature(creemSignature), expected)) {
-      throw new WebhookVerificationError("Invalid webhook signature");
-    }
+    return constructWebhookEventEntity(body, headers, this.webhookSecret);
   }
 
   /** Upsert a customer record if we have both entityId and customerId. */
@@ -747,7 +733,8 @@ export class Creem {
       10,
       customer.id,
     );
-    const existing = accounts.data?.find(
+    const accountData = getCustomerCreditAccounts(accounts);
+    const existing = accountData.find(
       (a) => a.name === "default" || a.name === "credits",
     );
     if (existing) return existing.id;
@@ -770,12 +757,13 @@ export class Creem {
       10,
       customerId,
     );
-    const existing = accounts.data?.find((a) => a.name === accountName);
+    const accountData = getCustomerCreditAccounts(accounts);
+    const existing = accountData.find((a) => a.name === accountName);
     if (existing) return existing.id;
 
     const fallback =
       accountName === "credits"
-        ? accounts.data?.find((a) => a.name === "default")
+        ? accountData.find((a) => a.name === "default")
         : undefined;
     if (fallback) return fallback.id;
     if (!createIfMissing) return null;
@@ -883,28 +871,27 @@ export class Creem {
     return debitAmount > 0n ? debitAmount.toString() : null;
   }
 
-  private async debitRefundedCustomerCredits(refund: Record<string, unknown>) {
+  private async debitRefundedCustomerCredits(refund: RefundEntity) {
     if (refund.status && refund.status !== "succeeded") return;
     const order =
       refund.order && typeof refund.order === "object"
-        ? (refund.order as Record<string, unknown>)
+        ? refund.order
         : undefined;
-    const productId = typeof order?.product === "string" ? order.product : "";
+    const productId = order?.product;
     const grant = this.getCreditGrantForProduct(productId);
     if (!grant) return;
 
     const amount = this.getRefundCreditDebitAmount(
       grant,
-      refund.refund_amount,
-      order?.amount_paid ?? order?.amount,
+      refund.refundAmount,
+      order?.amountPaid ?? order?.amount,
     );
     if (!amount) return;
 
-    const customerId =
-      typeof order?.customer === "string" ? order.customer : "";
+    const customerId = order?.customer ?? "";
     if (!customerId) return;
 
-    const refundId = typeof refund.id === "string" ? refund.id : "unknown";
+    const refundId = refund.id;
     const accountId = await this.resolveCreditAccountIdForCustomer(
       customerId,
       grant,
@@ -1000,6 +987,7 @@ export class Creem {
           subscriptionId: args.subscription.id,
           operation: "cancel",
           cancelMode: "scheduled",
+          scheduledUpdateId,
           previousStatus: args.subscription.status,
           previousCancelAtPeriodEnd: args.subscription.cancelAtPeriodEnd,
         },
@@ -2141,13 +2129,14 @@ export class Creem {
               };
             }
 
-            return await this.sdk.transactions.search(
+            const page = await this.sdk.transactions.search(
               customerId,
               args.orderId,
               args.productId,
               args.pageNumber,
               args.pageSize,
             );
+            return unwrapTransactionSearchPage(page);
           },
         }),
       },
@@ -2302,169 +2291,74 @@ export class Creem {
         request.headers.forEach((value, key) => {
           headers[key] = value;
         });
+        let event: WebhookEventEntity;
         try {
-          await this.verifyWebhook(body, headers);
-          const event = JSON.parse(body) as CreemWebhookEvent;
-          const eventType = getEventType(event);
-          const eventData = getEventData(event);
-
-          console.log(
-            `[creem-webhook] eventType=${eventType}`,
-            `body=${JSON.stringify(event)}`,
-          );
-
-          if (
-            eventData &&
-            typeof eventData === "object" &&
-            eventType === "checkout.completed"
-          ) {
-            const raw = eventData as Record<string, unknown>;
-            const checkout = parseCheckout(raw);
-            if (checkout) {
-              // Auto-create customer record from checkout metadata
-              const customerObj =
-                typeof checkout.customer === "object"
-                  ? checkout.customer
-                  : undefined;
-              const customerId = getCustomerId(customerObj);
-              const entityId = getConvexEntityId(checkout.metadata);
-              await this.upsertCustomerFromWebhook(
-                ctx,
-                customerId,
-                entityId,
-                customerObj as CustomerEntity | undefined,
-              );
-
-              // Process embedded subscription if present (recurring checkout).
-              // checkoutEntityFromJSON already parsed it into a typed SubscriptionEntity,
-              // so use it directly — do NOT re-parse through subscriptionEntityFromJSON.
-              if (
-                checkout.subscription &&
-                typeof checkout.subscription === "object"
-              ) {
-                const embeddedSub = checkout.subscription as SubscriptionEntity;
-                // Recover metadata: SDK strips it from SubscriptionEntity.
-                // Use checkout-level metadata as fallback (same convexUserId).
-                const embeddedRaw = (raw.subscription ?? {}) as Record<
-                  string,
-                  unknown
-                >;
-                const rawMeta = (embeddedRaw.metadata ??
-                  checkout.metadata ??
-                  {}) as Record<string, unknown>;
-                const subscription = convertToDatabaseSubscription(
-                  embeddedSub,
-                  { rawMetadata: rawMeta },
-                );
-                await ctx.runMutation(this.component.lib.createSubscription, {
-                  subscription,
-                });
-                if (
-                  entityId &&
-                  (subscription.status === "active" ||
-                    subscription.status === "trialing")
-                ) {
-                  await ctx.runMutation(
-                    this.component.lib.endActiveAppPlanAssignments,
-                    {
-                      entityId,
-                      endedAt:
-                        subscription.startedAt ?? new Date().toISOString(),
-                    },
-                  );
-                }
-              }
-
-              // Store the order (present for both one-time and subscription checkouts)
-              if (checkout.order && typeof checkout.order === "object") {
-                const o = checkout.order as Record<string, unknown>;
-                const order = convertToOrder(
-                  {
-                    id: o.id as string,
-                    customer: (o.customer as string) ?? null,
-                    product: o.product as string,
-                    amount: o.amount as number,
-                    currency: o.currency as string,
-                    status: o.status as string,
-                    type: o.type as string,
-                    transaction: (o.transaction as string) ?? null,
-                    subTotal: o.subTotal as number | undefined,
-                    sub_total: o.sub_total as number | undefined,
-                    taxAmount: o.taxAmount as number | undefined,
-                    tax_amount: o.tax_amount as number | undefined,
-                    discountAmount: o.discountAmount as number | undefined,
-                    discount_amount: o.discount_amount as number | undefined,
-                    amountDue: o.amountDue as number | undefined,
-                    amount_due: o.amount_due as number | undefined,
-                    amountPaid: o.amountPaid as number | undefined,
-                    amount_paid: o.amount_paid as number | undefined,
-                    discount: (o.discount as string) ?? null,
-                    affiliate: (o.affiliate as string) ?? null,
-                    mode: o.mode as string | undefined,
-                    createdAt: o.createdAt as Date | string | undefined,
-                    created_at: o.created_at as string | undefined,
-                    updatedAt: o.updatedAt as Date | string | undefined,
-                    updated_at: o.updated_at as string | undefined,
-                  },
-                  {
-                    checkoutId: checkout.id,
-                    metadata: checkout.metadata as
-                      | Record<string, unknown>
-                      | undefined,
-                  },
-                );
-                await ctx.runMutation(this.component.lib.createOrder, {
-                  order,
-                });
-              }
-
-              await this.creditCheckoutCustomerCredits(checkout);
-            }
+          event = await this.constructWebhookEvent(body, headers);
+        } catch (error) {
+          if (error instanceof ConvexError) {
+            throw error;
           }
+          if (error instanceof WebhookVerificationError) {
+            console.error(error);
+            return new Response("Forbidden", { status: 403 });
+          }
+          console.error(error);
+          return new Response("Bad Request", { status: 400 });
+        }
 
-          if (
-            eventData &&
-            typeof eventData === "object" &&
-            eventType === "refund.created"
-          ) {
-            await this.debitRefundedCustomerCredits(
-              eventData as Record<string, unknown>,
+        const eventType = getEventType(event);
+        const eventData = event.object;
+
+        console.log(
+          `[creem-webhook] eventType=${eventType}`,
+          `body=${JSON.stringify(event)}`,
+        );
+
+        if (
+          eventData &&
+          typeof eventData === "object" &&
+          event.eventType === "checkout.completed"
+        ) {
+          const raw = eventData as Record<string, unknown>;
+          const checkout = event.object;
+          if (checkout) {
+            // Auto-create customer record from checkout metadata
+            const customerObj =
+              typeof checkout.customer === "object"
+                ? checkout.customer
+                : undefined;
+            const customerId = getCustomerId(customerObj);
+            const entityId = getConvexEntityId(checkout.metadata);
+            await this.upsertCustomerFromWebhook(
+              ctx,
+              customerId,
+              entityId,
+              customerObj as CustomerEntity | undefined,
             );
-          }
 
-          if (
-            eventData &&
-            typeof eventData === "object" &&
-            subscriptionWebhookEvents.has(eventType)
-          ) {
-            const raw = eventData as Record<string, unknown>;
-            const parsed = parseSubscription(raw);
-            if (parsed) {
-              // Pass raw metadata since SDK's SubscriptionEntity type strips it
-              const rawMeta = (raw.metadata ?? {}) as Record<string, unknown>;
-              const subscription = convertToDatabaseSubscription(parsed, {
+            // Process embedded subscription if present (recurring checkout).
+            // checkoutEntityFromJSON already parsed it into a typed SubscriptionEntity,
+            // so use it directly — do NOT re-parse through subscriptionEntityFromJSON.
+            if (
+              checkout.subscription &&
+              typeof checkout.subscription === "object"
+            ) {
+              const embeddedSub = checkout.subscription as SubscriptionEntity;
+              // Prefer subscription metadata from the embedded payload, with
+              // checkout metadata as a fallback for older checkout webhooks.
+              const embeddedRaw = (raw.subscription ?? {}) as Record<
+                string,
+                unknown
+              >;
+              const rawMeta = (embeddedRaw.metadata ??
+                checkout.metadata ??
+                {}) as Record<string, unknown>;
+              const subscription = convertToDatabaseSubscription(embeddedSub, {
                 rawMetadata: rawMeta,
               });
-              await ctx.runMutation(this.component.lib.updateSubscription, {
+              await ctx.runMutation(this.component.lib.createSubscription, {
                 subscription,
               });
-
-              // Auto-create customer record from subscription metadata
-              const customerEntity =
-                typeof parsed.customer === "object"
-                  ? (parsed.customer as CustomerEntity)
-                  : undefined;
-              const customerId = getCustomerId(parsed.customer);
-              const entityId = getConvexEntityId(
-                raw.metadata ??
-                  (parsed as unknown as Record<string, unknown>).metadata,
-              );
-              await this.upsertCustomerFromWebhook(
-                ctx,
-                customerId,
-                entityId,
-                customerEntity,
-              );
               if (
                 entityId &&
                 (subscription.status === "active" ||
@@ -2478,33 +2372,112 @@ export class Creem {
                   },
                 );
               }
-            } else {
-              // Fallback: SDK parsing failed (e.g., unknown status)
-              // Still try to extract subscription ID for update events
-              const subId = typeof raw.id === "string" ? raw.id : null;
-              if (subId) {
-                console.warn(
-                  `Could not parse subscription for ${eventType}, id: ${subId}`,
-                );
-              }
             }
-          }
 
-          const handler = supportedWebhookEvents.has(eventType)
-            ? mergedEvents[eventType]
-            : undefined;
-          if (handler) {
-            await handler(ctx, event);
-          }
+            // Store the order (present for both one-time and subscription checkouts)
+            if (checkout.order && typeof checkout.order === "object") {
+              const o = checkout.order as Record<string, unknown>;
+              const order = convertToOrder(
+                {
+                  id: o.id as string,
+                  customer: (o.customer as string) ?? null,
+                  product: o.product as string,
+                  amount: o.amount as number,
+                  currency: o.currency as string,
+                  status: o.status as string,
+                  type: o.type as string,
+                  transaction: (o.transaction as string) ?? null,
+                  subTotal: o.subTotal as number | undefined,
+                  sub_total: o.sub_total as number | undefined,
+                  taxAmount: o.taxAmount as number | undefined,
+                  tax_amount: o.tax_amount as number | undefined,
+                  discountAmount: o.discountAmount as number | undefined,
+                  discount_amount: o.discount_amount as number | undefined,
+                  amountDue: o.amountDue as number | undefined,
+                  amount_due: o.amount_due as number | undefined,
+                  amountPaid: o.amountPaid as number | undefined,
+                  amount_paid: o.amount_paid as number | undefined,
+                  discount: (o.discount as string) ?? null,
+                  affiliate: (o.affiliate as string) ?? null,
+                  mode: o.mode as string | undefined,
+                  createdAt: o.createdAt as Date | string | undefined,
+                  created_at: o.created_at as string | undefined,
+                  updatedAt: o.updatedAt as Date | string | undefined,
+                  updated_at: o.updated_at as string | undefined,
+                },
+                {
+                  checkoutId: checkout.id,
+                  metadata: checkout.metadata as
+                    | Record<string, unknown>
+                    | undefined,
+                },
+              );
+              await ctx.runMutation(this.component.lib.createOrder, {
+                order,
+              });
+            }
 
-          return new Response("Accepted", { status: 202 });
-        } catch (error) {
-          if (error instanceof WebhookVerificationError) {
-            console.error(error);
-            return new Response("Forbidden", { status: 403 });
+            await this.creditCheckoutCustomerCredits(checkout);
           }
-          throw error;
         }
+
+        if (
+          eventData &&
+          typeof eventData === "object" &&
+          event.eventType === "refund.created"
+        ) {
+          await this.debitRefundedCustomerCredits(event.object);
+        }
+
+        if (
+          eventData &&
+          typeof eventData === "object" &&
+          isGeneratedSubscriptionWebhookEvent(event)
+        ) {
+          const parsed = event.object;
+          const subscription = convertToDatabaseSubscription(parsed, {
+            rawMetadata: (parsed.metadata ?? {}) as Record<string, unknown>,
+          });
+          await ctx.runMutation(this.component.lib.updateSubscription, {
+            subscription,
+          });
+
+          // Auto-create customer record from subscription metadata
+          const customerEntity =
+            typeof parsed.customer === "object"
+              ? (parsed.customer as CustomerEntity)
+              : undefined;
+          const customerId = getCustomerId(parsed.customer);
+          const entityId = getConvexEntityId(parsed.metadata);
+          await this.upsertCustomerFromWebhook(
+            ctx,
+            customerId,
+            entityId,
+            customerEntity,
+          );
+          if (
+            entityId &&
+            (subscription.status === "active" ||
+              subscription.status === "trialing")
+          ) {
+            await ctx.runMutation(
+              this.component.lib.endActiveAppPlanAssignments,
+              {
+                entityId,
+                endedAt: subscription.startedAt ?? new Date().toISOString(),
+              },
+            );
+          }
+        }
+
+        const handler = supportedWebhookEvents.has(eventType)
+          ? mergedEvents[eventType]
+          : undefined;
+        if (handler) {
+          await handler(ctx, event);
+        }
+
+        return new Response("Accepted", { status: 202 });
       }),
     });
   }

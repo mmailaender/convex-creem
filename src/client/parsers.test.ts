@@ -5,7 +5,6 @@ import {
   getCustomerId,
   getConvexEntityId,
   parseSubscription,
-  manualParseSubscription,
   parseCheckout,
   parseProduct,
 } from "./parsers.js";
@@ -680,14 +679,6 @@ describe("getEventType", () => {
     expect(getEventType(SUBSCRIPTION_PAUSED)).toBe("subscription.paused");
   });
 
-  it("prefers type over eventType", () => {
-    expect(getEventType({ type: "a", eventType: "b" })).toBe("a");
-  });
-
-  it("returns empty string when both are missing", () => {
-    expect(getEventType({})).toBe("");
-  });
-
   it("handles refund and dispute events", () => {
     expect(getEventType(REFUND_CREATED)).toBe("refund.created");
     expect(getEventType(DISPUTE_CREATED)).toBe("dispute.created");
@@ -701,14 +692,6 @@ describe("getEventData", () => {
     expect((data as Record<string, unknown>).id).toBe(
       "ch_6u5rCq19LEsXpltlDGtc9Y",
     );
-  });
-
-  it("prefers data over object", () => {
-    expect(getEventData({ data: "x", object: "y" })).toBe("x");
-  });
-
-  it("returns undefined when both are missing", () => {
-    expect(getEventData({})).toBeUndefined();
   });
 
   it("returns subscription object from subscription event", () => {
@@ -873,7 +856,6 @@ describe("parseSubscription", () => {
     const raw = SUBSCRIPTION_SCHEDULED_CANCEL.object as Record<string, unknown>;
     const result = parseSubscription(raw);
     expect(result).not.toBeNull();
-    // scheduled_cancel may be parsed by SDK or fall back to manual parser
     expect(result!.id).toBe("sub_5Nq3ne8vXuL0FvU356xKMc");
   });
 
@@ -882,6 +864,7 @@ describe("parseSubscription", () => {
     const result = parseSubscription(raw);
     expect(result).not.toBeNull();
     expect(result!.id).toBe("sub_1WRdOPrNNefOsSXDbPVi2d");
+    expect(result!.status).toBe("past_due");
   });
 
   it("parses paused subscription", () => {
@@ -909,109 +892,8 @@ describe("parseSubscription", () => {
     }
   });
 
-  it("returns a fallback object for garbage data (manual parser is lenient)", () => {
-    // manualParseSubscription is intentionally lenient — it's a last-resort fallback
-    // for unknown statuses. It produces a partial object rather than null.
+  it("returns null for invalid data", () => {
     const result = parseSubscription({ random: "garbage" });
-    expect(result).not.toBeNull();
-    expect(result!.id).toBeUndefined();
-  });
-});
-
-describe("manualParseSubscription", () => {
-  it("parses a subscription with embedded product object", () => {
-    const raw = SUBSCRIPTION_ACTIVE.object as Record<string, unknown>;
-    const result = manualParseSubscription(raw);
-    expect(result).not.toBeNull();
-    expect(result!.id).toBe("sub_35c5ooVUuIUtru83zXjrjC");
-    expect(result!.status).toBe("active");
-    expect(result!.collectionMethod).toBe("charge_automatically");
-  });
-
-  it("handles string product ID", () => {
-    const result = manualParseSubscription({
-      id: "sub_test",
-      status: "active",
-      product: "prod_123",
-      customer: "cust_456",
-      collection_method: "charge_automatically",
-      current_period_start_date: "2026-01-01T00:00:00Z",
-      current_period_end_date: "2026-02-01T00:00:00Z",
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
-    });
-    expect(result).not.toBeNull();
-    expect(result!.product).toBe("prod_123");
-  });
-
-  it("handles string customer ID", () => {
-    const result = manualParseSubscription({
-      id: "sub_test",
-      status: "active",
-      product: "prod_123",
-      customer: "cust_string",
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
-    });
-    expect(result).not.toBeNull();
-    expect(result!.customer).toBe("cust_string");
-  });
-
-  it("parses customer object to extract id", () => {
-    const result = manualParseSubscription({
-      id: "sub_test",
-      status: "active",
-      product: "prod_123",
-      customer: { id: "cust_obj_id", email: "x@y.com" },
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
-    });
-    expect(result).not.toBeNull();
-    expect(result!.customer).toBe("cust_obj_id");
-  });
-
-  it("parses canceledAt date", () => {
-    const raw = SUBSCRIPTION_CANCELED.object as Record<string, unknown>;
-    const result = manualParseSubscription(raw);
-    expect(result).not.toBeNull();
-    expect(result!.canceledAt).toBeInstanceOf(Date);
-  });
-
-  it("sets canceledAt to null when not present", () => {
-    const raw = SUBSCRIPTION_ACTIVE.object as Record<string, unknown>;
-    const result = manualParseSubscription(raw);
-    expect(result).not.toBeNull();
-    expect(result!.canceledAt).toBeNull();
-  });
-
-  it("defaults mode to test", () => {
-    const result = manualParseSubscription({
-      id: "sub_no_mode",
-      status: "active",
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
-    });
-    expect(result).not.toBeNull();
-    expect(result!.mode).toBe("test");
-  });
-
-  it("defaults object to subscription", () => {
-    const result = manualParseSubscription({
-      id: "sub_no_obj",
-      status: "active",
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
-    });
-    expect(result).not.toBeNull();
-    expect(result!.object).toBe("subscription");
-  });
-
-  it("parses unpaid subscription (SDK may not know this status)", () => {
-    const raw = SUBSCRIPTION_UNPAID.object as Record<string, unknown>;
-    const result = manualParseSubscription(raw);
-    expect(result).not.toBeNull();
-    expect(result!.id).toBe("sub_3xx35QzxsnpFiJ3vRB9YKt");
-    // Status is passed through even if SDK doesn't recognize it
-    expect(result!.status).toBe("unpaid");
+    expect(result).toBeNull();
   });
 });

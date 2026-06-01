@@ -90,7 +90,7 @@
     "@ark-ui/svelte": "^5.16.0",
     "@mmailaender/convex-svelte": ">=0.16.0",
     "convex": "^1.29.0",
-    "creem": "^1.3.6",
+    "creem": "^1.5.0",
     "react": "^18 || ^19",
     "react-dom": "^18 || ^19",
     "svelte": "^5"
@@ -149,7 +149,7 @@
     "convex-helpers": "0.1.116",
     "convex-test": "0.0.51",
     "cpy-cli": "7.0.0",
-    "creem": "^1.4.5",
+    "creem": "file:node_modules_local/creem-1.5.0.tgz",
     "eslint": "10.3.0",
     "eslint-plugin-react": "7.37.5",
     "eslint-plugin-react-hooks": "7.1.1",
@@ -184,8 +184,7 @@
     "buffer": "^6.0.3",
     "convex-helpers": "^0.1.116",
     "marked": "^18.0.3",
-    "remeda": "^2.34.0",
-    "standardwebhooks": "^1.0.0"
+    "remeda": "^2.34.0"
   },
   "packageManager": "pnpm@11.1.2"
 }
