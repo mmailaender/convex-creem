@@ -81,6 +81,25 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         },
         Name
       >;
+      cancelPendingScheduledSubscriptionUpdates: FunctionReference<
+        "mutation",
+        "internal",
+        { entityId: string; subscriptionId: string },
+        Array<{
+          createdAt: string;
+          effectiveAt: string;
+          entityId: string;
+          error?: string;
+          scheduledFunctionId?: string;
+          status: "pending" | "applying" | "applied" | "superseded" | "failed";
+          subscriptionId: string;
+          targetPlanId?: string;
+          targetProductId?: string;
+          targetUnits?: number;
+          updatedAt: string;
+        }>,
+        Name
+      >;
       cancelScheduledAppPlanAssignment: FunctionReference<
         "mutation",
         "internal",
@@ -259,6 +278,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           previousProductId?: string;
           previousSeats?: number | null;
           productId?: string;
+          resumeScheduledCancellation?: boolean;
           serverIdx?: number;
           serverURL?: string;
           subscriptionId: string;

@@ -476,6 +476,12 @@ export const SubscriptionRoot = ({
       ) ?? null,
     [model?.scheduledSubscriptionUpdates, matchedSubscription?.id],
   );
+  const formattedScheduledEffectiveDate = useMemo(() => {
+    if (!localScheduledUpdate?.effectiveAt) return null;
+    const date = new Date(localScheduledUpdate.effectiveAt);
+    if (Number.isNaN(date.getTime())) return null;
+    return resolvedI18n.formatDate({ date });
+  }, [localScheduledUpdate?.effectiveAt, resolvedI18n]);
 
   const snapshot = model?.snapshot ?? null;
 
@@ -1274,6 +1280,8 @@ export const SubscriptionRoot = ({
       subscriptionProductId: localSubscriptionProductId,
       subscriptionStatus: localSubscriptionState,
       subscriptionTrialEnd: matchedSubscription?.trialEnd ?? null,
+      scheduledUpdate: localScheduledUpdate,
+      scheduledEffectiveDate: formattedScheduledEffectiveDate,
       subscribedUnits: localSubscribedUnits,
       units,
       showUnitPicker,
@@ -1314,6 +1322,8 @@ export const SubscriptionRoot = ({
       allProducts,
       localSubscriptionProductId,
       localSubscriptionState,
+      localScheduledUpdate,
+      formattedScheduledEffectiveDate,
       matchedSubscription,
       localSubscribedUnits,
       units,
@@ -1416,6 +1426,8 @@ export const SubscriptionRoot = ({
                 subscriptionProductId={localSubscriptionProductId}
                 subscriptionStatus={localSubscriptionState}
                 subscriptionTrialEnd={matchedSubscription?.trialEnd ?? null}
+                scheduledUpdate={localScheduledUpdate}
+                scheduledEffectiveDate={formattedScheduledEffectiveDate}
                 units={units}
                 showUnitPicker={showUnitPicker}
                 showCycleToggle={intervalSelector === "auto"}

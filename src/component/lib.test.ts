@@ -1303,6 +1303,45 @@ describe("scheduled subscription update mutations", () => {
     expect(pending).toHaveLength(0);
   });
 
+  it("cancels all pending scheduled updates for a subscription", async () => {
+    await t.mutation(api.lib.createScheduledSubscriptionUpdate, {
+      entityId: "user_456",
+      subscriptionId: "sub_1",
+      targetProductId: "prod_basic",
+      effectiveAt: "2026-03-01T00:00:00.000Z",
+    });
+    await t.mutation(api.lib.createScheduledSubscriptionUpdate, {
+      entityId: "user_456",
+      subscriptionId: "sub_2",
+      targetPlanId: "free",
+      effectiveAt: "2026-03-01T00:00:00.000Z",
+    });
+
+    const canceled = await t.mutation(
+      api.lib.cancelPendingScheduledSubscriptionUpdates,
+      {
+        entityId: "user_456",
+        subscriptionId: "sub_1",
+      },
+    );
+
+    expect(canceled).toHaveLength(1);
+    expect(canceled[0]).toMatchObject({
+      subscriptionId: "sub_1",
+      targetProductId: "prod_basic",
+      status: "superseded",
+    });
+
+    const pending = await t.query(
+      api.lib.listPendingScheduledSubscriptionUpdates,
+      {
+        entityId: "user_456",
+      },
+    );
+    expect(pending).toHaveLength(1);
+    expect(pending[0].subscriptionId).toBe("sub_2");
+  });
+
   it("rejects scheduled updates without a target", async () => {
     await expect(
       t.mutation(api.lib.createScheduledSubscriptionUpdate, {

@@ -33,6 +33,9 @@ const REFS = {
   cancelScheduledSubscriptionUpdate: Symbol(
     "cancelScheduledSubscriptionUpdate",
   ),
+  cancelPendingScheduledSubscriptionUpdates: Symbol(
+    "cancelPendingScheduledSubscriptionUpdates",
+  ),
   setScheduledSubscriptionUpdateJob: Symbol(
     "setScheduledSubscriptionUpdateJob",
   ),
@@ -68,6 +71,9 @@ function createMockCtx(queryMap: Record<symbol, unknown> = {}) {
       }
       if (ref === REFS.cancelScheduledSubscriptionUpdate) {
         return null;
+      }
+      if (ref === REFS.cancelPendingScheduledSubscriptionUpdates) {
+        return [];
       }
     }),
     runAction: vi.fn(async () => {}),
@@ -481,6 +487,118 @@ describe("subscriptions namespace", () => {
           cancelMode: "scheduled",
           scheduledUpdateId: "scheduled_update_1",
           previousStatus: "active",
+        }),
+      );
+    });
+
+    it("replaces a scheduled paid-to-free change with a paid period-end change", async () => {
+      const ctx = createMockCtx({
+        [REFS.getCurrentSubscription]: {
+          ...ACTIVE_SUB,
+          status: "scheduled_cancel",
+          cancelAtPeriodEnd: true,
+        },
+      });
+      ctx.runMutation.mockImplementation(async (ref: symbol) => {
+        if (ref === REFS.createScheduledSubscriptionUpdate) {
+          return "scheduled_update_1";
+        }
+        if (ref === REFS.cancelPendingScheduledSubscriptionUpdates) {
+          return [
+            {
+              entityId: "user_1",
+              subscriptionId: "sub_1",
+              targetPlanId: "free",
+              effectiveAt: "2026-03-01T00:00:00Z",
+              status: "superseded",
+              createdAt: "2026-02-01T00:00:00Z",
+              updatedAt: "2026-02-15T00:00:00Z",
+            },
+          ];
+        }
+        return null;
+      });
+
+      await creem.subscriptions.update(ctx as never, {
+        entityId: "user_1",
+        productId: "prod_new",
+        updateBehavior: "period-end",
+      });
+
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        REFS.cancelPendingScheduledSubscriptionUpdates,
+        {
+          entityId: "user_1",
+          subscriptionId: "sub_1",
+        },
+      );
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        REFS.cancelScheduledAppPlanAssignment,
+        {
+          subscriptionId: "sub_1",
+          planId: "free",
+        },
+      );
+      expect(ctx.runMutation).toHaveBeenCalledWith(REFS.patchSubscription, {
+        subscriptionId: "sub_1",
+        status: "active",
+        cancelAtPeriodEnd: false,
+      });
+      expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+        0,
+        REFS.executeSubscriptionLifecycle,
+        expect.objectContaining({
+          subscriptionId: "sub_1",
+          operation: "resume",
+        }),
+      );
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        REFS.createScheduledSubscriptionUpdate,
+        expect.objectContaining({
+          entityId: "user_1",
+          subscriptionId: "sub_1",
+          targetProductId: "prod_new",
+        }),
+      );
+    });
+
+    it("resumes a scheduled cancellation before replacing it with an immediate paid update", async () => {
+      const ctx = createMockCtx({
+        [REFS.getCurrentSubscription]: {
+          ...ACTIVE_SUB,
+          status: "scheduled_cancel",
+          cancelAtPeriodEnd: true,
+        },
+      });
+      ctx.runMutation.mockImplementation(async (ref: symbol) => {
+        if (ref === REFS.cancelPendingScheduledSubscriptionUpdates) {
+          return [
+            {
+              entityId: "user_1",
+              subscriptionId: "sub_1",
+              targetPlanId: "free",
+              effectiveAt: "2026-03-01T00:00:00Z",
+              status: "superseded",
+              createdAt: "2026-02-01T00:00:00Z",
+              updatedAt: "2026-02-15T00:00:00Z",
+            },
+          ];
+        }
+        return null;
+      });
+
+      await creem.subscriptions.update(ctx as never, {
+        entityId: "user_1",
+        productId: "prod_new",
+      });
+
+      expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+        0,
+        REFS.executeSubscriptionUpdate,
+        expect.objectContaining({
+          subscriptionId: "sub_1",
+          productId: "prod_new",
+          resumeScheduledCancellation: true,
         }),
       );
     });

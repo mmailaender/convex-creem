@@ -124,6 +124,15 @@
       plan?.category !== "trial" &&
       plan?.category !== "enterprise",
   );
+  const isScheduledTarget = $derived.by(() => {
+    const scheduledUpdate = rootContext?.getScheduledUpdate();
+    return scheduledUpdate?.status === "pending" &&
+      ((scheduledUpdate.targetProductId != null &&
+        productId != null &&
+        scheduledUpdate.targetProductId === productId) ||
+        (scheduledUpdate.targetPlanId != null &&
+          scheduledUpdate.targetPlanId === plan?.planId));
+  });
   let checkoutUnits = $derived(rootContext?.getUnits() ?? 1);
 
   const effectiveUnits = $derived(
@@ -189,13 +198,16 @@
     );
   });
   const onCheckout = $derived.by(() => {
-    if (!rootContext || !plan || !productId || isActiveProduct || isActiveFreePlan || isSiblingPlan || isActivePlanOtherCycle) {
+    if (!rootContext || !plan || !productId || isActiveProduct || isActiveFreePlan || isSiblingPlan || isActivePlanOtherCycle || isScheduledTarget) {
       return undefined;
     }
     return () => rootContext.checkout({ plan, productId, units: effectiveUnits });
   });
   const onSwitch = $derived.by(() => {
     if (!rootContext || !plan) {
+      return undefined;
+    }
+    if (isScheduledTarget) {
       return undefined;
     }
     if (isAppPlan && !isActiveFreePlan && !rootContext.getIsGroupSubscribed()) {
@@ -228,6 +240,12 @@
     },
     get isSwitchPlan() {
       return isSiblingPlan || isActivePlanOtherCycle;
+    },
+    get isScheduledTarget() {
+      return isScheduledTarget;
+    },
+    get scheduledEffectiveDate() {
+      return rootContext?.getScheduledEffectiveDate() ?? null;
     },
     get isRecommended() {
       return plan?.recommended === true;
@@ -296,6 +314,8 @@
       subscriptionProductId={rootContext.getSubscriptionProductId()}
       subscriptionStatus={rootContext.getSubscriptionStatus()}
       subscriptionTrialEnd={rootContext.getSubscriptionTrialEnd()}
+      scheduledUpdate={rootContext.getScheduledUpdate()}
+      scheduledEffectiveDate={rootContext.getScheduledEffectiveDate()}
       products={rootContext.getProducts()}
       units={rootContext.getUnits()}
       showUnitPicker={rootContext.getShowUnitPicker()}

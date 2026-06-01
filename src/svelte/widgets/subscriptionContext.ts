@@ -1,5 +1,6 @@
 import type {
   RecurringCycle,
+  ScheduledSubscriptionUpdate,
   SupportedRecurringCycle,
   UIPlanEntry,
 } from "../../core/types.js";
@@ -23,6 +24,8 @@ export type SubscriptionContextValue = {
   getSubscriptionProductId: () => string | null;
   getSubscriptionStatus: () => string | null;
   getSubscriptionTrialEnd: () => string | null;
+  getScheduledUpdate: () => ScheduledSubscriptionUpdate | null;
+  getScheduledEffectiveDate: () => string | null;
   getSubscribedUnits: () => number | null;
   getUnits: () => number | undefined;
   getShowUnitPicker: () => boolean;

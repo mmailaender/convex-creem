@@ -1,6 +1,7 @@
 import { createContext } from "react";
 import type {
   RecurringCycle,
+  ScheduledSubscriptionUpdate,
   SupportedRecurringCycle,
   UIPlanEntry,
 } from "../../core/types.js";
@@ -24,6 +25,8 @@ export type SubscriptionContextValue = {
   subscriptionProductId: string | null;
   subscriptionStatus: string | null;
   subscriptionTrialEnd: string | null;
+  scheduledUpdate: ScheduledSubscriptionUpdate | null;
+  scheduledEffectiveDate: string | null;
   subscribedUnits: number | null;
   units?: number;
   showUnitPicker: boolean;

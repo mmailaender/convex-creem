@@ -56,6 +56,8 @@ export type BillingLabels = {
     loadingBillingModel: string;
     currentPlan: string;
     current: string;
+    scheduledPlan: string;
+    scheduledPlanWithDate: (formattedDate: string) => string;
     recommended: string;
     freeTrial: string;
     startTrial: string;
@@ -241,6 +243,8 @@ export const defaultBillingLabels: BillingLabels = {
     loadingBillingModel: "Loading billing model...",
     currentPlan: "Current plan",
     current: "Current",
+    scheduledPlan: "Scheduled",
+    scheduledPlanWithDate: (formattedDate) => `Scheduled for ${formattedDate}`,
     recommended: "Recommended",
     freeTrial: "Free trial",
     startTrial: "Start trial",

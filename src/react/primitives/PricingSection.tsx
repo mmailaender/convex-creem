@@ -4,6 +4,7 @@ import { PricingCard } from "./PricingCard.js";
 import type {
   UIPlanEntry,
   RecurringCycle,
+  ScheduledSubscriptionUpdate,
   SupportedRecurringCycle,
 } from "../../core/types.js";
 import {
@@ -21,6 +22,8 @@ export const PricingSection = ({
   subscriptionProductId,
   subscriptionStatus,
   subscriptionTrialEnd,
+  scheduledUpdate,
+  scheduledEffectiveDate,
   units,
   showUnitPicker = false,
   showCycleToggle = true,
@@ -48,6 +51,8 @@ export const PricingSection = ({
   subscriptionProductId?: string | null;
   subscriptionStatus?: string | null;
   subscriptionTrialEnd?: string | null;
+  scheduledUpdate?: ScheduledSubscriptionUpdate | null;
+  scheduledEffectiveDate?: string | null;
   units?: number;
   showUnitPicker?: boolean;
   showCycleToggle?: boolean;
@@ -146,6 +151,8 @@ export const PricingSection = ({
             subscriptionProductId={subscriptionProductId}
             subscriptionStatus={subscriptionStatus}
             subscriptionTrialEnd={subscriptionTrialEnd}
+            scheduledUpdate={scheduledUpdate}
+            scheduledEffectiveDate={scheduledEffectiveDate}
             products={products}
             units={units}
             showUnitPicker={showUnitPicker}
@@ -176,6 +183,8 @@ export const PricingSection = ({
               subscriptionProductId={subscriptionProductId}
               subscriptionStatus={subscriptionStatus}
               subscriptionTrialEnd={subscriptionTrialEnd}
+              scheduledUpdate={scheduledUpdate}
+              scheduledEffectiveDate={scheduledEffectiveDate}
               products={products}
               units={units}
               showUnitPicker={showUnitPicker}

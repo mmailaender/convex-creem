@@ -7,6 +7,8 @@ export type SubscriptionItemContextValue = {
   plan: UIPlanEntry;
   isActive: boolean;
   isSwitchPlan: boolean;
+  isScheduledTarget: boolean;
+  scheduledEffectiveDate: string | null;
   isRecommended: boolean;
   selectedCycle: RecurringCycle;
   currentProductId: string | undefined;

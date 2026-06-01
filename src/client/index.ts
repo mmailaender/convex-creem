@@ -52,6 +52,7 @@ import type {
   CreditGrant,
   BillingSnapshot,
   PlanCatalog,
+  ScheduledSubscriptionUpdate,
   SubscriptionSnapshot,
 } from "../core/types.js";
 
@@ -905,6 +906,83 @@ export class Creem {
     });
   }
 
+  private async cancelPendingScheduledUpdateSideEffects(
+    ctx: RunSchedulerMutationCtx,
+    args: {
+      entityId: string;
+      subscription: {
+        id: string;
+        status?: string;
+        cancelAtPeriodEnd?: boolean;
+      };
+      keepScheduledCancellation: boolean;
+    },
+  ): Promise<boolean> {
+    const pendingUpdates = (await ctx.runMutation(
+      this.component.lib.cancelPendingScheduledSubscriptionUpdates,
+      {
+        entityId: args.entityId,
+        subscriptionId: args.subscription.id,
+      },
+    )) as ScheduledSubscriptionUpdate[];
+    const targetPlanIds = Array.from(
+      new Set(
+        pendingUpdates
+          .map((update) => update.targetPlanId)
+          .filter((planId): planId is string => Boolean(planId)),
+      ),
+    );
+
+    for (const planId of targetPlanIds) {
+      await ctx.runMutation(
+        this.component.lib.cancelScheduledAppPlanAssignment,
+        {
+          subscriptionId: args.subscription.id,
+          planId,
+        },
+      );
+    }
+
+    const shouldClearScheduledCancellation =
+      !args.keepScheduledCancellation &&
+      (targetPlanIds.length > 0 ||
+        args.subscription.cancelAtPeriodEnd === true ||
+        args.subscription.status === "scheduled_cancel");
+
+    if (!shouldClearScheduledCancellation) return false;
+
+    await ctx.runMutation(this.component.lib.patchSubscription, {
+      subscriptionId: args.subscription.id,
+      ...(args.subscription.status
+        ? {
+            status:
+              args.subscription.status === "scheduled_cancel"
+                ? "active"
+                : args.subscription.status,
+          }
+        : {}),
+      cancelAtPeriodEnd: false,
+    });
+    await ctx.scheduler.runAfter(
+      0,
+      this.component.lib.executeSubscriptionLifecycle,
+      {
+        apiKey: this.apiKey,
+        serverIdx: this.serverIdx,
+        serverURL: this.serverURL,
+        subscriptionId: args.subscription.id,
+        operation: "resume",
+        ...(args.subscription.status
+          ? { previousStatus: args.subscription.status }
+          : {}),
+        ...(args.subscription.cancelAtPeriodEnd !== undefined
+          ? { previousCancelAtPeriodEnd: args.subscription.cancelAtPeriodEnd }
+          : {}),
+      },
+    );
+    return true;
+  }
+
   private async schedulePeriodEndSubscriptionUpdate(
     ctx: RunSchedulerMutationCtx,
     args: {
@@ -1072,6 +1150,15 @@ export class Creem {
             });
         if (!subscription) throw new ConvexError("Subscription not found");
 
+        const resumeScheduledCancellation =
+          updateBehavior !== "period-end" || !args.freePlanId
+            ? await this.cancelPendingScheduledUpdateSideEffects(ctx, {
+                entityId: args.entityId,
+                subscription,
+                keepScheduledCancellation: Boolean(args.freePlanId),
+              })
+            : false;
+
         if (updateBehavior === "period-end") {
           await this.schedulePeriodEndSubscriptionUpdate(ctx, {
             entityId: args.entityId,
@@ -1135,6 +1222,7 @@ export class Creem {
             productId: args.productId,
             units: args.units,
             updateBehavior,
+            resumeScheduledCancellation,
             previousSeats: subscription.seats ?? undefined,
             previousProductId: subscription.productId,
           },
@@ -1783,6 +1871,15 @@ export class Creem {
                 });
             if (!subscription) throw new ConvexError("Subscription not found");
 
+            const resumeScheduledCancellation =
+              updateBehavior !== "period-end" || !args.freePlanId
+                ? await this.cancelPendingScheduledUpdateSideEffects(ctx, {
+                    entityId,
+                    subscription,
+                    keepScheduledCancellation: Boolean(args.freePlanId),
+                  })
+                : false;
+
             if (updateBehavior === "period-end") {
               await this.schedulePeriodEndSubscriptionUpdate(ctx, {
                 entityId,
@@ -1847,6 +1944,7 @@ export class Creem {
                 productId: args.productId,
                 units: args.units,
                 updateBehavior,
+                resumeScheduledCancellation,
                 previousSeats: subscription.seats ?? undefined,
                 previousProductId: subscription.productId,
               },

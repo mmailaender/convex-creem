@@ -1,7 +1,12 @@
 <script lang="ts">
   import BillingToggle from "./BillingToggle.svelte";
   import PricingCard from "./PricingCard.svelte";
-  import type { UIPlanEntry, RecurringCycle, SupportedRecurringCycle } from "../../core/types.js";
+  import type {
+    UIPlanEntry,
+    RecurringCycle,
+    ScheduledSubscriptionUpdate,
+    SupportedRecurringCycle,
+  } from "../../core/types.js";
   import {
     defaultBillingLabels,
     type BillingCurrencyFormatInput,
@@ -18,6 +23,8 @@
     subscriptionProductId?: string | null;
     subscriptionStatus?: string | null;
     subscriptionTrialEnd?: string | null;
+    scheduledUpdate?: ScheduledSubscriptionUpdate | null;
+    scheduledEffectiveDate?: string | null;
     units?: number;
     showUnitPicker?: boolean;
     showCycleToggle?: boolean;
@@ -57,6 +64,8 @@
     subscriptionProductId = null,
     subscriptionStatus = null,
     subscriptionTrialEnd = null,
+    scheduledUpdate = null,
+    scheduledEffectiveDate = null,
     units = undefined,
     showUnitPicker = false,
     showCycleToggle = true,
@@ -137,6 +146,8 @@
         {subscriptionProductId}
         {subscriptionStatus}
         {subscriptionTrialEnd}
+        {scheduledUpdate}
+        {scheduledEffectiveDate}
         {products}
         {units}
         {showUnitPicker}
@@ -167,6 +178,8 @@
           {subscriptionProductId}
           {subscriptionStatus}
           {subscriptionTrialEnd}
+          {scheduledUpdate}
+          {scheduledEffectiveDate}
           {products}
           {units}
           {showUnitPicker}

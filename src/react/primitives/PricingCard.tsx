@@ -1,7 +1,11 @@
 import { useMemo, useState } from "react";
 import { CheckoutButton } from "./CheckoutButton.js";
 import { NumberInput } from "./NumberInput.js";
-import type { UIPlanEntry, RecurringCycle } from "../../core/types.js";
+import type {
+  UIPlanEntry,
+  RecurringCycle,
+  ScheduledSubscriptionUpdate,
+} from "../../core/types.js";
 import {
   defaultBillingLabels,
   type BillingCurrencyFormatInput,
@@ -29,6 +33,8 @@ export const PricingCard = ({
   subscriptionProductId,
   subscriptionStatus,
   subscriptionTrialEnd,
+  scheduledUpdate,
+  scheduledEffectiveDate,
   products = [],
   units,
   showUnitPicker = false,
@@ -52,6 +58,8 @@ export const PricingCard = ({
   subscriptionProductId?: string | null;
   subscriptionStatus?: string | null;
   subscriptionTrialEnd?: string | null;
+  scheduledUpdate?: ScheduledSubscriptionUpdate | null;
+  scheduledEffectiveDate?: string | null;
   products?: ConnectedProduct[];
   units?: number;
   showUnitPicker?: boolean;
@@ -148,9 +156,23 @@ export const PricingCard = ({
     !isActiveFreePlan &&
     (plan.category === "free" || plan.category === "trial") &&
     !isGroupSubscribed;
+  const isScheduledTarget =
+    scheduledUpdate?.status === "pending" &&
+    ((scheduledUpdate.targetProductId != null &&
+      productId != null &&
+      scheduledUpdate.targetProductId === productId) ||
+      (scheduledUpdate.targetPlanId != null &&
+        scheduledUpdate.targetPlanId === plan.planId));
+  const scheduledTargetLabel = scheduledEffectiveDate
+    ? labels.subscription.scheduledPlanWithDate(scheduledEffectiveDate)
+    : labels.subscription.scheduledPlan;
 
   const showUnitCheckoutControls =
-    isUnitPlan && showUnitPicker && !isActiveProduct && !isSiblingPlan;
+    isUnitPlan &&
+    showUnitPicker &&
+    !isActiveProduct &&
+    !isSiblingPlan &&
+    !isScheduledTarget;
   const reserveUnitActionHeight =
     isUnitPlan &&
     showUnitPicker &&
@@ -246,6 +268,10 @@ export const PricingCard = ({
             ) : (
               labels.subscription.currentPlan
             )}
+          </span>
+        ) : isScheduledTarget ? (
+          <span className="badge-filled-sm">
+            {labels.subscription.scheduledPlan}
           </span>
         ) : plan.recommended ? (
           <span className="badge-filled-sm">
@@ -391,9 +417,15 @@ export const PricingCard = ({
               {labels.subscription.cancelSubscription}
             </button>
           ) : isActiveProduct ||
-            isActiveFreePlan /* Keep CTA row height but intentionally empty when current plan has no action */ ? null : (isSiblingPlan ||
-              isActivePlanOtherCycle) &&
-            productId ? (
+            isActiveFreePlan /* Keep CTA row height but intentionally empty when current plan has no action */ ? null : isScheduledTarget ? (
+            <button
+              type="button"
+              disabled
+              className="button-faded w-full cursor-not-allowed opacity-70"
+            >
+              {scheduledTargetLabel}
+            </button>
+          ) : (isSiblingPlan || isActivePlanOtherCycle) && productId ? (
             <CheckoutButton
               productId={productId}
               disabled={disableSwitch}

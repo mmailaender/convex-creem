@@ -109,8 +109,15 @@ export const SubscriptionItemCTA = ({
   checkoutLabel?: string;
   switchLabel?: string;
 }) => {
-  const { isActive, onCheckout, onSwitch, unstyled, labels } =
-    useSubscriptionItem();
+  const {
+    isActive,
+    isScheduledTarget,
+    scheduledEffectiveDate,
+    onCheckout,
+    onSwitch,
+    unstyled,
+    labels,
+  } = useSubscriptionItem();
   const activeClassName = unstyled
     ? className
     : `creem-base:w-full creem-base:rounded-lg creem-base:bg-zinc-100 creem-base:px-4 creem-base:py-2 creem-base:text-sm creem-base:font-medium creem-base:text-zinc-500 dark:creem-base:bg-zinc-800 dark:creem-base:text-zinc-400 ${className}`;
@@ -130,6 +137,16 @@ export const SubscriptionItemCTA = ({
     return (
       <button type="button" className={actionClassName} onClick={onSwitch}>
         {switchLabel ?? labels.subscription.switchPlan}
+      </button>
+    );
+  }
+
+  if (isScheduledTarget) {
+    return (
+      <button type="button" className={activeClassName} disabled>
+        {scheduledEffectiveDate
+          ? labels.subscription.scheduledPlanWithDate(scheduledEffectiveDate)
+          : labels.subscription.scheduledPlan}
       </button>
     );
   }

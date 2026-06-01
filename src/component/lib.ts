@@ -1011,6 +1011,39 @@ export const cancelScheduledSubscriptionUpdate = mutation({
   },
 });
 
+export const cancelPendingScheduledSubscriptionUpdates = mutation({
+  args: {
+    entityId: v.string(),
+    subscriptionId: v.string(),
+  },
+  returns: v.array(schema.tables.scheduledSubscriptionUpdates.validator),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("scheduledSubscriptionUpdates")
+      .withIndex("subscriptionId_status", (q) =>
+        q.eq("subscriptionId", args.subscriptionId).eq("status", "pending"),
+      )
+      .filter((q) => q.eq(q.field("entityId"), args.entityId))
+      .collect();
+    if (existing.length === 0) return [];
+
+    const now = new Date().toISOString();
+    await asyncMap(existing, async (update) => {
+      await ctx.db.patch(update._id, {
+        status: "superseded",
+        updatedAt: now,
+      });
+    });
+    return existing.map((update) =>
+      omitSystemFields({
+        ...update,
+        status: "superseded" as const,
+        updatedAt: now,
+      }),
+    );
+  },
+});
+
 export const setScheduledSubscriptionUpdateJob = mutation({
   args: {
     scheduledUpdateId: v.id("scheduledSubscriptionUpdates"),
@@ -1086,6 +1119,7 @@ export const executeSubscriptionUpdate = action({
     productId: v.optional(v.string()),
     units: v.optional(v.number()),
     updateBehavior: v.optional(v.string()),
+    resumeScheduledCancellation: v.optional(v.boolean()),
     previousSeats: v.optional(v.union(v.number(), v.null())),
     previousProductId: v.optional(v.string()),
   },
@@ -1100,6 +1134,12 @@ export const executeSubscriptionUpdate = action({
         throw new ConvexError(
           "period-end updates must be scheduled before calling Creem",
         );
+      }
+      if (args.resumeScheduledCancellation) {
+        const live = await sdk.subscriptions.get(args.subscriptionId);
+        if (live.status === "scheduled_cancel" || live.status === "paused") {
+          await sdk.subscriptions.resume(args.subscriptionId);
+        }
       }
       if (args.productId) {
         // Plan/interval switch
@@ -1284,6 +1324,10 @@ export const executeSubscriptionLifecycle = action({
               : {};
         await sdk.subscriptions.cancel(args.subscriptionId, cancelParams);
       } else if (args.operation === "resume") {
+        const live = await sdk.subscriptions.get(args.subscriptionId);
+        if (live.status !== "scheduled_cancel" && live.status !== "paused") {
+          return;
+        }
         await sdk.subscriptions.resume(args.subscriptionId);
       } else if (args.operation === "pause") {
         await sdk.subscriptions.pause(args.subscriptionId);

@@ -258,6 +258,8 @@
     getSubscriptionProductId: () => localSubscriptionProductId,
     getSubscriptionStatus: () => localSubscriptionState,
     getSubscriptionTrialEnd: () => matchedSubscription?.trialEnd ?? null,
+    getScheduledUpdate: () => localScheduledUpdate,
+    getScheduledEffectiveDate: () => formattedScheduledEffectiveDate,
     getSubscribedUnits: () => localSubscribedUnits,
     getUnits: () => units,
     getShowUnitPicker: () => showUnitPicker,
@@ -472,6 +474,12 @@
       (update) => update.subscriptionId === matchedSubscription?.id,
     ) ?? null,
   );
+  const formattedScheduledEffectiveDate = $derived.by(() => {
+    if (!localScheduledUpdate?.effectiveAt) return null;
+    const date = new Date(localScheduledUpdate.effectiveAt);
+    if (Number.isNaN(date.getTime())) return null;
+    return resolvedI18n.formatDate({ date });
+  });
 
   const activePlanId = $derived.by<string | null>(() => {
     if (!model) return null;
@@ -1299,6 +1307,8 @@
         subscriptionProductId={localSubscriptionProductId}
         subscriptionStatus={localSubscriptionState}
         subscriptionTrialEnd={matchedSubscription?.trialEnd ?? null}
+        scheduledUpdate={localScheduledUpdate}
+        scheduledEffectiveDate={formattedScheduledEffectiveDate}
         {units}
         showUnitPicker={showUnitPicker}
         {columns}

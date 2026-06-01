@@ -133,6 +133,13 @@ export const SubscriptionItem = ({
     plan?.category !== "free" &&
     plan?.category !== "trial" &&
     plan?.category !== "enterprise";
+  const isScheduledTarget =
+    rootContext?.scheduledUpdate?.status === "pending" &&
+    ((rootContext.scheduledUpdate.targetProductId != null &&
+      productId != null &&
+      rootContext.scheduledUpdate.targetProductId === productId) ||
+      (rootContext.scheduledUpdate.targetPlanId != null &&
+        rootContext.scheduledUpdate.targetPlanId === plan?.planId));
   const rootUnits = rootContext?.units ?? 1;
   const [checkoutUnitState, setCheckoutUnitState] = useState({
     sourceUnits: rootUnits,
@@ -200,6 +207,8 @@ export const SubscriptionItem = ({
       plan,
       isActive: isActiveProduct || isActiveFreePlan,
       isSwitchPlan: isSiblingPlan || isActivePlanOtherCycle,
+      isScheduledTarget,
+      scheduledEffectiveDate: rootContext?.scheduledEffectiveDate ?? null,
       isRecommended: plan.recommended === true,
       selectedCycle: rootContext?.selectedCycle ?? "every-month",
       currentProductId: productId,
@@ -217,12 +226,14 @@ export const SubscriptionItem = ({
         !isActiveProduct &&
         !isActiveFreePlan &&
         !isSiblingPlan &&
-        !isActivePlanOtherCycle
+        !isActivePlanOtherCycle &&
+        !isScheduledTarget
           ? () =>
               rootContext.checkout({ plan, productId, units: effectiveUnits })
           : undefined,
       onSwitch:
         rootContext &&
+        !isScheduledTarget &&
         isAppPlan &&
         !isActiveFreePlan &&
         !rootContext.isGroupSubscribed
@@ -235,6 +246,7 @@ export const SubscriptionItem = ({
                   : {}),
               })
           : rootContext &&
+              !isScheduledTarget &&
               productId &&
               (isSiblingPlan || isActivePlanOtherCycle)
             ? () =>
@@ -264,6 +276,7 @@ export const SubscriptionItem = ({
     isAppPlan,
     isSiblingPlan,
     isActivePlanOtherCycle,
+    isScheduledTarget,
     checkoutUnits,
     effectiveUnits,
     setItemCheckoutUnits,
@@ -287,6 +300,8 @@ export const SubscriptionItem = ({
       subscriptionProductId={rootContext.subscriptionProductId}
       subscriptionStatus={rootContext.subscriptionStatus}
       subscriptionTrialEnd={rootContext.subscriptionTrialEnd}
+      scheduledUpdate={rootContext.scheduledUpdate}
+      scheduledEffectiveDate={rootContext.scheduledEffectiveDate}
       products={rootContext.products}
       units={rootContext.units}
       showUnitPicker={rootContext.showUnitPicker}

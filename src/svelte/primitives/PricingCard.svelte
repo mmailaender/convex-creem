@@ -1,7 +1,11 @@
 <script lang="ts">
   import CheckoutButton from "./CheckoutButton.svelte";
   import NumberInput from "./NumberInput.svelte";
-  import type { UIPlanEntry, RecurringCycle } from "../../core/types.js";
+  import type {
+    UIPlanEntry,
+    RecurringCycle,
+    ScheduledSubscriptionUpdate,
+  } from "../../core/types.js";
   import {
     defaultBillingLabels,
     type BillingCurrencyFormatInput,
@@ -23,6 +27,8 @@
     subscriptionProductId?: string | null;
     subscriptionStatus?: string | null;
     subscriptionTrialEnd?: string | null;
+    scheduledUpdate?: ScheduledSubscriptionUpdate | null;
+    scheduledEffectiveDate?: string | null;
     products?: ConnectedProduct[];
     units?: number;
     showUnitPicker?: boolean;
@@ -58,6 +64,8 @@
     subscriptionProductId = null,
     subscriptionStatus = null,
     subscriptionTrialEnd = null,
+    scheduledUpdate = null,
+    scheduledEffectiveDate = null,
     products = [],
     units = undefined,
     showUnitPicker = false,
@@ -127,8 +135,21 @@
       (plan.category === "free" || plan.category === "trial") &&
       !isGroupSubscribed,
   );
+  const isScheduledTarget = $derived(
+    scheduledUpdate?.status === "pending" &&
+      ((scheduledUpdate.targetProductId != null &&
+        productId != null &&
+        scheduledUpdate.targetProductId === productId) ||
+        (scheduledUpdate.targetPlanId != null &&
+          scheduledUpdate.targetPlanId === plan.planId)),
+  );
+  const scheduledTargetLabel = $derived(
+    scheduledEffectiveDate
+      ? labels.subscription.scheduledPlanWithDate(scheduledEffectiveDate)
+      : labels.subscription.scheduledPlan,
+  );
   const showUnitCheckoutControls = $derived(
-    isUnitPlan && showUnitPicker && !isActiveProduct && !isSiblingPlan,
+    isUnitPlan && showUnitPicker && !isActiveProduct && !isSiblingPlan && !isScheduledTarget,
   );
   const reserveUnitActionHeight = $derived(
     isUnitPlan && showUnitPicker && (isActiveProduct || isSiblingPlan || isActivePlanOtherCycle),
@@ -203,6 +224,10 @@
         {:else}
           {labels.subscription.currentPlan}
         {/if}
+      </span>
+    {:else if isScheduledTarget}
+      <span class="badge-filled-sm">
+        {labels.subscription.scheduledPlan}
       </span>
     {:else if plan.recommended}
       <span class="badge-filled-sm">
@@ -309,6 +334,14 @@
       </button>
     {:else if isActiveProduct || isActiveFreePlan}
       <!-- Keep CTA row height but intentionally empty when current plan has no action -->
+    {:else if isScheduledTarget}
+      <button
+        type="button"
+        disabled
+        class="button-faded w-full cursor-not-allowed opacity-70"
+      >
+        {scheduledTargetLabel}
+      </button>
     {:else if (isSiblingPlan || isActivePlanOtherCycle) && productId}
       <CheckoutButton
         {productId}

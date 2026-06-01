@@ -46,6 +46,16 @@
   >
     {switchLabel ?? ctx.labels.subscription.switchPlan}
   </button>
+{:else if ctx.isScheduledTarget}
+  <button
+    type="button"
+    class={activeClass}
+    disabled
+  >
+    {ctx.scheduledEffectiveDate
+      ? ctx.labels.subscription.scheduledPlanWithDate(ctx.scheduledEffectiveDate)
+      : ctx.labels.subscription.scheduledPlan}
+  </button>
 {:else if ctx.onCheckout}
   <button
     type="button"
