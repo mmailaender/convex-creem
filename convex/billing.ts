@@ -19,15 +19,18 @@ const billingCatalog = defineBillingCatalog({
       planId: "trial",
       category: "trial",
       billingType: "custom",
+      eligibilityScopeId: "base",
       eligibility: {
         oncePerEntity: true,
         hideWhenIneligible: true,
+        expiresWhenScopeHasNonTrialPlan: true,
       },
     },
     {
       planId: "free",
       category: "free",
       billingType: "custom",
+      eligibilityScopeId: "base",
     },
     {
       planId: "ai-credits-100",

@@ -140,18 +140,21 @@
         planId: "trial",
         category: "trial",
         billingType: "custom",
+        eligibilityScopeId: "base",
         title: "Starter Trial",
         description:
-          "No-card app trial. Hidden after it has been used once.",
+          "No-card app trial. Hidden after it has been used once or a base plan is chosen.",
         eligibility: {
           oncePerEntity: true,
           hideWhenIneligible: true,
+          expiresWhenScopeHasNonTrialPlan: true,
         },
         limits: { aiMessages: 5, projects: 1 },
       },
       {
         planId: "free",
         category: "free",
+        eligibilityScopeId: "base",
         title: "Free",
         description: "For individuals getting started",
         limits: { aiMessages: 50, projects: 1 },

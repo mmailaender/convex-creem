@@ -368,6 +368,7 @@
         pricingModel: plan.type === "unit-based" ? "unit" : (catalogEntry?.pricingModel ?? "flat"),
         groupId: plan.groupId ?? catalogEntry?.groupId,
         groupTitle: plan.groupTitle ?? catalogEntry?.groupTitle,
+        eligibilityScopeId: catalogEntry?.eligibilityScopeId,
         title:
           plan.title ??
           catalogEntry?.title ??
@@ -518,9 +519,48 @@
     return null;
   });
 
+  const activeOrScheduledPlanIds = $derived.by<string[]>(() => {
+    if (!model) return [];
+    const planIds = new SvelteSet<string>();
+    const addPlanId = (planId: string | null | undefined) => {
+      if (planId && plans.some((plan) => plan.planId === planId)) {
+        planIds.add(planId);
+      }
+    };
+    const addProductId = (productId: string | null | undefined) => {
+      const plan = getPlanForProduct(productId);
+      if (plan) {
+        planIds.add(plan.planId);
+      }
+    };
+
+    addProductId(localSubscriptionProductId);
+    addPlanId(model.activePlanId);
+    addPlanId(model.activeFreePlanId);
+
+    for (const subscription of model.activeSubscriptions ?? []) {
+      addProductId(subscription.productId);
+    }
+    for (const assignment of model.appPlanAssignments ?? []) {
+      if (assignment.status === "active" || assignment.status === "scheduled") {
+        addPlanId(assignment.planId);
+      }
+    }
+    for (const update of model.scheduledSubscriptionUpdates ?? []) {
+      addProductId(update.targetProductId);
+      addPlanId(update.targetPlanId);
+    }
+
+    return Array.from(planIds);
+  });
+
   const visiblePlans = $derived(
     groupedPlans.filter((plan) =>
-      shouldShowPlan(plan, model?.appPlanActivations, activePlanId),
+      shouldShowPlan(plan, model?.appPlanActivations, {
+        activePlanId,
+        activeOrScheduledPlanIds,
+        catalogPlans: plans,
+      }),
     ),
   );
 

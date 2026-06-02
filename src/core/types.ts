@@ -86,6 +86,15 @@ export type AppPlanEligibility = {
    */
   oncePerEntity?: boolean;
   /**
+   * Make this plan ineligible when another non-trial plan in the same
+   * `eligibilityScopeId` is active or scheduled.
+   *
+   * Use for scoped no-card trials, e.g. a base-plan trial that should disappear
+   * after choosing a base plan, while addon trials remain available until that
+   * addon scope is chosen.
+   */
+  expiresWhenScopeHasNonTrialPlan?: boolean;
+  /**
    * Hide the card when this plan is no longer eligible and it is not the active plan.
    * When false/omitted, custom compositions may still show or disable the option.
    */
@@ -108,6 +117,12 @@ export type PlanCatalogEntry = {
   groupId?: string;
   /** Optional display label for `groupId`. */
   groupTitle?: string;
+  /**
+   * Optional eligibility scope for mutually exclusive alternatives.
+   * Plans sharing the same scope can affect scoped app-owned trial eligibility
+   * without coupling that logic to pricing layout groups.
+   */
+  eligibilityScopeId?: string;
   /** Optional app-authored plan title. Creem product name is used when omitted. */
   title?: string;
   /** Optional app-authored plan description. Creem product description is used when omitted. */

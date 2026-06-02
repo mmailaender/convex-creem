@@ -300,6 +300,7 @@ describe("app-owned plan eligibility", () => {
     planId: "trial",
     category: "trial" as const,
     billingType: "custom" as const,
+    eligibilityScopeId: "base",
     eligibility: {
       oncePerEntity: true,
       hideWhenIneligible: true,
@@ -318,7 +319,9 @@ describe("app-owned plan eligibility", () => {
   });
 
   it("keeps a once-per-entity plan eligible until it was activated", () => {
-    expect(isAppPlanEligible(trialPlan, [], "free")).toBe(true);
+    expect(isAppPlanEligible(trialPlan, [], { activePlanId: "free" })).toBe(
+      true,
+    );
     expect(
       isAppPlanEligible(
         trialPlan,
@@ -331,9 +334,69 @@ describe("app-owned plan eligibility", () => {
             activationCount: 1,
           },
         ],
-        "free",
+        { activePlanId: "free" },
       ),
     ).toBe(false);
+  });
+
+  it("hides a scoped trial when a non-trial plan in the same scope is active or scheduled", () => {
+    const freePlan = {
+      planId: "free",
+      category: "free" as const,
+      billingType: "custom" as const,
+      eligibilityScopeId: "base",
+    };
+    const addonPlan = {
+      planId: "addon",
+      category: "paid" as const,
+      billingType: "recurring" as const,
+      eligibilityScopeId: "addon",
+    };
+    const scopedTrialPlan = {
+      ...trialPlan,
+      eligibility: {
+        ...trialPlan.eligibility,
+        expiresWhenScopeHasNonTrialPlan: true,
+      },
+    };
+
+    expect(
+      shouldShowPlan(scopedTrialPlan, [], {
+        activeOrScheduledPlanIds: ["free"],
+        catalogPlans: [scopedTrialPlan, freePlan, addonPlan],
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowPlan(scopedTrialPlan, [], {
+        activeOrScheduledPlanIds: ["addon"],
+        catalogPlans: [scopedTrialPlan, freePlan, addonPlan],
+      }),
+    ).toBe(true);
+  });
+
+  it("does not expire scoped trials from the implicit current plan fallback", () => {
+    const scopedTrialPlan = {
+      ...trialPlan,
+      eligibility: {
+        ...trialPlan.eligibility,
+        expiresWhenScopeHasNonTrialPlan: true,
+      },
+    };
+
+    expect(
+      shouldShowPlan(scopedTrialPlan, [], {
+        activePlanId: "free",
+        activeOrScheduledPlanIds: [],
+        catalogPlans: [
+          scopedTrialPlan,
+          {
+            planId: "free",
+            category: "free" as const,
+            eligibilityScopeId: "base",
+          },
+        ],
+      }),
+    ).toBe(true);
   });
 
   it("shows the active plan even when it was already activated", () => {
@@ -346,8 +409,12 @@ describe("app-owned plan eligibility", () => {
         activationCount: 1,
       },
     ];
-    expect(isAppPlanEligible(trialPlan, activations, "trial")).toBe(true);
-    expect(shouldShowPlan(trialPlan, activations, "trial")).toBe(true);
+    expect(
+      isAppPlanEligible(trialPlan, activations, { activePlanId: "trial" }),
+    ).toBe(true);
+    expect(
+      shouldShowPlan(trialPlan, activations, { activePlanId: "trial" }),
+    ).toBe(true);
   });
 
   it("hides ineligible plans only when configured", () => {
@@ -361,7 +428,9 @@ describe("app-owned plan eligibility", () => {
       },
     ];
     expect(hasAppPlanActivation(activations, "trial")).toBe(true);
-    expect(shouldShowPlan(trialPlan, activations, "free")).toBe(false);
+    expect(
+      shouldShowPlan(trialPlan, activations, { activePlanId: "free" }),
+    ).toBe(false);
     expect(
       shouldShowPlan(
         {
@@ -369,7 +438,7 @@ describe("app-owned plan eligibility", () => {
           eligibility: { oncePerEntity: true },
         },
         activations,
-        "free",
+        { activePlanId: "free" },
       ),
     ).toBe(true);
   });

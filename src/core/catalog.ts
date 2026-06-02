@@ -11,6 +11,18 @@ import type {
   AppPlanActivation,
 } from "./types.js";
 
+export type AppPlanEligibilityContext = {
+  /**
+   * Currently active catalog plan ID.
+   * Keeps the active plan visible even when it is otherwise ineligible.
+   */
+  activePlanId?: string | null;
+  /** Explicitly active or scheduled catalog plan IDs in this billing context. */
+  activeOrScheduledPlanIds?: readonly string[];
+  /** Catalog entries used to resolve scopes/categories for active plan IDs. */
+  catalogPlans?: readonly PlanCatalogEntry[];
+};
+
 /** All billing cycles supported by the Creem API, in display order. */
 export const SUPPORTED_RECURRING_CYCLES: SupportedRecurringCycle[] = [
   "every-month",
@@ -172,10 +184,32 @@ export const hasAppPlanActivation = (
 export const isAppPlanEligible = (
   plan: PlanCatalogEntry,
   activations: readonly AppPlanActivation[] | undefined,
-  activePlanId?: string | null,
+  context: AppPlanEligibilityContext = {},
 ): boolean => {
+  const activePlanId = context.activePlanId;
+  const activeOrScheduledPlanIds = new Set(context.activeOrScheduledPlanIds);
+
   if (activePlanId === plan.planId) {
     return true;
+  }
+  if (activeOrScheduledPlanIds.has(plan.planId)) {
+    return true;
+  }
+  if (
+    plan.eligibility?.expiresWhenScopeHasNonTrialPlan &&
+    plan.eligibilityScopeId &&
+    context.catalogPlans
+  ) {
+    const scopeHasNonTrialPlan = context.catalogPlans.some(
+      (catalogPlan) =>
+        catalogPlan.planId !== plan.planId &&
+        catalogPlan.eligibilityScopeId === plan.eligibilityScopeId &&
+        catalogPlan.category !== "trial" &&
+        activeOrScheduledPlanIds.has(catalogPlan.planId),
+    );
+    if (scopeHasNonTrialPlan) {
+      return false;
+    }
   }
   if (!plan.eligibility?.oncePerEntity) {
     return true;
@@ -187,9 +221,9 @@ export const isAppPlanEligible = (
 export const shouldShowPlan = (
   plan: PlanCatalogEntry,
   activations: readonly AppPlanActivation[] | undefined,
-  activePlanId?: string | null,
+  context: AppPlanEligibilityContext = {},
 ): boolean =>
-  isAppPlanEligible(plan, activations, activePlanId) ||
+  isAppPlanEligible(plan, activations, context) ||
   !plan.eligibility?.hideWhenIneligible;
 
 export const resolvePlanProductId = (

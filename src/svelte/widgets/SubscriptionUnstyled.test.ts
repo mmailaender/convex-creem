@@ -94,10 +94,16 @@ describe("Subscription unstyled mode", () => {
 });
 
 describe("Subscription catalog plan mapping", () => {
-  it("preserves app-plan eligibility for Svelte and React default pricing", () => {
+  it("preserves app-plan eligibility metadata for Svelte and React default pricing", () => {
     expect(svelteRootSource).toContain(
       "eligibility: catalogEntry?.eligibility",
     );
+    expect(svelteRootSource).toContain(
+      "eligibilityScopeId: catalogEntry?.eligibilityScopeId",
+    );
     expect(reactRootSource).toContain("eligibility: catalogEntry?.eligibility");
+    expect(reactRootSource).toContain(
+      "eligibilityScopeId: catalogEntry?.eligibilityScopeId",
+    );
   });
 });

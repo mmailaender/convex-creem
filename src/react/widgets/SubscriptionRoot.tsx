@@ -296,6 +296,7 @@ export const SubscriptionRoot = ({
             : (catalogEntry?.pricingModel ?? "flat"),
         groupId: plan.groupId ?? catalogEntry?.groupId,
         groupTitle: plan.groupTitle ?? catalogEntry?.groupTitle,
+        eligibilityScopeId: catalogEntry?.eligibilityScopeId,
         title:
           plan.title ??
           catalogEntry?.title ??
@@ -481,7 +482,7 @@ export const SubscriptionRoot = ({
     const date = new Date(localScheduledUpdate.effectiveAt);
     if (Number.isNaN(date.getTime())) return null;
     return resolvedI18n.formatDate({ date });
-  }, [localScheduledUpdate?.effectiveAt, resolvedI18n]);
+  }, [localScheduledUpdate, resolvedI18n]);
 
   const snapshot = model?.snapshot ?? null;
 
@@ -529,12 +530,63 @@ export const SubscriptionRoot = ({
     return null;
   }, [model, localSubscriptionProductId, plans]);
 
+  const activeOrScheduledPlanIds = useMemo(() => {
+    if (!model) return [];
+    const planIds = new Set<string>();
+    const addPlanId = (planId: string | null | undefined) => {
+      if (planId && plans.some((plan) => plan.planId === planId)) {
+        planIds.add(planId);
+      }
+    };
+    const addProductId = (productId: string | null | undefined) => {
+      const plan = productId
+        ? plans.find((candidate) =>
+            Object.values(candidate.creemProductIds ?? {})
+              .filter(Boolean)
+              .includes(productId),
+          )
+        : null;
+      if (plan) {
+        planIds.add(plan.planId);
+      }
+    };
+
+    addProductId(localSubscriptionProductId);
+    addPlanId(model.activePlanId);
+    addPlanId(model.activeFreePlanId);
+
+    for (const subscription of model.activeSubscriptions ?? []) {
+      addProductId(subscription.productId);
+    }
+    for (const assignment of model.appPlanAssignments ?? []) {
+      if (assignment.status === "active" || assignment.status === "scheduled") {
+        addPlanId(assignment.planId);
+      }
+    }
+    for (const update of model.scheduledSubscriptionUpdates ?? []) {
+      addProductId(update.targetProductId);
+      addPlanId(update.targetPlanId);
+    }
+
+    return Array.from(planIds);
+  }, [localSubscriptionProductId, model, plans]);
+
   const visiblePlans = useMemo(
     () =>
       groupedPlans.filter((plan) =>
-        shouldShowPlan(plan, model?.appPlanActivations, activePlanId),
+        shouldShowPlan(plan, model?.appPlanActivations, {
+          activePlanId,
+          activeOrScheduledPlanIds,
+          catalogPlans: plans,
+        }),
       ),
-    [activePlanId, groupedPlans, model?.appPlanActivations],
+    [
+      activeOrScheduledPlanIds,
+      activePlanId,
+      groupedPlans,
+      model?.appPlanActivations,
+      plans,
+    ],
   );
 
   const getProductPrice = useCallback(

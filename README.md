@@ -337,16 +337,41 @@ long-term destination plan. If users can actively pick one, expose
 `onBeforePlanActivation` for sign-in or consent gates.
 
 App-owned no-card trials can be limited to once per billing entity from the
-catalog:
+catalog. If the trial is an entry path for a specific plan line, add an
+`eligibilityScopeId` to the trial and the plans that replace it, then enable
+`expiresWhenScopeHasNonTrialPlan`. The scope is separate from `groupId`: use
+`groupId` for pricing layout/audience tabs and `eligibilityScopeId` for mutually
+exclusive entitlement alternatives.
 
 ```ts
 {
   planId: "trial",
   category: "trial",
   billingType: "custom",
-  eligibility: { oncePerEntity: true, hideWhenIneligible: true },
+  eligibilityScopeId: "base",
+  eligibility: {
+    oncePerEntity: true,
+    hideWhenIneligible: true,
+    expiresWhenScopeHasNonTrialPlan: true,
+  },
+},
+{
+  planId: "free",
+  category: "free",
+  billingType: "custom",
+  eligibilityScopeId: "base",
+},
+{
+  planId: "premium",
+  category: "paid",
+  billingType: "recurring",
+  eligibilityScopeId: "base",
 }
 ```
+
+Scoped trial expiry only looks at active or scheduled non-trial plans in the
+same `eligibilityScopeId`. This keeps addon trials available when a customer
+chooses a base subscription, as long as the addon plans use a different scope.
 
 In the app mutation, activate the plan through the component:
 
@@ -359,9 +384,11 @@ await creem.appPlans.activate(ctx, {
 ```
 
 The component enforces the once-per-entity rule and the default widget hides an
-ineligible trial card when `hideWhenIneligible` is enabled. Your app still owns
-quota enforcement and lock states; Convex-Creem owns the app-plan assignment row
-used by the billing UI and snapshot.
+ineligible trial card when `hideWhenIneligible` is enabled. Scoped expiry uses
+explicit active/scheduled billing state, not the widget's implicit first-free
+fallback, so public or pre-choice pricing pages can still show the trial. Your
+app still owns quota enforcement and lock states; Convex-Creem owns the app-plan
+assignment row used by the billing UI and snapshot.
 
 You can also pass `i18n` at the provider level to replace default UI labels and
 format dates/currency. This covers default cards, dialogs, billing history,
@@ -1837,6 +1864,28 @@ plan; host apps only need a custom `activePlanId` projection when they
 intentionally want to override the component-managed assignment. Price interval
 suffixes now come from `labels.priceInterval`, so override those labels instead
 of formatting `/mo` or `/yr` in application code.
+
+### App-plan eligibility helpers
+
+`isAppPlanEligible` and `shouldShowPlan` now take an eligibility context object
+as their third argument. Pass `activePlanId`, `activeOrScheduledPlanIds`, and
+`catalogPlans` explicitly so once-per-entity and scoped trial rules evaluate
+against the same billing state as the widgets.
+
+| Previous helper call                              | Current helper call                                              |
+| ------------------------------------------------- | ---------------------------------------------------------------- |
+| `shouldShowPlan(plan, activations, activePlanId)` | `shouldShowPlan(plan, activations, { activePlanId })`            |
+| `isAppPlanEligible(plan, activations, planId)`    | `isAppPlanEligible(plan, activations, { activePlanId: planId })` |
+
+For scoped trials, include `activeOrScheduledPlanIds` and `catalogPlans`:
+
+```ts
+shouldShowPlan(trialPlan, activations, {
+  activePlanId,
+  activeOrScheduledPlanIds,
+  catalogPlans,
+});
+```
 
 ### Billing Snapshot Contract
 

@@ -538,25 +538,25 @@ export function PricingPage() {
 The Svelte example exposes these paths as in-page anchors. Use the closest path
 as your starting point.
 
-| Example anchor            | Use this when                                    | Main API to configure                                              | Considerations                                                                                    |
-| ------------------------- | ------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `#sub-one-plan`           | You have one paid plan                           | `Subscription.Root plans={["pro"]}`                                | Smallest catalog-driven subscription setup.                                                       |
-| `#sub-two-plans`          | You have a simple upgrade choice                 | `plans={["basic", "premium"]}`                                     | Good default for most SaaS pricing pages.                                                         |
-| `#sub-multi-cycle`        | Plans support monthly/yearly or more cycles      | `creemProductIds` with several cycle keys                          | The interval selector appears only when multiple cycles exist.                                    |
-| `#sub-catalog-driven`     | You split plans by audience                      | `groups={[...]}`                                                   | Group selector controls visible plans; unit plans can show a picker.                              |
-| `#sub-unit-auto`          | Quantity comes from app state                    | `units={memberCount}`                                              | Keep Creem quantity synced when the app count changes.                                            |
-| `#sub-grouped-cycles`     | Groups also have different intervals             | `groups` plus multi-cycle products                                 | The active group controls available billing cycles.                                               |
-| `#sub-app-trial`          | No-card trial before choosing free or paid       | `category: "trial"` plus `plans.activate`                          | Component records once-per-entity history and app-plan assignments; your app owns quotas.         |
-| `#sub-consent-gates`      | Checkout requires terms, auth, or policy consent | `onBeforeCheckout`, `onBeforePlanChange`, `onBeforePlanActivation` | Return `false` to stop the billing action. Enforce real permissions server-side too.              |
-| `#sub-custom-composition` | You need app-owned card markup                   | `unstyled`, `Subscription.Grid`, `Subscription.Item`, slots        | The root still owns checkout, switch, cancel, units, and active state.                            |
-| `#sub-typed-binding`      | You want typed plan IDs and one binding object   | `createCreemSvelte` or `createCreemReact`                          | Recommended for production apps.                                                                  |
-| `#sub-period-end`         | Downgrades should apply at period end            | `updateBehavior` resolver and `cancelScheduledUpdate` export       | App-side scheduled updates are tracked in Convex until applied.                                   |
-| `#onetime-single`         | You sell a one-time product once                 | `Product.Root` with `Product.Item type="one-time"`                 | Shows "Owned" after purchase.                                                                     |
-| `#onetime-group`          | One-time products are mutually exclusive         | `Product.Root transition={[...]}`                                  | Use `via_product` for delta-priced upgrades.                                                      |
-| `#onetime-repeat`         | You sell repeatable packs or consumables         | `Product.Item type="recurring"` and optional `Credits.Root`        | Repeating products do not show "Owned"; credit grants should be server-owned.                     |
-| `#payment-recovery`       | You need past-due or failed-payment UI           | `PaymentRecoveryBanner`, `PaymentRecoveryButton`                   | Button needs `customers.portalUrl`; banners can derive from snapshot or accept an explicit state. |
-| `#billing-history`        | Users need transaction history                   | `BillingHistory` and `transactions.search`                         | This is transaction history, not full invoice rendering.                                          |
-| `#feature-usage-gate`     | Features depend on plan or payment state         | `BillingGate`, `evaluateUsageLimits`                               | Billing state gates access; your app still measures usage.                                        |
+| Example anchor            | Use this when                                    | Main API to configure                                              | Considerations                                                                                                 |
+| ------------------------- | ------------------------------------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `#sub-one-plan`           | You have one paid plan                           | `Subscription.Root plans={["pro"]}`                                | Smallest catalog-driven subscription setup.                                                                    |
+| `#sub-two-plans`          | You have a simple upgrade choice                 | `plans={["basic", "premium"]}`                                     | Good default for most SaaS pricing pages.                                                                      |
+| `#sub-multi-cycle`        | Plans support monthly/yearly or more cycles      | `creemProductIds` with several cycle keys                          | The interval selector appears only when multiple cycles exist.                                                 |
+| `#sub-catalog-driven`     | You split plans by audience                      | `groups={[...]}`                                                   | Group selector controls visible plans; unit plans can show a picker.                                           |
+| `#sub-unit-auto`          | Quantity comes from app state                    | `units={memberCount}`                                              | Keep Creem quantity synced when the app count changes.                                                         |
+| `#sub-grouped-cycles`     | Groups also have different intervals             | `groups` plus multi-cycle products                                 | The active group controls available billing cycles.                                                            |
+| `#sub-app-trial`          | No-card trial before choosing free or paid       | `category: "trial"` plus `plans.activate`                          | Component records once-per-entity history and can expire trials by `eligibilityScopeId`; your app owns quotas. |
+| `#sub-consent-gates`      | Checkout requires terms, auth, or policy consent | `onBeforeCheckout`, `onBeforePlanChange`, `onBeforePlanActivation` | Return `false` to stop the billing action. Enforce real permissions server-side too.                           |
+| `#sub-custom-composition` | You need app-owned card markup                   | `unstyled`, `Subscription.Grid`, `Subscription.Item`, slots        | The root still owns checkout, switch, cancel, units, and active state.                                         |
+| `#sub-typed-binding`      | You want typed plan IDs and one binding object   | `createCreemSvelte` or `createCreemReact`                          | Recommended for production apps.                                                                               |
+| `#sub-period-end`         | Downgrades should apply at period end            | `updateBehavior` resolver and `cancelScheduledUpdate` export       | App-side scheduled updates are tracked in Convex until applied.                                                |
+| `#onetime-single`         | You sell a one-time product once                 | `Product.Root` with `Product.Item type="one-time"`                 | Shows "Owned" after purchase.                                                                                  |
+| `#onetime-group`          | One-time products are mutually exclusive         | `Product.Root transition={[...]}`                                  | Use `via_product` for delta-priced upgrades.                                                                   |
+| `#onetime-repeat`         | You sell repeatable packs or consumables         | `Product.Item type="recurring"` and optional `Credits.Root`        | Repeating products do not show "Owned"; credit grants should be server-owned.                                  |
+| `#payment-recovery`       | You need past-due or failed-payment UI           | `PaymentRecoveryBanner`, `PaymentRecoveryButton`                   | Button needs `customers.portalUrl`; banners can derive from snapshot or accept an explicit state.              |
+| `#billing-history`        | Users need transaction history                   | `BillingHistory` and `transactions.search`                         | This is transaction history, not full invoice rendering.                                                       |
+| `#feature-usage-gate`     | Features depend on plan or payment state         | `BillingGate`, `evaluateUsageLimits`                               | Billing state gates access; your app still measures usage.                                                     |
 
 The external paths are:
 
@@ -585,14 +585,25 @@ export const billingCatalog = defineBillingCatalog({
       planId: "trial",
       category: "trial",
       billingType: "custom",
-      eligibility: { oncePerEntity: true, hideWhenIneligible: true },
+      eligibilityScopeId: "base",
+      eligibility: {
+        oncePerEntity: true,
+        hideWhenIneligible: true,
+        expiresWhenScopeHasNonTrialPlan: true,
+      },
       limits: { aiMessages: 5 },
     },
-    { planId: "free", category: "free", billingType: "custom" },
+    {
+      planId: "free",
+      category: "free",
+      billingType: "custom",
+      eligibilityScopeId: "base",
+    },
     {
       planId: "premium",
       category: "paid",
       billingType: "recurring",
+      eligibilityScopeId: "base",
       creemProductIds: { "every-month": "prod_..." },
     },
   ],
@@ -608,6 +619,12 @@ Expose `plans.activate` with an app mutation that calls
 component stores trial history, enforces `oncePerEntity`, and writes the current
 app-plan assignment used by the widgets and snapshot; the app still owns feature
 quotas and lock states.
+
+Use `eligibilityScopeId` when the trial should disappear only after choosing an
+alternative in the same product line. For example, put `trial`, `free`, and
+`premium` in the `"base"` scope, but put an addon trial and its paid addon in an
+`"analytics-addon"` scope. Choosing a base plan will not hide the addon trial;
+choosing or scheduling the addon will.
 
 Grouped setup:
 
