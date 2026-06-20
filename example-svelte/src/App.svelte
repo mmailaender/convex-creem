@@ -3,7 +3,7 @@
     setupConvex,
     useConvexClient,
     useQuery,
-  } from "@mmailaender/convex-svelte";
+  } from "convex-svelte";
   import {
     BillingGate,
     CheckoutSuccessSummary,

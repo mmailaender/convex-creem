@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { FunctionReference } from "convex/server";
-  import { useConvexClient } from "@mmailaender/convex-svelte";
+  import { useConvexClient } from "convex-svelte";
   import {
     defaultBillingLabels,
     type BillingLabels,

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext, setContext, untrack } from "svelte";
-  import { useConvexClient, useQuery } from "@mmailaender/convex-svelte";
+  import { useConvexClient, useQuery } from "convex-svelte";
   import {
     formatPriceWithInterval,
     splitPriceLabel,

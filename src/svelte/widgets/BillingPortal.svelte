@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext } from "svelte";
-  import { useConvexClient, useQuery } from "@mmailaender/convex-svelte";
+  import { useConvexClient, useQuery } from "convex-svelte";
   import CustomerPortalButton from "../primitives/CustomerPortalButton.svelte";
   import type { BillingPermissions, ConnectedBillingModel } from "./types.js";
   import type { Snippet } from "svelte";

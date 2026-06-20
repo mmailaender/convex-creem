@@ -1,7 +1,6 @@
 import type {
   GenericMutationCtx,
   GenericActionCtx,
-  GenericQueryCtx,
   GenericDataModel,
 } from "convex/server";
 import type {
@@ -11,14 +10,21 @@ import type {
 import { ConvexError, type Infer } from "convex/values";
 import type schema from "./schema.js";
 
+// NOTE: `runQuery`/`runMutation` are intentionally typed via `GenericActionCtx`,
+// not `GenericQueryCtx`/`GenericMutationCtx`. As of Convex 1.41, the query/mutation
+// flavors accept an extra transaction-scoped `transactionLimits` option, while the
+// action flavor does not (actions aren't transactional). These helper ctx types are
+// passed action ctxs at call sites, so they must use the action signature. A
+// query/mutation ctx (whose `runQuery` accepts an optional extra options arg) is
+// still assignable to the action signature, so every ctx kind satisfies these.
 /** Minimal context type for Convex functions that only need `runQuery`. */
 export type RunQueryCtx = {
-  runQuery: GenericQueryCtx<GenericDataModel>["runQuery"];
+  runQuery: GenericActionCtx<GenericDataModel>["runQuery"];
 };
 /** Minimal context type for Convex functions that need `runQuery` + `runMutation`. */
 export type RunMutationCtx = {
-  runQuery: GenericQueryCtx<GenericDataModel>["runQuery"];
-  runMutation: GenericMutationCtx<GenericDataModel>["runMutation"];
+  runQuery: GenericActionCtx<GenericDataModel>["runQuery"];
+  runMutation: GenericActionCtx<GenericDataModel>["runMutation"];
 };
 /** Mutation context that also includes `scheduler` for scheduling async follow-up actions. */
 export type RunSchedulerMutationCtx = RunMutationCtx & {
@@ -26,8 +32,8 @@ export type RunSchedulerMutationCtx = RunMutationCtx & {
 };
 /** Minimal context type for Convex actions that need `runQuery` + `runMutation` + `runAction`. */
 export type RunActionCtx = {
-  runQuery: GenericQueryCtx<GenericDataModel>["runQuery"];
-  runMutation: GenericMutationCtx<GenericDataModel>["runMutation"];
+  runQuery: GenericActionCtx<GenericDataModel>["runQuery"];
+  runMutation: GenericActionCtx<GenericDataModel>["runMutation"];
   runAction: GenericActionCtx<GenericDataModel>["runAction"];
 };
 

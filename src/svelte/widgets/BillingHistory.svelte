@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext } from "svelte";
-  import { useConvexClient } from "@mmailaender/convex-svelte";
+  import { useConvexClient } from "convex-svelte";
   import { Pagination } from "@ark-ui/svelte/pagination";
   import type {
     PaginationPageChangeDetails,

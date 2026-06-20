@@ -53,7 +53,7 @@ npm install @mmailaender/convex-creem convex creem
 For Svelte widgets:
 
 ```bash
-npm install svelte @mmailaender/convex-svelte @ark-ui/svelte
+npm install svelte convex-svelte @ark-ui/svelte
 ```
 
 For React widgets:
@@ -363,7 +363,7 @@ component name; the package exports `CreemConvexProvider`.
 
 ```svelte
 <script lang="ts">
-  import { setupConvex } from "@mmailaender/convex-svelte";
+  import { setupConvex } from "convex-svelte";
   import {
     CreemConvexProvider,
     Subscription,
@@ -457,7 +457,7 @@ payment recovery and usage gates:
 
 ```svelte
 <script lang="ts">
-  import { useQuery } from "@mmailaender/convex-svelte";
+  import { useQuery } from "convex-svelte";
   import { CheckoutSuccessSummary } from "@mmailaender/convex-creem/svelte";
   import { api } from "../convex/_generated/api.js";
 

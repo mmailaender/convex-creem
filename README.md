@@ -264,7 +264,7 @@ or page component:
 
 ```svelte
 <script lang="ts">
-  import { setupConvex } from "@mmailaender/convex-svelte";
+  import { setupConvex } from "convex-svelte";
   import {
     Subscription, Product, BillingPortal,
     type ConnectedBillingApi,
@@ -428,7 +428,7 @@ catalog or with composition slots.
 > The `ConnectedBillingApi` object is the same shape in both frameworks. Only
 > the Convex client setup differs: `setupConvex()` in Svelte vs
 > `<ConvexProvider>` in React (see
-> [@mmailaender/convex-svelte](https://github.com/mmailaender/convex-svelte) and
+> [convex-svelte](https://github.com/mmailaender/convex-svelte) and
 > [convex/react](https://docs.convex.dev/client/react) docs).
 
 ### 1. Subscriptions

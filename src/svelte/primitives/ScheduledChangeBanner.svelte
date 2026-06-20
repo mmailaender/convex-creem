@@ -1,7 +1,7 @@
 <script lang="ts">
   /* global $props, $derived */
   import { getContext } from "svelte";
-  import { useConvexClient, useQuery } from "@mmailaender/convex-svelte";
+  import { useConvexClient, useQuery } from "convex-svelte";
   import {
     type BillingDateFormatInput,
     type BillingLabels,

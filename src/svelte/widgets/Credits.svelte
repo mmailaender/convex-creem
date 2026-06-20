@@ -1,6 +1,6 @@
 <script lang="ts">
   import { getContext, setContext, type Snippet } from "svelte";
-  import { useConvexClient } from "@mmailaender/convex-svelte";
+  import { useConvexClient } from "convex-svelte";
   import CreditsAmount from "./CreditsAmount.svelte";
   import CreditsError from "./CreditsError.svelte";
   import CreditsRefresh from "./CreditsRefresh.svelte";
