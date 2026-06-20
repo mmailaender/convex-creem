@@ -48,7 +48,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         {
           apiKey: string;
           scheduledUpdateId: string;
-          serverIdx?: number;
+          server?: "test" | "prod";
           serverURL?: string;
         },
         any,
@@ -263,7 +263,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           previousCancelAtPeriodEnd?: boolean;
           previousStatus?: string;
           scheduledUpdateId?: string;
-          serverIdx?: number;
+          server?: "test" | "prod";
           serverURL?: string;
           subscriptionId: string;
         },
@@ -279,7 +279,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           previousSeats?: number | null;
           productId?: string;
           resumeScheduledCancellation?: boolean;
-          serverIdx?: number;
+          server?: "test" | "prod";
           serverURL?: string;
           subscriptionId: string;
           units?: number;
@@ -785,7 +785,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       syncProducts: FunctionReference<
         "action",
         "internal",
-        { apiKey: string; serverIdx?: number; serverURL?: string },
+        { apiKey: string; server?: "test" | "prod"; serverURL?: string },
         any,
         Name
       >;

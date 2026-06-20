@@ -164,13 +164,37 @@ describe("Creem constructor", () => {
     }
   });
 
-  it("accepts serverIdx and serverURL config", () => {
+  it("accepts server and serverURL config", () => {
     const creem = new Creem(mockComponent, {
       apiKey: "k",
-      serverIdx: 1,
+      server: "test",
       serverURL: "https://custom.creem.io",
     });
     expect(creem.sdk).toBeDefined();
+  });
+
+  it("passes CREEM_SERVER env fallback to component actions", async () => {
+    const originalServer = process.env["CREEM_SERVER"];
+    process.env["CREEM_SERVER"] = "test";
+    try {
+      const creem = new Creem(mockComponent, {
+        apiKey: "test_key",
+        webhookSecret: "s",
+      });
+      const ctx = createMockCtx();
+      await creem.syncProducts(ctx as never);
+      expect(ctx.runAction).toHaveBeenCalledWith(REFS.syncProducts, {
+        apiKey: "test_key",
+        server: "test",
+        serverURL: undefined,
+      });
+    } finally {
+      if (originalServer !== undefined) {
+        process.env["CREEM_SERVER"] = originalServer;
+      } else {
+        delete process.env["CREEM_SERVER"];
+      }
+    }
   });
 });
 
@@ -1058,7 +1082,7 @@ describe("syncProducts", () => {
     await creem.syncProducts(ctx as never);
     expect(ctx.runAction).toHaveBeenCalledWith(REFS.syncProducts, {
       apiKey: "test_key",
-      serverIdx: undefined,
+      server: undefined,
       serverURL: undefined,
     });
   });

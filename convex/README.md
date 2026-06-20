@@ -17,7 +17,11 @@ billing component integration.
 ```bash
 npx convex env set CREEM_API_KEY <your_creem_api_key>
 npx convex env set CREEM_WEBHOOK_SECRET <your_creem_webhook_signing_secret>
+npx convex env set CREEM_SERVER test
 ```
+
+The examples default to the Creem test server unless `CREEM_SERVER=prod` is set
+in Convex env.
 
 For the credit-pack demo, keep the trusted product ID in Convex env:
 

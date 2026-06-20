@@ -834,6 +834,7 @@ Trusted server values are set with Convex, not in `.env.example`:
 ```bash
 npx convex env set CREEM_API_KEY <your_creem_api_key>
 npx convex env set CREEM_WEBHOOK_SECRET <your_creem_webhook_signing_secret>
+npx convex env set CREEM_SERVER test
 npx convex env set CREEM_ONETIME_CREDITS prod_...
 ```
 

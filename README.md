@@ -31,7 +31,7 @@ Add subscriptions, one-time purchases, and billing to your Convex app with
   - [Webhook event middleware](#webhook-event-middleware)
   - [Security & Access Control](#security--access-control)
   - [Custom billing UI model](#custom-billing-ui-model)
-  - [Server endpoint overrides](#server-endpoint-overrides)
+  - [Creem server](#creem-server)
 - [API Reference](#api-reference)
   - [Resource namespaces](#resource-namespaces--creemnamespace)
   - [`creem.api({ resolve })` — convenience exports](#creemapi-resolve---convenience-exports)
@@ -74,6 +74,7 @@ export default app;
 ```bash
 npx convex env set CREEM_API_KEY <your_creem_api_key>
 npx convex env set CREEM_WEBHOOK_SECRET <your_creem_webhook_signing_secret>
+npx convex env set CREEM_SERVER test
 ```
 
 ### 4. Configure billing
@@ -1031,17 +1032,18 @@ export const getCustomBillingModel = query({
 });
 ```
 
-### Server endpoint overrides
+### Creem server
 
-Only needed for non-default API endpoints (e.g. test/staging):
+The SDK uses the production API by default. The examples pass `server: "test"`
+unless `CREEM_SERVER=prod` is set in Convex env. For your own app, set the
+server explicitly:
 
 ```bash
-npx convex env set CREEM_SERVER_IDX <index>
-# or
-npx convex env set CREEM_SERVER_URL <url>
+npx convex env set CREEM_SERVER test
 ```
 
-Leave both unset to use the default Creem production endpoint.
+Use `CREEM_SERVER=prod` or omit `server` to use the default Creem production
+endpoint.
 
 ---
 

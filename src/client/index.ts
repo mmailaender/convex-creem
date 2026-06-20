@@ -333,12 +333,20 @@ type CreemConfig = {
   apiKey?: string;
   /** Creem webhook signing secret. Falls back to `CREEM_WEBHOOK_SECRET` env var. */
   webhookSecret?: string;
-  /** Creem SDK server index (for non-default endpoints). Falls back to `CREEM_SERVER_IDX` env var. */
-  serverIdx?: number;
+  /** Creem SDK server. Falls back to `CREEM_SERVER` env var and defaults to production. */
+  server?: "test" | "prod";
   /** Creem SDK server URL override (for test/staging). Falls back to `CREEM_SERVER_URL` env var. */
   serverURL?: string;
   /** Optional app-owned billing catalog used for server-side fulfillment such as Customer Credits grants. */
   billingCatalog?: PlanCatalog;
+};
+
+const resolveCreemServer = (
+  server: string | undefined,
+): "test" | "prod" | undefined => {
+  if (!server) return undefined;
+  if (server === "test" || server === "prod") return server;
+  throw new Error(`Invalid Creem server ${server}`);
 };
 
 /**
@@ -365,7 +373,7 @@ export class Creem {
   public sdk: CreemSDK;
   private apiKey: string;
   private webhookSecret: string;
-  private serverIdx?: number;
+  private server?: "test" | "prod";
   private serverURL?: string;
   private billingCatalog?: PlanCatalog;
 
@@ -376,17 +384,14 @@ export class Creem {
     this.apiKey = config.apiKey ?? process.env["CREEM_API_KEY"] ?? "";
     this.webhookSecret =
       config.webhookSecret ?? process.env["CREEM_WEBHOOK_SECRET"] ?? "";
-    this.serverIdx =
-      config.serverIdx ??
-      (process.env["CREEM_SERVER_IDX"]
-        ? Number(process.env["CREEM_SERVER_IDX"])
-        : undefined);
+    this.server =
+      config.server ?? resolveCreemServer(process.env["CREEM_SERVER"]);
     this.serverURL = config.serverURL ?? process.env["CREEM_SERVER_URL"];
     this.billingCatalog = normalizePlanCatalog(config.billingCatalog);
 
     this.sdk = new CreemSDK({
       apiKey: this.apiKey,
-      ...(this.serverIdx !== undefined ? { serverIdx: this.serverIdx } : {}),
+      ...(this.server ? { server: this.server } : {}),
       ...(this.serverURL ? { serverURL: this.serverURL } : {}),
     });
   }
@@ -398,7 +403,7 @@ export class Creem {
   async syncProducts(ctx: RunActionCtx) {
     await ctx.runAction(this.component.lib.syncProducts, {
       apiKey: this.apiKey,
-      serverIdx: this.serverIdx,
+      server: this.server,
       serverURL: this.serverURL,
     });
   }
@@ -968,7 +973,7 @@ export class Creem {
       this.component.lib.executeSubscriptionLifecycle,
       {
         apiKey: this.apiKey,
-        serverIdx: this.serverIdx,
+        server: this.server,
         serverURL: this.serverURL,
         subscriptionId: args.subscription.id,
         operation: "resume",
@@ -1036,7 +1041,7 @@ export class Creem {
       this.component.lib.applyScheduledSubscriptionUpdate,
       {
         apiKey: this.apiKey,
-        serverIdx: this.serverIdx,
+        server: this.server,
         serverURL: this.serverURL,
         scheduledUpdateId,
       },
@@ -1060,7 +1065,7 @@ export class Creem {
         this.component.lib.executeSubscriptionLifecycle,
         {
           apiKey: this.apiKey,
-          serverIdx: this.serverIdx,
+          server: this.server,
           serverURL: this.serverURL,
           subscriptionId: args.subscription.id,
           operation: "cancel",
@@ -1188,7 +1193,7 @@ export class Creem {
             this.component.lib.executeSubscriptionLifecycle,
             {
               apiKey: this.apiKey,
-              serverIdx: this.serverIdx,
+              server: this.server,
               serverURL: this.serverURL,
               subscriptionId: subscription.id,
               operation: "cancel",
@@ -1216,7 +1221,7 @@ export class Creem {
           this.component.lib.executeSubscriptionUpdate,
           {
             apiKey: this.apiKey,
-            serverIdx: this.serverIdx,
+            server: this.server,
             serverURL: this.serverURL,
             subscriptionId: subscription.id,
             productId: args.productId,
@@ -1278,7 +1283,7 @@ export class Creem {
           this.component.lib.executeSubscriptionLifecycle,
           {
             apiKey: this.apiKey,
-            serverIdx: this.serverIdx,
+            server: this.server,
             serverURL: this.serverURL,
             subscriptionId: subscription.id,
             operation: "cancel",
@@ -1319,7 +1324,7 @@ export class Creem {
           this.component.lib.executeSubscriptionLifecycle,
           {
             apiKey: this.apiKey,
-            serverIdx: this.serverIdx,
+            server: this.server,
             serverURL: this.serverURL,
             subscriptionId: subscription.id,
             operation: "pause",
@@ -1359,7 +1364,7 @@ export class Creem {
           this.component.lib.executeSubscriptionLifecycle,
           {
             apiKey: this.apiKey,
-            serverIdx: this.serverIdx,
+            server: this.server,
             serverURL: this.serverURL,
             subscriptionId: subscription.id,
             operation: "resume",
@@ -1411,7 +1416,7 @@ export class Creem {
             this.component.lib.executeSubscriptionLifecycle,
             {
               apiKey: this.apiKey,
-              serverIdx: this.serverIdx,
+              server: this.server,
               serverURL: this.serverURL,
               subscriptionId: subscription.id,
               operation: "resume",
@@ -1909,7 +1914,7 @@ export class Creem {
                 this.component.lib.executeSubscriptionLifecycle,
                 {
                   apiKey: this.apiKey,
-                  serverIdx: this.serverIdx,
+                  server: this.server,
                   serverURL: this.serverURL,
                   subscriptionId: subscription.id,
                   operation: "cancel",
@@ -1938,7 +1943,7 @@ export class Creem {
               this.component.lib.executeSubscriptionUpdate,
               {
                 apiKey: this.apiKey,
-                serverIdx: this.serverIdx,
+                server: this.server,
                 serverURL: this.serverURL,
                 subscriptionId: subscription.id,
                 productId: args.productId,
@@ -1997,7 +2002,7 @@ export class Creem {
               this.component.lib.executeSubscriptionLifecycle,
               {
                 apiKey: this.apiKey,
-                serverIdx: this.serverIdx,
+                server: this.server,
                 serverURL: this.serverURL,
                 subscriptionId: subscription.id,
                 operation: "cancel",
@@ -2040,7 +2045,7 @@ export class Creem {
               this.component.lib.executeSubscriptionLifecycle,
               {
                 apiKey: this.apiKey,
-                serverIdx: this.serverIdx,
+                server: this.server,
                 serverURL: this.serverURL,
                 subscriptionId: subscription.id,
                 operation: "resume",
@@ -2094,7 +2099,7 @@ export class Creem {
                 this.component.lib.executeSubscriptionLifecycle,
                 {
                   apiKey: this.apiKey,
-                  serverIdx: this.serverIdx,
+                  server: this.server,
                   serverURL: this.serverURL,
                   subscriptionId: subscription.id,
                   operation: "resume",
@@ -2138,7 +2143,7 @@ export class Creem {
               this.component.lib.executeSubscriptionLifecycle,
               {
                 apiKey: this.apiKey,
-                serverIdx: this.serverIdx,
+                server: this.server,
                 serverURL: this.serverURL,
                 subscriptionId: subscription.id,
                 operation: "pause",

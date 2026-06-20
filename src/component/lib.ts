@@ -466,13 +466,13 @@ export const listCustomerSubscriptions = query({
 export const syncProducts = action({
   args: {
     apiKey: v.string(),
-    serverIdx: v.optional(v.number()),
+    server: v.optional(v.union(v.literal("test"), v.literal("prod"))),
     serverURL: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const creem = new Creem({
       apiKey: args.apiKey,
-      ...(args.serverIdx !== undefined ? { serverIdx: args.serverIdx } : {}),
+      ...(args.server ? { server: args.server } : {}),
       ...(args.serverURL ? { serverURL: args.serverURL } : {}),
     });
     const productPages = await creem.products.search(1, 100);
@@ -1113,7 +1113,7 @@ export const markScheduledSubscriptionUpdateFailed = mutation({
 export const executeSubscriptionUpdate = action({
   args: {
     apiKey: v.string(),
-    serverIdx: v.optional(v.number()),
+    server: v.optional(v.union(v.literal("test"), v.literal("prod"))),
     serverURL: v.optional(v.string()),
     subscriptionId: v.string(),
     productId: v.optional(v.string()),
@@ -1126,7 +1126,7 @@ export const executeSubscriptionUpdate = action({
   handler: async (ctx, args) => {
     const sdk = new Creem({
       apiKey: args.apiKey,
-      ...(args.serverIdx !== undefined ? { serverIdx: args.serverIdx } : {}),
+      ...(args.server ? { server: args.server } : {}),
       ...(args.serverURL ? { serverURL: args.serverURL } : {}),
     });
     try {
@@ -1199,7 +1199,7 @@ export const executeSubscriptionUpdate = action({
 export const applyScheduledSubscriptionUpdate = action({
   args: {
     apiKey: v.string(),
-    serverIdx: v.optional(v.number()),
+    server: v.optional(v.union(v.literal("test"), v.literal("prod"))),
     serverURL: v.optional(v.string()),
     scheduledUpdateId: v.id("scheduledSubscriptionUpdates"),
   },
@@ -1222,7 +1222,7 @@ export const applyScheduledSubscriptionUpdate = action({
 
     const sdk = new Creem({
       apiKey: args.apiKey,
-      ...(args.serverIdx !== undefined ? { serverIdx: args.serverIdx } : {}),
+      ...(args.server ? { server: args.server } : {}),
       ...(args.serverURL ? { serverURL: args.serverURL } : {}),
     });
 
@@ -1283,7 +1283,7 @@ export const applyScheduledSubscriptionUpdate = action({
 export const executeSubscriptionLifecycle = action({
   args: {
     apiKey: v.string(),
-    serverIdx: v.optional(v.number()),
+    server: v.optional(v.union(v.literal("test"), v.literal("prod"))),
     serverURL: v.optional(v.string()),
     subscriptionId: v.string(),
     operation: v.union(
@@ -1300,7 +1300,7 @@ export const executeSubscriptionLifecycle = action({
   handler: async (ctx, args) => {
     const sdk = new Creem({
       apiKey: args.apiKey,
-      ...(args.serverIdx !== undefined ? { serverIdx: args.serverIdx } : {}),
+      ...(args.server ? { server: args.server } : {}),
       ...(args.serverURL ? { serverURL: args.serverURL } : {}),
     });
     try {

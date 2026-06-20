@@ -12,6 +12,9 @@ import { ConvexError } from "convex/values";
 const demoCreditsProductId =
   process.env.CREEM_ONETIME_CREDITS ?? "prod_73CnZ794MaJ1DUn8MU0O5f";
 
+const creemServer =
+  process.env.CREEM_SERVER === "test" ? "test" : ("prod" as const);
+
 const billingCatalog = defineBillingCatalog({
   version: "example-server",
   plans: [
@@ -50,6 +53,7 @@ const billingCatalog = defineBillingCatalog({
 } as const);
 
 export const creem = new Creem(components.creem, {
+  server: creemServer,
   billingCatalog,
   // Demo cancellation should keep access until period end so
   // `subscription.scheduled_cancel` and resume flows are visible in examples.
