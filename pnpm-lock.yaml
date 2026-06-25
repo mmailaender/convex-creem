@@ -112,8 +112,8 @@ importers:
         specifier: 7.0.0
         version: 7.0.0
       creem:
-        specifier: file:node_modules_local/creem-1.5.0.tgz
-        version: file:node_modules_local/creem-1.5.0.tgz
+        specifier: ^1.5.2
+        version: 1.5.2
       eslint:
         specifier: 10.5.0
         version: 10.5.0(jiti@2.7.0)
@@ -2083,9 +2083,8 @@ packages:
     resolution: {integrity: sha512-/H2B3WW9gccZJKjKoDZsIrDU3MkkHlxgheT82hUbInC5fEdi4+54zyYpFueZT9pLfr5ObrtgN4MsYYrmTmHzeg==}
     engines: {node: '>=20'}
 
-  creem@file:node_modules_local/creem-1.5.0.tgz:
-    resolution: {integrity: sha512-uL4qdxJeFaxUtzfSi1dpFJJyDGbuSPtt9bi8SokvakeWp3ZdCItDfOWNHoPYL5ZuyHi5DuawVk+c5INiMBogYw==, tarball: file:node_modules_local/creem-1.5.0.tgz}
-    version: 1.5.0
+  creem@1.5.2:
+    resolution: {integrity: sha512-p36KAaIPsOfrRVZ6EBkqhqVM3DYnrr6sTBlFc/L1oR8LNo0tOS4G0LXu6DejviEpXGU0MX7QwpyvdeFlPQj4Hw==}
     hasBin: true
 
   cross-spawn@7.0.6:
@@ -7027,7 +7026,7 @@ snapshots:
       p-filter: 4.1.0
       p-map: 7.0.4
 
-  creem@file:node_modules_local/creem-1.5.0.tgz:
+  creem@1.5.2:
     dependencies:
       '@modelcontextprotocol/sdk': 1.26.0(zod@4.3.6)
       jsonpath-rfc9535: 1.1.0
