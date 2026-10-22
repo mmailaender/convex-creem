@@ -1,7 +1,9 @@
 # Convex Creem Component (deprecated)
 
-> [!WARNING] **`@mmailaender/convex-creem` is deprecated and no longer
-> maintained.** Development continues at Creem as
+<!-- prettier-ignore -->
+> [!WARNING]
+> **`@mmailaender/convex-creem` is deprecated and no longer maintained.**
+> Development continues at Creem as
 > [`@creem_io/convex`](https://www.npmjs.com/package/@creem_io/convex).
 
 This repository won't receive further updates, fixes, or releases. Please don't
