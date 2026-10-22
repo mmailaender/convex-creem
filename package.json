@@ -1,6 +1,6 @@
 {
   "name": "@mmailaender/convex-creem",
-  "description": "A Creem component for Convex.",
+  "description": "Deprecated: use @creem_io/convex instead. A Creem component for Convex.",
   "repository": "github:mmailaender/convex-creem",
   "homepage": "https://github.com/mmailaender/convex-creem#readme",
   "bugs": {
